@@ -109,109 +109,8 @@ func Import(ctx context.Context, opts ImportOptions) (result ImportResult, retEr
 		return ImportResult{}, err
 	}
 	flushPhase.Finish(nil)
-	var triePercent atomic.Uint64
-	triePhase := reporter.StartPhase("generate_trie", percentageProgressSnapshot(&triePercent, true),
-		"scheme", opts.Scheme,
-		"root", bundleResult.State.Root,
-	)
-	var stats triedb.GenerateStats
-	if reporter.Enabled() {
-		stats, err = triedb.GenerateTrieWithProgress(disk, opts.Scheme, bundleResult.State.Root, ctx.Done(), &triePercent)
-	} else {
-		stats, err = triedb.GenerateTrie(disk, opts.Scheme, bundleResult.State.Root, ctx.Done())
-	}
-	if err != nil {
-		generateErr := fmt.Errorf("generate %s state trie: %w", opts.Scheme, err)
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			generateErr = errors.Join(generateErr, ctxErr)
-		}
-		triePhase.Finish(generateErr)
-		return ImportResult{}, generateErr
-	}
-	if stats.Scanned != int64(bundleResult.State.Counts.Accounts) || stats.Updated != 0 || stats.Deleted != 0 {
-		reconcileErr := fmt.Errorf("unexpected trie generation reconciliation: scanned=%d updated=%d deleted=%d expected-accounts=%d", stats.Scanned, stats.Updated, stats.Deleted, bundleResult.State.Counts.Accounts)
-		triePhase.Finish(reconcileErr,
-			"accounts", stats.Scanned,
-			"updated_accounts", stats.Updated,
-			"deleted_storage_slots", stats.Deleted,
-		)
-		return ImportResult{}, reconcileErr
-	}
-	triePhase.Finish(nil,
-		"accounts", stats.Scanned,
-		"updated_accounts", stats.Updated,
-		"deleted_storage_slots", stats.Deleted,
-	)
-	schemePhaseName := "adopt_path_state"
-	if opts.Scheme == rawdb.HashScheme {
-		schemePhaseName = "remove_flat_state"
-	}
-	schemePhase := reporter.StartPhase(schemePhaseName, nil, "scheme", opts.Scheme)
-	schemeErr := func() error {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if opts.Scheme == rawdb.HashScheme {
-			return removeFlatState(ctx, disk)
-		}
-		config := *pathdb.Defaults
-		config.SnapshotNoBuild = true
-		config.EnableStateIndexing = false
-		config.TrienodeHistory = -1
-		trieDB := triedb.NewDatabase(disk, &triedb.Config{PathDB: &config})
-		if err := trieDB.AdoptSyncedState(bundleResult.State.Root); err != nil {
-			adoptErr := fmt.Errorf("adopt generated path state: %w", err)
-			if closeErr := trieDB.Close(); closeErr != nil {
-				adoptErr = errors.Join(adoptErr, fmt.Errorf("close path trie database: %w", closeErr))
-			}
-			return adoptErr
-		}
-		if !trieDB.SnapshotCompleted() {
-			snapshotErr := errors.New("path snapshot is not marked complete after adoption")
-			if closeErr := trieDB.Close(); closeErr != nil {
-				snapshotErr = errors.Join(snapshotErr, fmt.Errorf("close path trie database: %w", closeErr))
-			}
-			return snapshotErr
-		}
-		if err := trieDB.Close(); err != nil {
-			return fmt.Errorf("close adopted path trie database: %w", err)
-		}
-		return nil
-	}()
-	schemePhase.Finish(schemeErr)
-	if schemeErr != nil {
-		return ImportResult{}, schemeErr
-	}
-	finalizePhase := reporter.StartPhase("finalize_database", nil)
-	finalizeErr := func() error {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if err := disk.SyncKeyValue(); err != nil {
-			return fmt.Errorf("sync target database: %w", err)
-		}
-		if err := disk.Close(); err != nil {
-			return fmt.Errorf("close target database: %w", err)
-		}
-		diskClosed = true
-		ranges := [][2][]byte{{rawdb.CodePrefix, prefixLimit(rawdb.CodePrefix)}}
-		if opts.Scheme == rawdb.HashScheme {
-			ranges = append([][2][]byte{
-				{rawdb.SnapshotAccountPrefix, prefixLimit(rawdb.SnapshotAccountPrefix)},
-				{rawdb.SnapshotStoragePrefix, prefixLimit(rawdb.SnapshotStoragePrefix)},
-			}, ranges...)
-		}
-		if err := compactPebbleRanges(ctx, dbPath, opts.CacheMB, opts.Handles, ranges); err != nil {
-			return err
-		}
-		return syncDirectory(dbPath)
-	}()
-	finalizePhase.Finish(finalizeErr)
-	if finalizeErr != nil {
-		return ImportResult{}, finalizeErr
-	}
-
-	dbState, err := verifyDatabase(ctx, dbPath, opts.Scheme, bundleResult.Manifest, opts.CacheMB, opts.Handles, reporter)
+	dbState, closed, err := buildAndVerifyTarget(ctx, disk, dbPath, opts.Scheme, bundleResult.State, opts.CacheMB, opts.Handles, reporter)
+	diskClosed = closed
 	if err != nil {
 		return ImportResult{}, err
 	}
@@ -232,14 +131,134 @@ func Import(ctx context.Context, opts ImportOptions) (result ImportResult, retEr
 	return ImportResult{ArtifactPath: opts.Output, Report: report}, nil
 }
 
+func buildAndVerifyTarget(
+	ctx context.Context,
+	disk ethdb.Database,
+	dbPath, scheme string,
+	expected StateResult,
+	cacheMB, handles int,
+	reporter *progressReporter,
+) (StateResult, bool, error) {
+	var triePercent atomic.Uint64
+	triePhase := reporter.StartPhase("generate_trie", percentageProgressSnapshot(&triePercent, true),
+		"scheme", scheme,
+		"root", expected.Root,
+	)
+	var (
+		stats triedb.GenerateStats
+		err   error
+	)
+	if reporter.Enabled() {
+		stats, err = triedb.GenerateTrieWithProgress(disk, scheme, expected.Root, ctx.Done(), &triePercent)
+	} else {
+		stats, err = triedb.GenerateTrie(disk, scheme, expected.Root, ctx.Done())
+	}
+	if err != nil {
+		generateErr := fmt.Errorf("generate %s state trie: %w", scheme, err)
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			generateErr = errors.Join(generateErr, ctxErr)
+		}
+		triePhase.Finish(generateErr)
+		return StateResult{}, false, generateErr
+	}
+	if stats.Scanned != int64(expected.Counts.Accounts) || stats.Updated != 0 || stats.Deleted != 0 {
+		reconcileErr := fmt.Errorf("unexpected trie generation reconciliation: scanned=%d updated=%d deleted=%d expected-accounts=%d", stats.Scanned, stats.Updated, stats.Deleted, expected.Counts.Accounts)
+		triePhase.Finish(reconcileErr,
+			"accounts", stats.Scanned,
+			"updated_accounts", stats.Updated,
+			"deleted_storage_slots", stats.Deleted,
+		)
+		return StateResult{}, false, reconcileErr
+	}
+	triePhase.Finish(nil,
+		"accounts", stats.Scanned,
+		"updated_accounts", stats.Updated,
+		"deleted_storage_slots", stats.Deleted,
+	)
+	schemePhaseName := "adopt_path_state"
+	if scheme == rawdb.HashScheme {
+		schemePhaseName = "remove_flat_state"
+	}
+	schemePhase := reporter.StartPhase(schemePhaseName, nil, "scheme", scheme)
+	schemeErr := func() error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if scheme == rawdb.HashScheme {
+			return removeFlatState(ctx, disk)
+		}
+		config := *pathdb.Defaults
+		config.SnapshotNoBuild = true
+		config.EnableStateIndexing = false
+		config.TrienodeHistory = -1
+		trieDB := triedb.NewDatabase(disk, &triedb.Config{PathDB: &config})
+		if err := trieDB.AdoptSyncedState(expected.Root); err != nil {
+			adoptErr := fmt.Errorf("adopt generated path state: %w", err)
+			if closeErr := trieDB.Close(); closeErr != nil {
+				adoptErr = errors.Join(adoptErr, fmt.Errorf("close path trie database: %w", closeErr))
+			}
+			return adoptErr
+		}
+		if !trieDB.SnapshotCompleted() {
+			snapshotErr := errors.New("path snapshot is not marked complete after adoption")
+			if closeErr := trieDB.Close(); closeErr != nil {
+				snapshotErr = errors.Join(snapshotErr, fmt.Errorf("close path trie database: %w", closeErr))
+			}
+			return snapshotErr
+		}
+		if err := trieDB.Close(); err != nil {
+			return fmt.Errorf("close adopted path trie database: %w", err)
+		}
+		return nil
+	}()
+	schemePhase.Finish(schemeErr)
+	if schemeErr != nil {
+		return StateResult{}, false, schemeErr
+	}
+	diskClosed := false
+	finalizePhase := reporter.StartPhase("finalize_database", nil)
+	finalizeErr := func() error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := disk.SyncKeyValue(); err != nil {
+			return fmt.Errorf("sync target database: %w", err)
+		}
+		if err := disk.Close(); err != nil {
+			return fmt.Errorf("close target database: %w", err)
+		}
+		diskClosed = true
+		ranges := [][2][]byte{{rawdb.CodePrefix, prefixLimit(rawdb.CodePrefix)}}
+		if scheme == rawdb.HashScheme {
+			ranges = append([][2][]byte{
+				{rawdb.SnapshotAccountPrefix, prefixLimit(rawdb.SnapshotAccountPrefix)},
+				{rawdb.SnapshotStoragePrefix, prefixLimit(rawdb.SnapshotStoragePrefix)},
+			}, ranges...)
+		}
+		if err := compactPebbleRanges(ctx, dbPath, cacheMB, handles, ranges); err != nil {
+			return err
+		}
+		return syncDirectory(dbPath)
+	}()
+	finalizePhase.Finish(finalizeErr)
+	if finalizeErr != nil {
+		return StateResult{}, diskClosed, finalizeErr
+	}
+	dbState, err := verifyDatabase(ctx, dbPath, scheme, expected, cacheMB, handles, reporter)
+	if err != nil {
+		return StateResult{}, diskClosed, err
+	}
+	return dbState, diskClosed, nil
+}
+
 type flatStateWriter struct {
-	db     ethdb.Database
-	batch  ethdb.Batch
-	closed bool
+	batch     ethdb.Batch
+	seenCodes map[common.Hash]struct{}
+	closed    bool
 }
 
 func newFlatStateWriter(db ethdb.Database) *flatStateWriter {
-	return &flatStateWriter{db: db, batch: db.NewBatch()}
+	return &flatStateWriter{batch: db.NewBatch(), seenCodes: make(map[common.Hash]struct{})}
 }
 
 func (w *flatStateWriter) Account(hash common.Hash, account *types.StateAccount, _ []byte) error {
@@ -262,11 +281,18 @@ func (w *flatStateWriter) Storage(accountHash, slotHash common.Hash, valueRLP []
 }
 
 func (w *flatStateWriter) Code(_ common.Hash, codeHash common.Hash, code []byte) error {
+	if _, exists := w.seenCodes[codeHash]; exists {
+		return nil
+	}
 	key := prefixedKey(rawdb.CodePrefix, codeHash[:])
 	if err := w.batch.Put(key, code); err != nil {
 		return fmt.Errorf("write code %s: %w", codeHash, err)
 	}
-	return w.flushIfNeeded()
+	if err := w.flushIfNeeded(); err != nil {
+		return err
+	}
+	w.seenCodes[codeHash] = struct{}{}
+	return nil
 }
 
 func (w *flatStateWriter) flushIfNeeded() error {

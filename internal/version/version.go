@@ -4,7 +4,7 @@ const (
 	// ToolName is the command-line program name.
 	ToolName = "l2state"
 	// ToolVersion is the l2state release version.
-	ToolVersion = "0.2.0"
+	ToolVersion = "0.3.0"
 	// GethVersion is the exact go-ethereum compatibility target.
 	GethVersion = "v1.17.5"
 	// GethCommit is the exact go-ethereum source commit for GethVersion.

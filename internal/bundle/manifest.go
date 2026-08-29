@@ -45,6 +45,40 @@ type SourceEvidence struct {
 	HeaderRLP  hexutil.Bytes `json:"header_rlp"`
 }
 
+// Validate checks that the encoded header and stable source heads agree.
+func (s SourceEvidence) Validate() error {
+	if s.HeadBefore != s.HeadAfter {
+		return errors.New("source head changed during traversal")
+	}
+	if s.HeadBefore.BlockHash == (common.Hash{}) {
+		return errors.New("source block hash is empty")
+	}
+	if s.HeadBefore.StateRoot == (common.Hash{}) {
+		return errors.New("source state root is empty")
+	}
+	if len(s.HeaderRLP) == 0 {
+		return errors.New("source header RLP is empty")
+	}
+	var header types.Header
+	if err := rlp.DecodeBytes(s.HeaderRLP, &header); err != nil {
+		return fmt.Errorf("decode header RLP as geth v1.17.5 header: %w", err)
+	}
+	if header.Number == nil || !header.Number.IsUint64() {
+		return errors.New("header block number is missing or exceeds uint64")
+	}
+	head := s.HeadBefore
+	if header.Number.Uint64() != head.BlockNumber {
+		return fmt.Errorf("header block number mismatch: have %d want %d", header.Number.Uint64(), head.BlockNumber)
+	}
+	if header.Hash() != head.BlockHash {
+		return fmt.Errorf("header block hash mismatch: have %s want %s", header.Hash(), head.BlockHash)
+	}
+	if header.Root != head.StateRoot {
+		return fmt.Errorf("header state root mismatch: have %s want %s", header.Root, head.StateRoot)
+	}
+	return nil
+}
+
 // Counts summarizes the records and payload bytes in a state bundle.
 type Counts struct {
 	Accounts       uint64 `json:"accounts"`
@@ -53,6 +87,27 @@ type Counts struct {
 	CodeRecords    uint64 `json:"code_records,omitempty"`
 	Records        uint64 `json:"records"`
 	PayloadBytes   uint64 `json:"payload_bytes"`
+}
+
+// Validate checks relationships between semantic state counts.
+func (c Counts) Validate() error {
+	if c.CodeReferences > c.Accounts {
+		return errors.New("code reference count exceeds account count")
+	}
+	if c.CodeRecords > c.CodeReferences {
+		return errors.New("code record count exceeds code reference count")
+	}
+	if c.CodeReferences > 0 && c.CodeRecords == 0 {
+		return errors.New("state has code references but no code records")
+	}
+	expected, ok := sumCounts(c.Accounts, c.StorageSlots, c.CodeRecords)
+	if !ok {
+		return errors.New("record type counts overflow uint64")
+	}
+	if c.Records != expected {
+		return errors.New("record count does not match record type counts")
+	}
+	return nil
 }
 
 // StateFile describes the encoded record stream and its integrity evidence.
@@ -151,34 +206,8 @@ func (m Manifest) Validate() error {
 	if m.CreatedAt.IsZero() {
 		return errors.New("manifest created_at is empty")
 	}
-	if m.Source.HeadBefore != m.Source.HeadAfter {
-		return errors.New("source head changed during export")
-	}
-	if m.Source.HeadBefore.BlockHash == (common.Hash{}) {
-		return errors.New("source block hash is empty")
-	}
-	if m.Source.HeadBefore.StateRoot == (common.Hash{}) {
-		return errors.New("source state root is empty")
-	}
-	if len(m.Source.HeaderRLP) == 0 {
-		return errors.New("source header RLP is empty")
-	}
-	var header types.Header
-	if err := rlp.DecodeBytes(m.Source.HeaderRLP, &header); err != nil {
-		return fmt.Errorf("decode header RLP as geth v1.17.5 header: %w", err)
-	}
-	if header.Number == nil || !header.Number.IsUint64() {
-		return errors.New("header block number is missing or exceeds uint64")
-	}
-	head := m.Source.HeadBefore
-	if header.Number.Uint64() != head.BlockNumber {
-		return fmt.Errorf("header block number mismatch: have %d want %d", header.Number.Uint64(), head.BlockNumber)
-	}
-	if header.Hash() != head.BlockHash {
-		return fmt.Errorf("header block hash mismatch: have %s want %s", header.Hash(), head.BlockHash)
-	}
-	if header.Root != head.StateRoot {
-		return fmt.Errorf("header state root mismatch: have %s want %s", header.Root, head.StateRoot)
+	if err := m.Source.Validate(); err != nil {
+		return err
 	}
 	if m.StateFile.Name != RecordsFileZstd && m.StateFile.Name != RecordsFileRaw {
 		return fmt.Errorf("invalid state file name %q", m.StateFile.Name)
@@ -204,21 +233,8 @@ func (m Manifest) Validate() error {
 	if m.StateFile.RecordChainHash == (common.Hash{}) {
 		return errors.New("record chain hash is empty")
 	}
-	if m.Counts.CodeReferences > m.Counts.Accounts {
-		return errors.New("manifest code reference count exceeds account count")
-	}
-	if m.Counts.CodeRecords > m.Counts.CodeReferences {
-		return errors.New("manifest code record count exceeds code reference count")
-	}
-	if m.Counts.CodeReferences > 0 && m.Counts.CodeRecords == 0 {
-		return errors.New("manifest has code references but no code records")
-	}
-	expected, ok := sumCounts(m.Counts.Accounts, m.Counts.StorageSlots, m.Counts.CodeRecords)
-	if !ok {
-		return errors.New("manifest record type counts overflow uint64")
-	}
-	if m.Counts.Records != expected {
-		return errors.New("manifest record count does not match record type counts")
+	if err := m.Counts.Validate(); err != nil {
+		return err
 	}
 	if len(m.SupportedSchemes) != 2 || m.SupportedSchemes[0] != "hash" || m.SupportedSchemes[1] != "path" {
 		return errors.New("manifest supported_schemes must be [hash, path]")

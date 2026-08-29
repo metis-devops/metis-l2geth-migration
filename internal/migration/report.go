@@ -20,7 +20,7 @@ const (
 	VerificationFormat = "metis-l2state-verification"
 	// VerificationVersion is the supported verification report version.
 	VerificationVersion = 2
-	// VerificationFileName is the fixed report name in an imported artifact.
+	// VerificationFileName is the fixed report name in a state artifact.
 	VerificationFileName = "verification.json"
 )
 

@@ -21,6 +21,7 @@ func TestCLIEndToEnd(t *testing.T) {
 	root := t.TempDir()
 	bundlePath := filepath.Join(root, "bundle")
 	artifactPath := filepath.Join(root, "artifact")
+	directArtifactPath := filepath.Join(root, "direct-artifact")
 	var stdout, stderr bytes.Buffer
 	if err := run(context.Background(), []string{
 		"export", "--source-chaindata", source, "--out", bundlePath,
@@ -69,6 +70,45 @@ func TestCLIEndToEnd(t *testing.T) {
 		"phase=verify_state",
 		"phase=inspect_database",
 	)
+	stdout.Reset()
+	stderr.Reset()
+	if err := run(context.Background(), []string{
+		"migrate", "--source-chaindata", source, "--out", directArtifactPath, "--scheme", "hash",
+		"--cache-mb", "16", "--handles", "16",
+	}, &stdout, &stderr); err != nil {
+		t.Fatalf("migrate command: %v stderr=%s", err, stderr.String())
+	}
+	assertJSON(t, stdout.Bytes())
+	assertHexJSONField(t, stdout.Bytes(), "verification.source.header_rlp", -1)
+	assertHexJSONField(t, stdout.Bytes(), "verification.source.head_before.block_hash", 32)
+	assertHexJSONField(t, stdout.Bytes(), "verification.source.head_before.state_root", 32)
+	assertHexJSONField(t, stdout.Bytes(), "verification.recomputed_state_root", 32)
+	if bytes.Contains(stdout.Bytes(), []byte("manifest_sha256")) || bytes.Contains(stdout.Bytes(), []byte("record_chain_hash")) {
+		t.Fatalf("direct migration output contains bundle-only evidence: %s", stdout.String())
+	}
+	assertProgressLog(t, stderr.String(), "migrate",
+		"phase=migrate_state",
+		"phase=generate_trie",
+		"estimated=true",
+		"phase=verify_state",
+		"phase=inspect_database",
+	)
+	stdout.Reset()
+	stderr.Reset()
+	if err := run(context.Background(), []string{
+		"verify", "--source-chaindata", source, "--artifact", directArtifactPath,
+		"--cache-mb", "16", "--handles", "16",
+	}, &stdout, &stderr); err != nil {
+		t.Fatalf("direct verify command: %v stderr=%s", err, stderr.String())
+	}
+	assertJSON(t, stdout.Bytes())
+	assertHexJSONField(t, stdout.Bytes(), "source.header_rlp", -1)
+	assertHexJSONField(t, stdout.Bytes(), "recomputed_state_root", 32)
+	assertProgressLog(t, stderr.String(), "verify",
+		"phase=verify_source_state",
+		"phase=verify_state",
+		"phase=inspect_database",
+	)
 }
 
 func TestCLIQuiet(t *testing.T) {
@@ -76,6 +116,7 @@ func TestCLIQuiet(t *testing.T) {
 	root := t.TempDir()
 	bundlePath := filepath.Join(root, "bundle")
 	artifactPath := filepath.Join(root, "artifact")
+	directArtifactPath := filepath.Join(root, "direct-artifact")
 	var stdout, stderr bytes.Buffer
 	commands := [][]string{
 		{
@@ -90,6 +131,14 @@ func TestCLIQuiet(t *testing.T) {
 			"verify", "--bundle", bundlePath, "--artifact", artifactPath,
 			"--cache-mb", "16", "--handles", "16", "--quiet",
 		},
+		{
+			"migrate", "--source-chaindata", source, "--out", directArtifactPath, "--scheme", "hash",
+			"--cache-mb", "16", "--handles", "16", "--quiet",
+		},
+		{
+			"verify", "--source-chaindata", source, "--artifact", directArtifactPath,
+			"--cache-mb", "16", "--handles", "16", "--quiet",
+		},
 	}
 	for _, args := range commands {
 		stdout.Reset()
@@ -101,6 +150,28 @@ func TestCLIQuiet(t *testing.T) {
 		if stderr.Len() != 0 {
 			t.Fatalf("%s --quiet wrote stderr %q", args[0], stderr.String())
 		}
+	}
+}
+
+func TestCLIVerifyInputModes(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{name: "missing source", args: []string{"verify"}, want: "exactly one"},
+		{name: "both sources", args: []string{"verify", "--bundle", "bundle", "--source-chaindata", "source"}, want: "exactly one"},
+		{name: "direct artifact required", args: []string{"verify", "--source-chaindata", "source"}, want: "--artifact is required"},
+		{name: "migrate positional", args: []string{"migrate", "unexpected"}, want: "does not accept positional"},
+		{name: "migrate has no compression", args: []string{"migrate", "--compression", "none"}, want: "flag provided but not defined"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := run(context.Background(), tt.args, io.Discard, io.Discard)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("run(%v) error is %v, want %q", tt.args, err, tt.want)
+			}
+		})
 	}
 }
 

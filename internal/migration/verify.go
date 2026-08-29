@@ -66,7 +66,7 @@ func Verify(ctx context.Context, opts VerifyOptions) (result VerificationReport,
 	if err := compareStoredReport(stored, bundleResult); err != nil {
 		return VerificationReport{}, err
 	}
-	state, err := verifyDatabase(ctx, filepath.Join(opts.Artifact, "db"), stored.Scheme, bundleResult.Manifest, opts.CacheMB, opts.Handles, reporter)
+	state, err := verifyDatabase(ctx, filepath.Join(opts.Artifact, "db"), stored.Scheme, bundleResult.State, opts.CacheMB, opts.Handles, reporter)
 	if err != nil {
 		return VerificationReport{}, err
 	}
@@ -89,7 +89,7 @@ func compareStoredReport(stored VerificationReport, current BundleResult) error 
 	return nil
 }
 
-func verifyDatabase(ctx context.Context, dbPath, scheme string, manifest bundle.Manifest, cacheMB, handles int, progress *progressReporter) (result StateResult, retErr error) {
+func verifyDatabase(ctx context.Context, dbPath, scheme string, expected StateResult, cacheMB, handles int, progress *progressReporter) (result StateResult, retErr error) {
 	diskKV, err := pebble.New(dbPath, cacheMB, handles, "l2state/verify", true)
 	if err != nil {
 		return StateResult{}, fmt.Errorf("open artifact Pebble database read-only: %w", err)
@@ -123,8 +123,8 @@ func verifyDatabase(ctx context.Context, dbPath, scheme string, manifest bundle.
 		if !trieDB.SnapshotCompleted() {
 			return StateResult{}, errors.New("path artifact snapshot is not complete")
 		}
-		if rawdb.ReadSnapshotRoot(disk) != manifest.Source.HeadBefore.StateRoot {
-			return StateResult{}, fmt.Errorf("path snapshot root mismatch: have %s want %s", rawdb.ReadSnapshotRoot(disk), manifest.Source.HeadBefore.StateRoot)
+		if rawdb.ReadSnapshotRoot(disk) != expected.Root {
+			return StateResult{}, fmt.Errorf("path snapshot root mismatch: have %s want %s", rawdb.ReadSnapshotRoot(disk), expected.Root)
 		}
 		if rawdb.ReadPersistentStateID(disk) != 0 {
 			return StateResult{}, fmt.Errorf("path artifact persistent state ID is %d, want 0", rawdb.ReadPersistentStateID(disk))
@@ -132,7 +132,7 @@ func verifyDatabase(ctx context.Context, dbPath, scheme string, manifest bundle.
 		if rawdb.ReadSnapSyncStatusFlag(disk) != rawdb.StateSyncFinished {
 			return StateResult{}, errors.New("path artifact snap sync status is not finished")
 		}
-		if err := verifyPathMetadata(disk, manifest.Source.HeadBefore.StateRoot); err != nil {
+		if err := verifyPathMetadata(disk, expected.Root); err != nil {
 			return StateResult{}, err
 		}
 	}
@@ -144,27 +144,27 @@ func verifyDatabase(ctx context.Context, dbPath, scheme string, manifest bundle.
 	if progress.Enabled() {
 		counts := new(progressCounts)
 		visitor = newCountingStateVisitor(visitor, counts)
-		progressView = countProgressSnapshot(counts, &manifest.Counts)
+		progressView = countProgressSnapshot(counts, &expected.Counts)
 	}
 	phaseAttrs := append([]any{
 		"database", dbPath,
 		"scheme", scheme,
-		"root", manifest.Source.HeadBefore.StateRoot,
-	}, totalCountAttrs(manifest.Counts)...)
+		"root", expected.Root,
+	}, totalCountAttrs(expected.Counts)...)
 	statePhase := progress.StartPhase("verify_state", progressView, phaseAttrs...)
-	state, inventory, err := traverseState(ctx, disk, trieDB, manifest.Source.HeadBefore.StateRoot, visitor, true)
+	state, inventory, err := traverseState(ctx, disk, trieDB, expected.Root, visitor, true)
 	if err != nil {
 		verifyErr := fmt.Errorf("verify artifact state: %w", err)
 		statePhase.Finish(verifyErr)
 		return StateResult{}, verifyErr
 	}
-	if state.Counts != manifest.Counts {
-		countsErr := fmt.Errorf("artifact counts mismatch: have %+v want %+v", state.Counts, manifest.Counts)
+	if state.Counts != expected.Counts {
+		countsErr := fmt.Errorf("artifact counts mismatch: have %+v want %+v", state.Counts, expected.Counts)
 		statePhase.Finish(countsErr, "recomputed_root", state.Root)
 		return StateResult{}, countsErr
 	}
 	statePhase.Finish(nil, "recomputed_root", state.Root)
-	if err := verifyDatabaseInventory(ctx, disk, scheme, manifest.Counts, inventory, progress); err != nil {
+	if err := verifyDatabaseInventory(ctx, disk, scheme, expected.Counts, inventory, progress); err != nil {
 		return StateResult{}, err
 	}
 	return state, nil
