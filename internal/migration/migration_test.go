@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 	gethleveldb "github.com/ethereum/go-ethereum/ethdb/leveldb"
 	"github.com/ethereum/go-ethereum/ethdb/pebble"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -103,7 +104,7 @@ func TestGoldenLegacyL2GethFixtureBothSchemes(t *testing.T) {
 	if !bytes.Equal(exported.Manifest.Source.HeaderRLP, expected.HeaderRLP) {
 		t.Fatal("golden header RLP mismatch")
 	}
-	if counts := exported.Manifest.Counts; counts.Accounts != 5 || counts.StorageSlots != 9 || counts.CodeReferences != 3 {
+	if counts := exported.Manifest.Counts; counts.Accounts != 5 || counts.StorageSlots != 9 || counts.CodeReferences != 3 || counts.CodeRecords != 2 {
 		t.Fatalf("golden OVM state shape mismatch: %+v", counts)
 	}
 	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme} {
@@ -191,6 +192,9 @@ func TestExportImportAndVerifyBothSchemes(t *testing.T) {
 	}
 	if !bytes.Equal(exported.Manifest.Source.HeaderRLP, fixture.headerRLP) {
 		t.Fatal("header RLP mismatch")
+	}
+	if counts := exported.Manifest.Counts; counts.CodeReferences != 2 || counts.CodeRecords != 1 {
+		t.Fatalf("duplicate code was not deduplicated: %+v", counts)
 	}
 	bundleReport, err := Verify(context.Background(), VerifyOptions{Bundle: bundleDir, CacheMB: 32, Handles: 32})
 	if err != nil {
@@ -430,6 +434,223 @@ func TestOutputsMustNotExist(t *testing.T) {
 	}
 	if _, err := newAtomicDir(existing); err == nil {
 		t.Fatal("existing output path was accepted")
+	}
+}
+
+func TestAtomicDirCommitDoesNotReplaceAppearedOutput(t *testing.T) {
+	final := filepath.Join(t.TempDir(), "artifact")
+	output, err := newAtomicDir(final)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := output.Abort(); err != nil {
+			t.Errorf("abort temporary output: %v", err)
+		}
+	}()
+	if err := os.Mkdir(final, 0o701); err != nil {
+		t.Fatal(err)
+	}
+	if err := output.Commit(); err == nil {
+		t.Fatal("commit replaced an output directory that appeared during the operation")
+	}
+	info, err := os.Stat(final)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o701 {
+		t.Fatalf("appeared output directory was replaced: mode=%o", info.Mode().Perm())
+	}
+}
+
+func TestExportRejectsSymlinkedOutputInsideSource(t *testing.T) {
+	fixture := buildLegacyFixture(t)
+	alias := filepath.Join(t.TempDir(), "source-alias")
+	if err := os.Symlink(fixture.chaindata, alias); err != nil {
+		t.Skipf("symlinks are unavailable: %v", err)
+	}
+	output := filepath.Join(alias, "bundle")
+	_, err := Export(context.Background(), ExportOptions{
+		SourceChaindata: fixture.chaindata,
+		Output:          output,
+		Compression:     "none",
+		CacheMB:         16,
+		Handles:         16,
+	})
+	if err == nil {
+		t.Fatal("output routed through a symlink into the source was accepted")
+	}
+	if _, statErr := os.Lstat(output); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("rejected output unexpectedly exists: %v", statErr)
+	}
+}
+
+func TestHashFlatCleanupPreservesOverlappingTrieHashes(t *testing.T) {
+	db := rawdb.NewMemoryDatabase()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close memory database: %v", err)
+		}
+	}()
+	accountHash := common.HexToHash("0x01")
+	slotHash := common.HexToHash("0x02")
+	rawdb.WriteAccountSnapshot(db, accountHash, []byte{0x01})
+	rawdb.WriteStorageSnapshot(db, accountHash, slotHash, []byte{0x02})
+	var trieHashes []common.Hash
+	for _, prefix := range []byte{rawdb.SnapshotAccountPrefix[0], rawdb.SnapshotStoragePrefix[0]} {
+		hash, blob := findBlobWithHashPrefix(t, prefix)
+		if err := db.Put(hash[:], blob); err != nil {
+			t.Fatal(err)
+		}
+		trieHashes = append(trieHashes, hash)
+	}
+	if err := removeFlatState(context.Background(), db); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range [][]byte{
+		prefixedKey(rawdb.SnapshotAccountPrefix, accountHash[:]),
+		prefixedKey(rawdb.SnapshotStoragePrefix, append(accountHash[:], slotHash[:]...)),
+	} {
+		has, err := db.Has(key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if has {
+			t.Fatalf("flat key %x survived cleanup", key)
+		}
+	}
+	for _, hash := range trieHashes {
+		has, err := db.Has(hash[:])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !has {
+			t.Fatalf("overlapping trie hash %s was deleted", hash)
+		}
+	}
+}
+
+func TestFlatCleanupAndCompactionHonorCanceledContext(t *testing.T) {
+	db := rawdb.NewMemoryDatabase()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close memory database: %v", err)
+		}
+	}()
+	accountHash := common.HexToHash("0x01")
+	rawdb.WriteAccountSnapshot(db, accountHash, []byte{0x01})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := removeFlatState(ctx, db); !errors.Is(err, context.Canceled) {
+		t.Fatalf("flat cleanup returned %v, want context cancellation", err)
+	}
+	has, err := db.Has(prefixedKey(rawdb.SnapshotAccountPrefix, accountHash[:]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !has {
+		t.Fatal("canceled flat cleanup deleted state before observing cancellation")
+	}
+	if err := compactPebbleRanges(ctx, filepath.Join(t.TempDir(), "missing"), 16, 16, nil); !errors.Is(err, context.Canceled) {
+		t.Fatalf("compaction returned %v, want context cancellation", err)
+	}
+}
+
+func TestVerifyRejectsExtraArtifactState(t *testing.T) {
+	fixture := buildLegacyFixture(t)
+	root := t.TempDir()
+	bundleDir := filepath.Join(root, "bundle")
+	if _, err := Export(context.Background(), ExportOptions{
+		SourceChaindata: fixture.chaindata,
+		Output:          bundleDir,
+		Compression:     "none",
+		CacheMB:         16,
+		Handles:         16,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name      string
+		scheme    string
+		wantError string
+		mutate    func(ethdb.Database) error
+	}{
+		{
+			name: "hash orphan trie node", scheme: rawdb.HashScheme, wantError: "trie-node inventory mismatch",
+			mutate: func(db ethdb.Database) error {
+				blob := []byte("unreachable hash trie payload")
+				hash := crypto.Keccak256Hash(blob)
+				return db.Put(hash[:], blob)
+			},
+		},
+		{
+			name: "path orphan trie node", scheme: rawdb.PathScheme, wantError: "trie-node inventory mismatch",
+			mutate: func(db ethdb.Database) error {
+				return db.Put(prefixedKey(rawdb.TrieNodeAccountPrefix, make([]byte, 2*common.HashLength)), []byte{0x80})
+			},
+		},
+		{
+			name: "invalid path trie key", scheme: rawdb.PathScheme, wantError: "non-state key",
+			mutate: func(db ethdb.Database) error {
+				return db.Put(prefixedKey(rawdb.TrieNodeAccountPrefix, []byte{0xff}), []byte{0x80})
+			},
+		},
+		{
+			name: "unreferenced code", scheme: rawdb.HashScheme, wantError: "code inventory mismatch",
+			mutate: func(db ethdb.Database) error {
+				code := []byte{0x60, 0xaa}
+				hash := crypto.Keccak256Hash(code)
+				return db.Put(prefixedKey(rawdb.CodePrefix, hash[:]), code)
+			},
+		},
+		{
+			name: "non-canonical path metadata", scheme: rawdb.PathScheme, wantError: "metadata is non-canonical",
+			mutate: func(db ethdb.Database) error {
+				return db.Put([]byte("LastStateID"), []byte{0})
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			artifact := filepath.Join(root, strings.ReplaceAll(tt.name, " ", "-"))
+			if _, err := Import(context.Background(), ImportOptions{
+				Bundle: bundleDir, Output: artifact, Scheme: tt.scheme, CacheMB: 16, Handles: 16,
+			}); err != nil {
+				t.Fatal(err)
+			}
+			kv, err := pebble.New(filepath.Join(artifact, "db"), 16, 16, "inventory-mutate", false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			disk := rawdb.NewDatabase(kv)
+			if err := tt.mutate(disk); err != nil {
+				t.Fatal(err)
+			}
+			if err := disk.SyncKeyValue(); err != nil {
+				t.Fatal(err)
+			}
+			if err := disk.Close(); err != nil {
+				t.Fatal(err)
+			}
+			_, err = Verify(context.Background(), VerifyOptions{
+				Bundle: bundleDir, Artifact: artifact, CacheMB: 16, Handles: 16,
+			})
+			if err == nil || !strings.Contains(err.Error(), tt.wantError) {
+				t.Fatalf("expected %q error, got %v", tt.wantError, err)
+			}
+		})
+	}
+}
+
+func findBlobWithHashPrefix(t *testing.T, prefix byte) (common.Hash, []byte) {
+	t.Helper()
+	for i := uint64(0); ; i++ {
+		blob := make([]byte, 8)
+		binary.BigEndian.PutUint64(blob, i)
+		hash := crypto.Keccak256Hash(blob)
+		if hash[0] == prefix {
+			return hash, blob
+		}
 	}
 }
 

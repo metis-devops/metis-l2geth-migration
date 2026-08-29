@@ -3,6 +3,7 @@ package migration
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -14,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/pebble"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
 	"github.com/metis-devops/metis-l2geth-migration/internal/bundle"
@@ -130,6 +132,9 @@ func verifyDatabase(ctx context.Context, dbPath, scheme string, manifest bundle.
 		if rawdb.ReadSnapSyncStatusFlag(disk) != rawdb.StateSyncFinished {
 			return StateResult{}, errors.New("path artifact snap sync status is not finished")
 		}
+		if err := verifyPathMetadata(disk, manifest.Source.HeadBefore.StateRoot); err != nil {
+			return StateResult{}, err
+		}
 	}
 	var visitor StateVisitor
 	if scheme == rawdb.PathScheme {
@@ -147,7 +152,7 @@ func verifyDatabase(ctx context.Context, dbPath, scheme string, manifest bundle.
 		"root", manifest.Source.HeadBefore.StateRoot,
 	}, totalCountAttrs(manifest.Counts)...)
 	statePhase := progress.StartPhase("verify_state", progressView, phaseAttrs...)
-	state, err := TraverseState(ctx, disk, trieDB, manifest.Source.HeadBefore.StateRoot, visitor)
+	state, inventory, err := traverseState(ctx, disk, trieDB, manifest.Source.HeadBefore.StateRoot, visitor, true)
 	if err != nil {
 		verifyErr := fmt.Errorf("verify artifact state: %w", err)
 		statePhase.Finish(verifyErr)
@@ -159,7 +164,7 @@ func verifyDatabase(ctx context.Context, dbPath, scheme string, manifest bundle.
 		return StateResult{}, countsErr
 	}
 	statePhase.Finish(nil, "recomputed_root", state.Root)
-	if err := verifyDatabaseInventory(ctx, disk, scheme, manifest.Counts, progress); err != nil {
+	if err := verifyDatabaseInventory(ctx, disk, scheme, manifest.Counts, inventory, progress); err != nil {
 		return StateResult{}, err
 	}
 	return state, nil
@@ -190,7 +195,7 @@ func (v *flatStateVerifier) Code(common.Hash, common.Hash, []byte) error {
 	return nil
 }
 
-func verifyDatabaseInventory(ctx context.Context, db ethdb.Database, scheme string, counts bundle.Counts, progress *progressReporter) (retErr error) {
+func verifyDatabaseInventory(ctx context.Context, db ethdb.Database, scheme string, counts bundle.Counts, expected stateInventory, progress *progressReporter) (retErr error) {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -209,7 +214,7 @@ func verifyDatabaseInventory(ctx context.Context, db ethdb.Database, scheme stri
 	defer func() {
 		phase.Finish(retErr, finishAttrs...)
 	}()
-	var flatAccounts, flatSlots uint64
+	var flatAccounts, flatSlots, trieNodes, codeEntries uint64
 	for it.Next() {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -221,19 +226,24 @@ func verifyDatabaseInventory(ctx context.Context, db ethdb.Database, scheme stri
 		if scheme == rawdb.HashScheme {
 			switch {
 			case rawdb.IsLegacyTrieNode(key, value):
+				trieNodes++
 				continue
 			case isValidCodeEntry(key, value):
+				codeEntries++
 				continue
 			default:
 				return fmt.Errorf("hash artifact contains non-state key %x", key)
 			}
 		}
 		switch {
-		case rawdb.IsAccountTrieNode(key):
+		case isCanonicalPathAccountTrieNodeKey(key):
+			trieNodes++
 			continue
-		case rawdb.IsStorageTrieNode(key):
+		case isCanonicalPathStorageTrieNodeKey(key):
+			trieNodes++
 			continue
 		case isValidCodeEntry(key, value):
+			codeEntries++
 			continue
 		case bytes.HasPrefix(key, rawdb.SnapshotAccountPrefix) && len(key) == len(rawdb.SnapshotAccountPrefix)+common.HashLength:
 			flatAccounts++
@@ -258,7 +268,55 @@ func verifyDatabaseInventory(ctx context.Context, db ethdb.Database, scheme stri
 			return fmt.Errorf("path flat-state inventory mismatch: accounts=%d/%d slots=%d/%d", flatAccounts, counts.Accounts, flatSlots, counts.StorageSlots)
 		}
 	}
-	finishAttrs = []any{"flat_accounts", flatAccounts, "flat_storage_slots", flatSlots}
+	if trieNodes != expected.TrieNodes {
+		return fmt.Errorf("artifact trie-node inventory mismatch: have %d want %d", trieNodes, expected.TrieNodes)
+	}
+	if codeEntries != expected.CodeEntries {
+		return fmt.Errorf("artifact code inventory mismatch: have %d want %d", codeEntries, expected.CodeEntries)
+	}
+	finishAttrs = []any{
+		"flat_accounts", flatAccounts,
+		"flat_storage_slots", flatSlots,
+		"trie_nodes", trieNodes,
+		"code_entries", codeEntries,
+	}
+	return nil
+}
+
+type snapshotGeneratorMarker struct {
+	Wiping   bool
+	Done     bool
+	Marker   []byte
+	Accounts uint64
+	Slots    uint64
+	Storage  uint64
+}
+
+func verifyPathMetadata(db ethdb.Database, root common.Hash) error {
+	var stateID [8]byte
+	binary.BigEndian.PutUint64(stateID[:], 0)
+	generator, err := rlp.EncodeToBytes(snapshotGeneratorMarker{Done: true})
+	if err != nil {
+		return fmt.Errorf("encode expected path snapshot generator marker: %w", err)
+	}
+	for _, expected := range []struct {
+		name  string
+		key   []byte
+		value []byte
+	}{
+		{name: "snapshot root", key: rawdb.SnapshotRootKey, value: root[:]},
+		{name: "snapshot generator", key: []byte("SnapshotGenerator"), value: generator},
+		{name: "persistent state ID", key: []byte("LastStateID"), value: stateID[:]},
+		{name: "snap sync status", key: []byte("SnapSyncStatus"), value: []byte{rawdb.StateSyncFinished}},
+	} {
+		value, err := db.Get(expected.key)
+		if err != nil {
+			return fmt.Errorf("read path %s metadata: %w", expected.name, err)
+		}
+		if !bytes.Equal(value, expected.value) {
+			return fmt.Errorf("path %s metadata is non-canonical", expected.name)
+		}
+	}
 	return nil
 }
 
@@ -268,6 +326,36 @@ func isValidCodeEntry(key, code []byte) bool {
 		return false
 	}
 	return crypto.Keccak256Hash(code) == common.BytesToHash(hashBytes)
+}
+
+func isCanonicalPathAccountTrieNodeKey(key []byte) bool {
+	if !bytes.HasPrefix(key, rawdb.TrieNodeAccountPrefix) {
+		return false
+	}
+	return isCanonicalHexPath(key[len(rawdb.TrieNodeAccountPrefix):])
+}
+
+func isCanonicalPathStorageTrieNodeKey(key []byte) bool {
+	if !bytes.HasPrefix(key, rawdb.TrieNodeStoragePrefix) {
+		return false
+	}
+	pathOffset := len(rawdb.TrieNodeStoragePrefix) + common.HashLength
+	if len(key) < pathOffset {
+		return false
+	}
+	return isCanonicalHexPath(key[pathOffset:])
+}
+
+func isCanonicalHexPath(path []byte) bool {
+	if len(path) > 2*common.HashLength {
+		return false
+	}
+	for _, nibble := range path {
+		if nibble > 0x0f {
+			return false
+		}
+	}
+	return true
 }
 
 func allowedPathMetadataKey(key []byte) bool {

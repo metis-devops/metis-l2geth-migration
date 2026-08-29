@@ -128,16 +128,18 @@ func TestCountingStateVisitor(t *testing.T) {
 	counts := new(progressCounts)
 	visitor := newCountingStateVisitor(nil, counts)
 	account := types.NewEmptyStateAccount()
+	codeHash := common.HexToHash("0x03")
+	account.CodeHash = codeHash[:]
 	if err := visitor.Account(common.HexToHash("0x01"), account, []byte{1, 2, 3}); err != nil {
 		t.Fatal(err)
 	}
 	if err := visitor.Storage(common.HexToHash("0x01"), common.HexToHash("0x02"), []byte{4, 5}); err != nil {
 		t.Fatal(err)
 	}
-	if err := visitor.Code(common.HexToHash("0x01"), common.HexToHash("0x03"), []byte{6, 7, 8, 9}); err != nil {
+	if err := visitor.Code(common.HexToHash("0x01"), codeHash, []byte{6, 7, 8, 9}); err != nil {
 		t.Fatal(err)
 	}
-	want := bundle.Counts{Accounts: 1, StorageSlots: 1, CodeReferences: 1, Records: 3, PayloadBytes: 9}
+	want := bundle.Counts{Accounts: 1, StorageSlots: 1, CodeReferences: 1, CodeRecords: 1, Records: 3, PayloadBytes: 9}
 	if got := counts.snapshot(); got != want {
 		t.Fatalf("unexpected progress counts: got %+v want %+v", got, want)
 	}
@@ -152,7 +154,7 @@ func TestVerifyDatabaseInventoryHonorsCanceledContext(t *testing.T) {
 			t.Errorf("close memory database: %v", err)
 		}
 	}()
-	if err := verifyDatabaseInventory(ctx, db, rawdb.HashScheme, bundle.Counts{}, nil); !errors.Is(err, context.Canceled) {
+	if err := verifyDatabaseInventory(ctx, db, rawdb.HashScheme, bundle.Counts{}, stateInventory{}, nil); !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected context cancellation, got %v", err)
 	}
 }

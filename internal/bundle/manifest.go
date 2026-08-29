@@ -22,7 +22,7 @@ const (
 	// FormatName identifies the bundle format in a manifest.
 	FormatName = "metis-l2state"
 	// FormatVersion is the supported bundle format version.
-	FormatVersion = 1
+	FormatVersion = 2
 	// ManifestFileName is the fixed name of the bundle manifest.
 	ManifestFileName = "manifest.json"
 	// RecordsFileZstd is the fixed name of a zstd-compressed record stream.
@@ -50,6 +50,7 @@ type Counts struct {
 	Accounts       uint64 `json:"accounts"`
 	StorageSlots   uint64 `json:"storage_slots"`
 	CodeReferences uint64 `json:"code_references"`
+	CodeRecords    uint64 `json:"code_records,omitempty"`
 	Records        uint64 `json:"records"`
 	PayloadBytes   uint64 `json:"payload_bytes"`
 }
@@ -203,13 +204,37 @@ func (m Manifest) Validate() error {
 	if m.StateFile.RecordChainHash == (common.Hash{}) {
 		return errors.New("record chain hash is empty")
 	}
-	if m.Counts.Records != m.Counts.Accounts+m.Counts.StorageSlots+m.Counts.CodeReferences {
+	if m.Counts.CodeReferences > m.Counts.Accounts {
+		return errors.New("manifest code reference count exceeds account count")
+	}
+	if m.Counts.CodeRecords > m.Counts.CodeReferences {
+		return errors.New("manifest code record count exceeds code reference count")
+	}
+	if m.Counts.CodeReferences > 0 && m.Counts.CodeRecords == 0 {
+		return errors.New("manifest has code references but no code records")
+	}
+	expected, ok := sumCounts(m.Counts.Accounts, m.Counts.StorageSlots, m.Counts.CodeRecords)
+	if !ok {
+		return errors.New("manifest record type counts overflow uint64")
+	}
+	if m.Counts.Records != expected {
 		return errors.New("manifest record count does not match record type counts")
 	}
 	if len(m.SupportedSchemes) != 2 || m.SupportedSchemes[0] != "hash" || m.SupportedSchemes[1] != "path" {
 		return errors.New("manifest supported_schemes must be [hash, path]")
 	}
 	return nil
+}
+
+func sumCounts(values ...uint64) (uint64, bool) {
+	var total uint64
+	for _, value := range values {
+		if ^uint64(0)-total < value {
+			return 0, false
+		}
+		total += value
+	}
+	return total, true
 }
 
 // ManifestSHA256 returns the SHA-256 digest of manifest bytes.

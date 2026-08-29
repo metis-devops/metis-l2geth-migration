@@ -151,6 +151,7 @@ type progressCounts struct {
 	accounts       atomic.Uint64
 	storageSlots   atomic.Uint64
 	codeReferences atomic.Uint64
+	codeRecords    atomic.Uint64
 	records        atomic.Uint64
 	payloadBytes   atomic.Uint64
 }
@@ -163,18 +164,20 @@ func (c *progressCounts) snapshot() bundle.Counts {
 		Accounts:       c.accounts.Load(),
 		StorageSlots:   c.storageSlots.Load(),
 		CodeReferences: c.codeReferences.Load(),
+		CodeRecords:    c.codeRecords.Load(),
 		Records:        c.records.Load(),
 		PayloadBytes:   c.payloadBytes.Load(),
 	}
 }
 
 type countingStateVisitor struct {
-	next   StateVisitor
-	counts *progressCounts
+	next     StateVisitor
+	counts   *progressCounts
+	seenCode map[common.Hash]struct{}
 }
 
 func newCountingStateVisitor(next StateVisitor, counts *progressCounts) StateVisitor {
-	return &countingStateVisitor{next: next, counts: counts}
+	return &countingStateVisitor{next: next, counts: counts, seenCode: make(map[common.Hash]struct{})}
 }
 
 func (v *countingStateVisitor) Account(hash common.Hash, account *types.StateAccount, fullRLP []byte) error {
@@ -186,6 +189,9 @@ func (v *countingStateVisitor) Account(hash common.Hash, account *types.StateAcc
 	v.counts.accounts.Add(1)
 	v.counts.records.Add(1)
 	v.counts.payloadBytes.Add(uint64(len(fullRLP)))
+	if common.BytesToHash(account.CodeHash) != types.EmptyCodeHash {
+		v.counts.codeReferences.Add(1)
+	}
 	return nil
 }
 
@@ -207,9 +213,12 @@ func (v *countingStateVisitor) Code(accountHash, codeHash common.Hash, code []by
 			return err
 		}
 	}
-	v.counts.codeReferences.Add(1)
-	v.counts.records.Add(1)
-	v.counts.payloadBytes.Add(uint64(len(code)))
+	if _, exists := v.seenCode[codeHash]; !exists {
+		v.seenCode[codeHash] = struct{}{}
+		v.counts.codeRecords.Add(1)
+		v.counts.records.Add(1)
+		v.counts.payloadBytes.Add(uint64(len(code)))
+	}
 	return nil
 }
 
@@ -224,6 +233,7 @@ func countProgressAttrs(current bundle.Counts, total *bundle.Counts, elapsed tim
 		"accounts", current.Accounts,
 		"storage_slots", current.StorageSlots,
 		"code_references", current.CodeReferences,
+		"code_records", current.CodeRecords,
 		"records", current.Records,
 		"payload_bytes", current.PayloadBytes,
 	}
@@ -252,6 +262,7 @@ func totalCountAttrs(total bundle.Counts) []any {
 		"total_accounts", total.Accounts,
 		"total_storage_slots", total.StorageSlots,
 		"total_code_references", total.CodeReferences,
+		"total_code_records", total.CodeRecords,
 		"total_records", total.Records,
 		"total_payload_bytes", total.PayloadBytes,
 	}

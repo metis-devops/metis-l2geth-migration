@@ -100,13 +100,16 @@ func Export(ctx context.Context, opts ExportOptions) (result ExportResult, retEr
 			retErr = errors.Join(retErr, fmt.Errorf("remove partial bundle: %w", err))
 		}
 	}()
+	if err := rejectOutputInsideSource(opts.SourceChaindata, output.Path()); err != nil {
+		return ExportResult{}, err
+	}
 
 	recordWriter, err := bundle.NewWriter(output.Path(), opts.Compression, headBefore, headerRLP)
 	if err != nil {
 		return ExportResult{}, err
 	}
 	var (
-		visitor      StateVisitor = &recordWriterVisitor{writer: recordWriter}
+		visitor      StateVisitor = &recordWriterVisitor{writer: recordWriter, seenCode: make(map[common.Hash]struct{})}
 		progressView progressSnapshot
 	)
 	if reporter.Enabled() {
@@ -188,6 +191,10 @@ func Export(ctx context.Context, opts ExportOptions) (result ExportResult, retEr
 		return ExportResult{}, finalizeErr
 	}
 	publishPhase := reporter.StartPhase("publish_bundle", nil, "output", opts.Output)
+	if err := rejectOutputInsideSource(opts.SourceChaindata, opts.Output); err != nil {
+		publishPhase.Finish(err)
+		return ExportResult{}, err
+	}
 	if err := output.Commit(); err != nil {
 		publishPhase.Finish(err)
 		return ExportResult{}, err
@@ -233,12 +240,18 @@ func readLegacyHead(db ethdb.Database) (bundle.Head, []byte, error) {
 }
 
 type recordWriterVisitor struct {
-	writer *bundle.Writer
+	writer   *bundle.Writer
+	seenCode map[common.Hash]struct{}
 }
 
-func (v *recordWriterVisitor) Account(hash common.Hash, _ *types.StateAccount, fullRLP []byte) error {
+func (v *recordWriterVisitor) Account(hash common.Hash, account *types.StateAccount, fullRLP []byte) error {
 	if err := v.writer.WriteAccount(hash, fullRLP); err != nil {
 		return fmt.Errorf("write account %s: %w", hash, err)
+	}
+	if common.BytesToHash(account.CodeHash) != types.EmptyCodeHash {
+		if err := v.writer.CountCodeReference(); err != nil {
+			return fmt.Errorf("count account %s code reference: %w", hash, err)
+		}
 	}
 	return nil
 }
@@ -251,18 +264,26 @@ func (v *recordWriterVisitor) Storage(accountHash, slotHash common.Hash, valueRL
 }
 
 func (v *recordWriterVisitor) Code(accountHash, codeHash common.Hash, code []byte) error {
+	if _, exists := v.seenCode[codeHash]; exists {
+		return nil
+	}
 	if err := v.writer.WriteCode(codeHash, code); err != nil {
 		return fmt.Errorf("write account %s code %s: %w", accountHash, codeHash, err)
 	}
+	v.seenCode[codeHash] = struct{}{}
 	return nil
 }
 
 func rejectOutputInsideSource(source, output string) error {
-	sourceAbs, err := filepath.Abs(source)
+	sourceAbs, err := filepath.EvalSymlinks(source)
 	if err != nil {
 		return fmt.Errorf("resolve source path: %w", err)
 	}
-	outputAbs, err := filepath.Abs(output)
+	sourceAbs, err = filepath.Abs(sourceAbs)
+	if err != nil {
+		return fmt.Errorf("resolve absolute source path: %w", err)
+	}
+	outputAbs, err := resolvePathWithMissing(output)
 	if err != nil {
 		return fmt.Errorf("resolve output path: %w", err)
 	}
@@ -272,6 +293,25 @@ func rejectOutputInsideSource(source, output string) error {
 	}
 	if rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator))) {
 		return errors.New("bundle output must not be inside the source chaindata directory")
+	}
+	sourceInfo, err := os.Stat(sourceAbs)
+	if err != nil {
+		return fmt.Errorf("stat source path: %w", err)
+	}
+	for probe := outputAbs; ; probe = filepath.Dir(probe) {
+		info, statErr := os.Stat(probe)
+		switch {
+		case statErr == nil && os.SameFile(sourceInfo, info):
+			return errors.New("bundle output aliases the source chaindata directory")
+		case statErr == nil:
+		case errors.Is(statErr, os.ErrNotExist):
+		default:
+			return fmt.Errorf("inspect output ancestor %s: %w", probe, statErr)
+		}
+		parent := filepath.Dir(probe)
+		if parent == probe {
+			break
+		}
 	}
 	return nil
 }

@@ -6,8 +6,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync/atomic"
 
+	cpebble "github.com/cockroachdb/pebble/v2"
+	"github.com/cockroachdb/pebble/v2/bloom"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -145,8 +148,11 @@ func Import(ctx context.Context, opts ImportOptions) (result ImportResult, retEr
 	}
 	schemePhase := reporter.StartPhase(schemePhaseName, nil, "scheme", opts.Scheme)
 	schemeErr := func() error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if opts.Scheme == rawdb.HashScheme {
-			return removeFlatState(disk)
+			return removeFlatState(ctx, disk)
 		}
 		config := *pathdb.Defaults
 		config.SnapshotNoBuild = true
@@ -178,8 +184,8 @@ func Import(ctx context.Context, opts ImportOptions) (result ImportResult, retEr
 	}
 	finalizePhase := reporter.StartPhase("finalize_database", nil)
 	finalizeErr := func() error {
-		if err := disk.Compact(rawdb.CodePrefix, prefixLimit(rawdb.CodePrefix)); err != nil {
-			return fmt.Errorf("compact contract code range: %w", err)
+		if err := ctx.Err(); err != nil {
+			return err
 		}
 		if err := disk.SyncKeyValue(); err != nil {
 			return fmt.Errorf("sync target database: %w", err)
@@ -188,7 +194,17 @@ func Import(ctx context.Context, opts ImportOptions) (result ImportResult, retEr
 			return fmt.Errorf("close target database: %w", err)
 		}
 		diskClosed = true
-		return nil
+		ranges := [][2][]byte{{rawdb.CodePrefix, prefixLimit(rawdb.CodePrefix)}}
+		if opts.Scheme == rawdb.HashScheme {
+			ranges = append([][2][]byte{
+				{rawdb.SnapshotAccountPrefix, prefixLimit(rawdb.SnapshotAccountPrefix)},
+				{rawdb.SnapshotStoragePrefix, prefixLimit(rawdb.SnapshotStoragePrefix)},
+			}, ranges...)
+		}
+		if err := compactPebbleRanges(ctx, dbPath, opts.CacheMB, opts.Handles, ranges); err != nil {
+			return err
+		}
+		return syncDirectory(dbPath)
 	}()
 	finalizePhase.Finish(finalizeErr)
 	if finalizeErr != nil {
@@ -276,30 +292,147 @@ func (w *flatStateWriter) Close() error {
 	return nil
 }
 
-func removeFlatState(db ethdb.Database) error {
-	ranges := [][2][]byte{
-		{rawdb.SnapshotAccountPrefix, prefixLimit(rawdb.SnapshotAccountPrefix)},
-		{rawdb.SnapshotStoragePrefix, prefixLimit(rawdb.SnapshotStoragePrefix)},
-	}
-	for _, bounds := range ranges {
-		if err := db.DeleteRange(bounds[0], bounds[1]); err != nil {
-			return fmt.Errorf("delete temporary flat state range %x: %w", bounds[0], err)
+func removeFlatState(ctx context.Context, db ethdb.Database) error {
+	for _, target := range []struct {
+		prefix    []byte
+		keyLength int
+	}{
+		{prefix: rawdb.SnapshotAccountPrefix, keyLength: len(rawdb.SnapshotAccountPrefix) + common.HashLength},
+		{prefix: rawdb.SnapshotStoragePrefix, keyLength: len(rawdb.SnapshotStoragePrefix) + 2*common.HashLength},
+	} {
+		if err := deleteKeysWithExactLength(ctx, db, target.prefix, target.keyLength); err != nil {
+			return err
 		}
-		if err := db.Compact(bounds[0], bounds[1]); err != nil {
-			return fmt.Errorf("compact temporary flat state range %x: %w", bounds[0], err)
-		}
-		it := db.NewIterator(bounds[0], nil)
-		hasEntry := it.Next()
-		iterErr := it.Error()
-		it.Release()
-		if iterErr != nil {
-			return fmt.Errorf("inspect removed flat state range %x: %w", bounds[0], iterErr)
+		hasEntry, err := hasKeyWithExactLength(ctx, db, target.prefix, target.keyLength)
+		if err != nil {
+			return err
 		}
 		if hasEntry {
-			return fmt.Errorf("temporary flat state range %x is not empty after deletion", bounds[0])
+			return fmt.Errorf("temporary flat state prefix %x is not empty after deletion", target.prefix)
 		}
 	}
 	return nil
+}
+
+func deleteKeysWithExactLength(ctx context.Context, db ethdb.Database, prefix []byte, keyLength int) (retErr error) {
+	it := db.NewIterator(prefix, nil)
+	defer it.Release()
+	batch := db.NewBatchWithSize(ethdb.IdealBatchSize)
+	defer batch.Close()
+	for it.Next() {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if len(it.Key()) != keyLength {
+			continue
+		}
+		if err := batch.Delete(append([]byte(nil), it.Key()...)); err != nil {
+			return fmt.Errorf("delete temporary flat state key %x: %w", it.Key(), err)
+		}
+		if batch.ValueSize() >= ethdb.IdealBatchSize {
+			if err := batch.Write(); err != nil {
+				return fmt.Errorf("flush temporary flat state deletion: %w", err)
+			}
+			batch.Reset()
+		}
+	}
+	if err := it.Error(); err != nil {
+		return fmt.Errorf("iterate temporary flat state prefix %x: %w", prefix, err)
+	}
+	if err := batch.Write(); err != nil {
+		return fmt.Errorf("flush final temporary flat state deletion: %w", err)
+	}
+	return nil
+}
+
+func hasKeyWithExactLength(ctx context.Context, db ethdb.Database, prefix []byte, keyLength int) (bool, error) {
+	it := db.NewIterator(prefix, nil)
+	defer it.Release()
+	for it.Next() {
+		if err := ctx.Err(); err != nil {
+			return false, err
+		}
+		if len(it.Key()) == keyLength {
+			return true, nil
+		}
+	}
+	if err := it.Error(); err != nil {
+		return false, fmt.Errorf("inspect temporary flat state prefix %x: %w", prefix, err)
+	}
+	return false, nil
+}
+
+func compactPebbleRanges(ctx context.Context, path string, cacheMB, handles int, ranges [][2][]byte) (retErr error) {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	cacheMB = max(cacheMB, 16)
+	handles = max(handles, 16)
+	cache := cpebble.NewCache(int64(cacheMB) * 1024 * 1024)
+	defer cache.Unref()
+	memTableSize := cacheMB * 1024 * 1024 / 8
+	maxMemTableSize := (1<<31)<<(^uint(0)>>63) - 1
+	if memTableSize >= maxMemTableSize {
+		memTableSize = maxMemTableSize - 1
+	}
+	options := &cpebble.Options{
+		Cache:                       cache,
+		MaxOpenFiles:                handles,
+		MemTableSize:                uint64(memTableSize),
+		MemTableStopWritesThreshold: 8,
+		CompactionConcurrencyRange:  func() (int, int) { return 1, runtime.NumCPU() },
+		Levels: [7]cpebble.LevelOptions{
+			{FilterPolicy: bloom.FilterPolicy(10)},
+			{FilterPolicy: bloom.FilterPolicy(10)},
+			{FilterPolicy: bloom.FilterPolicy(10)},
+			{FilterPolicy: bloom.FilterPolicy(10)},
+			{FilterPolicy: bloom.FilterPolicy(10)},
+			{FilterPolicy: bloom.FilterPolicy(10)},
+			{},
+		},
+		TargetFileSizes: [7]int64{
+			2 * 1024 * 1024,
+			4 * 1024 * 1024,
+			8 * 1024 * 1024,
+			16 * 1024 * 1024,
+			32 * 1024 * 1024,
+			64 * 1024 * 1024,
+			128 * 1024 * 1024,
+		},
+		Logger:                compactLogger{},
+		WALBytesPerSync:       5 * ethdb.IdealBatchSize,
+		L0CompactionThreshold: 2,
+		FormatMajorVersion:    cpebble.FormatFlushableIngest,
+	}
+	options.Experimental.ReadSamplingMultiplier = -1
+	options.Experimental.L0CompactionConcurrency = 1
+	options.Experimental.CompactionDebtConcurrency = 1 << 28
+	db, err := cpebble.Open(path, options)
+	if err != nil {
+		return fmt.Errorf("open target Pebble database for cancellable compaction: %w", err)
+	}
+	defer func() {
+		if err := db.Close(); err != nil {
+			retErr = errors.Join(retErr, fmt.Errorf("close compacted Pebble database: %w", err))
+		}
+	}()
+	for _, bounds := range ranges {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := db.Compact(ctx, bounds[0], bounds[1], true); err != nil {
+			return fmt.Errorf("compact target database range %x: %w", bounds[0], err)
+		}
+	}
+	return nil
+}
+
+type compactLogger struct{}
+
+func (compactLogger) Infof(string, ...any)  {}
+func (compactLogger) Errorf(string, ...any) {}
+func (compactLogger) Fatalf(format string, args ...any) {
+	panic(fmt.Errorf("fatal: "+format, args...))
 }
 
 func prefixLimit(prefix []byte) []byte {

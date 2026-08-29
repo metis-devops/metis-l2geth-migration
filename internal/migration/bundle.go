@@ -61,6 +61,7 @@ func scanBundle(ctx context.Context, dir string, visitor StateVisitor, progress 
 		expectedRoot: manifest.Source.HeadBefore.StateRoot,
 		visitor:      trackedVisitor,
 		accountStack: trie.NewStackTrie(nil),
+		knownCodes:   make(map[common.Hash]struct{}),
 	}
 	records, err := bundle.ScanRecords(ctx, dir, manifest, consumer.consume)
 	if err != nil {
@@ -88,6 +89,7 @@ type recordConsumer struct {
 	visitor      StateVisitor
 	accountStack *trie.StackTrie
 	counts       bundle.Counts
+	knownCodes   map[common.Hash]struct{}
 
 	haveAccount bool
 	accountHash common.Hash
@@ -181,7 +183,11 @@ func (c *recordConsumer) consume(record bundle.Record) error {
 		if computed := crypto.Keccak256Hash(record.Payload); computed != expected {
 			return fmt.Errorf("account %s code content hash mismatch: computed %s account %s", c.accountHash, computed, expected)
 		}
+		if _, exists := c.knownCodes[expected]; exists {
+			return fmt.Errorf("account %s repeats code record %s already provided by an earlier account", c.accountHash, expected)
+		}
 		c.codeSeen = true
+		c.knownCodes[expected] = struct{}{}
 		if c.visitor != nil {
 			if err := c.visitor.Code(c.accountHash, expected, record.Payload); err != nil {
 				return err
@@ -203,8 +209,16 @@ func (c *recordConsumer) finalizeAccount() error {
 		return fmt.Errorf("account %s storage root mismatch: computed %s account %s", c.accountHash, computed, c.account.Root)
 	}
 	expectsCode := common.BytesToHash(c.account.CodeHash) != types.EmptyCodeHash
-	if expectsCode != c.codeSeen {
-		return fmt.Errorf("account %s code record presence mismatch: expected %t got %t", c.accountHash, expectsCode, c.codeSeen)
+	if !expectsCode && c.codeSeen {
+		return fmt.Errorf("account %s has an unexpected code record", c.accountHash)
+	}
+	if expectsCode {
+		expected := common.BytesToHash(c.account.CodeHash)
+		_, available := c.knownCodes[expected]
+		if !available {
+			return fmt.Errorf("account %s code %s has not been provided", c.accountHash, expected)
+		}
+		c.counts.CodeReferences++
 	}
 	if err := c.accountStack.Update(c.accountHash[:], c.accountRLP); err != nil {
 		return fmt.Errorf("rebuild account trie: %w", err)
@@ -240,6 +254,6 @@ func (c *recordConsumer) addCount(typ byte, payloadLen int) {
 	case bundle.RecordStorage:
 		c.counts.StorageSlots++
 	case bundle.RecordCode:
-		c.counts.CodeReferences++
+		c.counts.CodeRecords++
 	}
 }
