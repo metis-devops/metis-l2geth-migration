@@ -64,7 +64,6 @@ func TestLoadVerificationReportRejectsInvalidHashEvidence(t *testing.T) {
 	}
 	var tests []testCase
 	for _, field := range []string{"manifest_sha256", "state_file_sha256", "record_chain_hash"} {
-		field := field
 		tests = append(tests,
 			testCase{name: field + " without prefix", mutate: func(document map[string]any) {
 				document[field] = strings.TrimPrefix(document[field].(string), "0x")

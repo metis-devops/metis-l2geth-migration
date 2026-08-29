@@ -128,7 +128,7 @@ func assertHexJSONField(t *testing.T, data []byte, path string, byteLength int) 
 	if err := json.Unmarshal(data, &value); err != nil {
 		t.Fatalf("decode JSON for %s: %v", path, err)
 	}
-	for _, component := range strings.Split(path, ".") {
+	for component := range strings.SplitSeq(path, ".") {
 		object, ok := value.(map[string]any)
 		if !ok {
 			t.Fatalf("JSON path %s does not contain an object at %s", path, component)

@@ -30,7 +30,6 @@ Run commands from the repository root:
 
 ```bash
 make fmt-check
-make vet
 make lint
 make test
 make build

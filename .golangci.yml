@@ -7,6 +7,8 @@ run:
 linters:
   default: standard
   enable:
+    - modernize
+    - govet
     - errorlint
     - misspell
     - revive

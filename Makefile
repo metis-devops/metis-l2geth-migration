@@ -1,4 +1,4 @@
-.PHONY: build test test-race vet lint fmt-check ci
+.PHONY: build test test-race lint fmt-check ci
 
 build:
 	go build -o bin/l2state ./cmd/l2state
@@ -12,11 +12,8 @@ test:
 test-race:
 	go test -race ./...
 
-vet:
-	go vet ./...
-
 fmt-check:
 	test -z "$$(gofmt -l cmd internal)"
 	go mod tidy -diff
 
-ci: fmt-check vet lint test build
+ci: fmt-check lint test build
