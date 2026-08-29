@@ -1,0 +1,42 @@
+name: test
+
+on:
+  push:
+    branches:
+      - "main"
+  pull_request:
+    branches:
+      - "main"
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "stable"
+          check-latest: true
+      - name: Golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: latest
+          skip-cache: true
+          install-only: true
+      - run: make ci test-race
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - name: Build production image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          pull: true
+          push: false
+          load: false
+          cache-from: type=gha,scope=smock-check-${{ runner.os }}-${{ runner.arch }}
+          cache-to: type=gha,mode=max,scope=smock-check-${{ runner.os }}-${{ runner.arch }},ignore-error=true
