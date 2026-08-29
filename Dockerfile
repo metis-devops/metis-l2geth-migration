@@ -9,5 +9,5 @@ RUN  --mount=type=cache,target=/go/pkg/mod \
 
 FROM alpine:latest
 WORKDIR /app
-COPY --from=build /app/go/bin/l2state  /usr/local/bin/
+COPY --from=build /app/bin/l2state  /usr/local/bin/
 ENTRYPOINT ["/usr/local/bin/l2state"]
