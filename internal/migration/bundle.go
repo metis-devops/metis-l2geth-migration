@@ -24,7 +24,7 @@ type BundleResult struct {
 
 // ScanBundle strictly validates a bundle and rebuilds its committed state root.
 func ScanBundle(ctx context.Context, dir string, visitor StateVisitor) (BundleResult, error) {
-	return scanBundle(ctx, dir, visitor, nil, codeHashIndexOptions{})
+	return scanBundle(ctx, dir, visitor, nil)
 }
 
 func scanBundle(
@@ -32,7 +32,6 @@ func scanBundle(
 	dir string,
 	visitor StateVisitor,
 	progress *progressReporter,
-	indexOpts codeHashIndexOptions,
 ) (result BundleResult, retErr error) {
 	manifest, manifestBytes, err := bundle.LoadManifest(dir)
 	if err != nil {
@@ -63,20 +62,11 @@ func scanBundle(
 	defer func() {
 		phase.Finish(retErr, finishAttrs...)
 	}()
-	codeIndex, err := newTemporaryCodeHashIndex(indexOpts)
-	if err != nil {
-		return BundleResult{}, err
-	}
-	defer func() {
-		if err := codeIndex.Close(); err != nil {
-			retErr = errors.Join(retErr, err)
-		}
-	}()
 	consumer := &recordConsumer{
 		expectedRoot: manifest.Source.HeadBefore.StateRoot,
 		visitor:      trackedVisitor,
 		accountStack: trie.NewStackTrie(nil),
-		knownCodes:   codeIndex,
+		knownCodes:   newHashSet(),
 	}
 	records, err := bundle.ScanRecords(ctx, dir, manifest, consumer.consume)
 	if err != nil {
@@ -104,7 +94,7 @@ type recordConsumer struct {
 	visitor      StateVisitor
 	accountStack *trie.StackTrie
 	counts       bundle.Counts
-	knownCodes   *temporaryCodeHashIndex
+	knownCodes   hashSet
 
 	haveAccount bool
 	accountHash common.Hash
@@ -201,11 +191,7 @@ func (c *recordConsumer) consume(record bundle.Record) error {
 		if computed := crypto.Keccak256Hash(record.Payload); computed != expected {
 			return fmt.Errorf("account %s code content hash mismatch: computed %s account %s", c.accountHash, computed, expected)
 		}
-		added, err := c.knownCodes.Add(expected)
-		if err != nil {
-			return fmt.Errorf("track account %s code %s: %w", c.accountHash, expected, err)
-		}
-		if !added {
+		if !c.knownCodes.Add(expected) {
 			return fmt.Errorf("account %s repeats code record %s already provided by an earlier account", c.accountHash, expected)
 		}
 		c.codeSeen = true
@@ -240,11 +226,7 @@ func (c *recordConsumer) finalizeAccount() error {
 		expected := common.BytesToHash(c.account.CodeHash)
 		available := c.codeSeen
 		if !available {
-			var err error
-			available, err = c.knownCodes.Has(expected)
-			if err != nil {
-				return fmt.Errorf("look up account %s code %s: %w", c.accountHash, expected, err)
-			}
+			available = c.knownCodes.Has(expected)
 		}
 		if !available {
 			return fmt.Errorf("account %s code %s has not been provided", c.accountHash, expected)

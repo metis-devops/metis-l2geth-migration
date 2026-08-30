@@ -56,15 +56,15 @@ func (s *legacySource) Head() (bundle.Head, []byte) {
 	return s.head, append([]byte(nil), s.headerRLP...)
 }
 
-func (s *legacySource) Traverse(ctx context.Context, visitor StateVisitor, indexOpts codeHashIndexOptions) (result StateResult, retErr error) {
-	return s.traverse(ctx, visitor, nil, indexOpts)
+func (s *legacySource) Traverse(ctx context.Context, visitor StateVisitor) (result StateResult, retErr error) {
+	return s.traverse(ctx, visitor, nil)
 }
 
-func (s *legacySource) TraverseWithTrieNodes(ctx context.Context, visitor StateVisitor, nodes trieNodeSink, indexOpts codeHashIndexOptions) (result StateResult, retErr error) {
-	return s.traverse(ctx, visitor, nodes, indexOpts)
+func (s *legacySource) TraverseWithTrieNodes(ctx context.Context, visitor StateVisitor, nodes trieNodeSink) (result StateResult, retErr error) {
+	return s.traverse(ctx, visitor, nodes)
 }
 
-func (s *legacySource) traverse(ctx context.Context, visitor StateVisitor, nodes trieNodeSink, indexOpts codeHashIndexOptions) (result StateResult, retErr error) {
+func (s *legacySource) traverse(ctx context.Context, visitor StateVisitor, nodes trieNodeSink) (result StateResult, retErr error) {
 	trieDB := triedb.NewDatabase(s.db, triedb.HashDefaults)
 	defer func() {
 		if err := trieDB.Close(); err != nil {
@@ -72,7 +72,6 @@ func (s *legacySource) traverse(ctx context.Context, visitor StateVisitor, nodes
 		}
 	}()
 	result, _, err := traverseState(ctx, s.db, trieDB, s.head.StateRoot, visitor, false, stateTraversalOptions{
-		CodeIndex: indexOpts,
 		ReadCode: func(db ethdb.KeyValueReader, hash common.Hash) []byte {
 			code, _ := db.Get(hash[:])
 			return code

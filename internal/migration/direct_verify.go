@@ -68,9 +68,7 @@ func VerifyDirect(ctx context.Context, opts DirectVerifyOptions) (result DirectV
 	traversePhase := reporter.StartPhase("verify_source_state", progressView,
 		"root", head.StateRoot,
 	)
-	stateResult, traverseErr := source.Traverse(ctx, visitor, codeHashIndexOptions{
-		CacheMB: opts.CacheMB, Handles: opts.Handles,
-	})
+	stateResult, traverseErr := source.Traverse(ctx, visitor)
 	traversePhase.Finish(traverseErr, "recomputed_root", stateResult.Root)
 	if traverseErr != nil {
 		return DirectVerificationReport{}, traverseErr

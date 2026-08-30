@@ -21,7 +21,7 @@ type stateInventory struct {
 	CodeEntries uint64
 
 	scheme    string
-	nodeIndex *temporaryCodeHashIndex
+	nodeIndex *temporaryTrieNodeIndex
 }
 
 func (t *stateTraverser) traverseStorage(accountHash, expectedRoot common.Hash) (common.Hash, error) {
@@ -132,7 +132,7 @@ func (t *stateInventoryTracker) recordTrieNode(hash common.Hash) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.inventory.scheme == rawdb.HashScheme {
-		return t.inventory.nodeIndex.MarkTrieNode(hash)
+		return t.inventory.nodeIndex.Mark(hash)
 	}
 	t.inventory.TrieNodes++
 	return nil

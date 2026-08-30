@@ -48,9 +48,7 @@ func Verify(ctx context.Context, opts VerifyOptions) (result VerificationReport,
 	if opts.Bundle == "" {
 		return VerificationReport{}, errors.New("bundle path is required")
 	}
-	bundleResult, err := scanBundle(ctx, opts.Bundle, nil, reporter, codeHashIndexOptions{
-		CacheMB: opts.CacheMB, Handles: opts.Handles,
-	})
+	bundleResult, err := scanBundle(ctx, opts.Bundle, nil, reporter)
 	if err != nil {
 		return VerificationReport{}, err
 	}
@@ -168,7 +166,7 @@ func verifyDatabase(ctx context.Context, dbPath, scheme string, source bundle.So
 	}, totalCountAttrs(expected.Counts)...)
 	statePhase := progress.StartPhase("verify_state", progressView, phaseAttrs...)
 	state, inventory, err := traverseState(ctx, disk, trieDB, expected.Root, visitor, true, stateTraversalOptions{
-		CodeIndex: codeHashIndexOptions{Parent: scratchParent, CacheMB: cacheMB, Handles: handles},
+		NodeIndex: trieNodeIndexOptions{Parent: scratchParent, CacheMB: cacheMB, Handles: handles},
 		ReadCode:  func(db ethdb.KeyValueReader, hash common.Hash) []byte { return rawdb.ReadCodeWithPrefix(db, hash) },
 	})
 	if err != nil {

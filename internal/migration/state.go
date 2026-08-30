@@ -26,7 +26,7 @@ type StateVisitor interface {
 type codeReader func(ethdb.KeyValueReader, common.Hash) []byte
 
 type stateTraversalOptions struct {
-	CodeIndex codeHashIndexOptions
+	NodeIndex trieNodeIndexOptions
 	ReadCode  codeReader
 	TrieNodes trieNodeSink
 }
@@ -43,7 +43,7 @@ type stateTraverser struct {
 	trieDB           *triedb.Database
 	root             common.Hash
 	visitor          StateVisitor
-	codeIndex        *temporaryCodeHashIndex
+	codeHashes       hashSet
 	readCode         codeReader
 	trieNodes        trieNodeSink
 	inventory        *stateInventory
@@ -68,16 +68,20 @@ func traverseState(
 	collectInventory bool,
 	opts stateTraversalOptions,
 ) (result StateResult, inventory stateInventory, retErr error) {
-	codeIndex, err := newTemporaryCodeHashIndex(opts.CodeIndex)
-	if err != nil {
-		return StateResult{}, stateInventory{}, err
-	}
-	defer func() {
-		if err := codeIndex.Close(); err != nil {
-			retErr = errors.Join(retErr, err)
+	var nodeIndex *temporaryTrieNodeIndex
+	if collectInventory && trieDB.Scheme() == rawdb.HashScheme {
+		var err error
+		nodeIndex, err = newTemporaryTrieNodeIndex(opts.NodeIndex)
+		if err != nil {
+			return StateResult{}, stateInventory{}, err
 		}
-	}()
-	traverser := newStateTraverser(ctx, disk, trieDB, root, visitor, collectInventory, opts, codeIndex)
+		defer func() {
+			if err := nodeIndex.Close(); err != nil {
+				retErr = errors.Join(retErr, err)
+			}
+		}()
+	}
+	traverser := newStateTraverser(ctx, disk, trieDB, root, visitor, collectInventory, opts, nodeIndex)
 	return traverser.run()
 }
 
@@ -89,7 +93,7 @@ func newStateTraverser(
 	visitor StateVisitor,
 	collectInventory bool,
 	opts stateTraversalOptions,
-	codeIndex *temporaryCodeHashIndex,
+	nodeIndex *temporaryTrieNodeIndex,
 ) *stateTraverser {
 	readCode := opts.ReadCode
 	if readCode == nil {
@@ -97,19 +101,19 @@ func newStateTraverser(
 	}
 	inventory := &stateInventory{scheme: trieDB.Scheme()}
 	traverser := &stateTraverser{
-		ctx:       ctx,
-		disk:      disk,
-		trieDB:    trieDB,
-		root:      root,
-		visitor:   visitor,
-		codeIndex: codeIndex,
-		readCode:  readCode,
-		trieNodes: opts.TrieNodes,
-		inventory: inventory,
+		ctx:        ctx,
+		disk:       disk,
+		trieDB:     trieDB,
+		root:       root,
+		visitor:    visitor,
+		codeHashes: newHashSet(),
+		readCode:   readCode,
+		trieNodes:  opts.TrieNodes,
+		inventory:  inventory,
 	}
 	if collectInventory {
 		if inventory.scheme == rawdb.HashScheme {
-			inventory.nodeIndex = codeIndex
+			inventory.nodeIndex = nodeIndex
 		}
 		traverser.inventoryTracker = &stateInventoryTracker{inventory: inventory}
 	}
@@ -196,11 +200,7 @@ func (t *stateTraverser) processCode(accountHash, codeHash common.Hash) error {
 		return nil
 	}
 	t.counts.CodeReferences++
-	firstReference, err := t.codeIndex.Add(codeHash)
-	if err != nil {
-		return fmt.Errorf("track account %s code %s: %w", accountHash, codeHash, err)
-	}
-	if !firstReference {
+	if !t.codeHashes.Add(codeHash) {
 		return nil
 	}
 	code := t.readCode(t.disk, codeHash)
@@ -232,7 +232,7 @@ func (t *stateTraverser) finalize() (StateResult, stateInventory, error) {
 	if t.inventoryTracker != nil {
 		t.inventory.CodeEntries = t.counts.CodeRecords
 		if t.inventory.scheme == rawdb.HashScheme {
-			count, err := t.codeIndex.CountTrieNodes(t.ctx)
+			count, err := t.inventory.nodeIndex.Count(t.ctx)
 			if err != nil {
 				return StateResult{}, stateInventory{}, fmt.Errorf("count reachable hash trie nodes: %w", err)
 			}

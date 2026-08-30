@@ -82,7 +82,6 @@ func benchmarkTraverseState(b *testing.B, workload traversalBenchmarkWorkload) {
 		}
 	})
 	opts := stateTraversalOptions{
-		CodeIndex: codeHashIndexOptions{Parent: b.TempDir(), CacheMB: 16, Handles: 16},
 		ReadCode: func(db ethdb.KeyValueReader, hash common.Hash) []byte {
 			code, _ := db.Get(hash[:])
 			return code

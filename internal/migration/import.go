@@ -97,9 +97,7 @@ func Import(ctx context.Context, opts ImportOptions) (result ImportResult, retEr
 	}()
 
 	sink := newFlatStateWriter(disk)
-	bundleResult, err := scanBundle(ctx, opts.Bundle, sink, reporter, codeHashIndexOptions{
-		Parent: output.Path(), CacheMB: opts.CacheMB, Handles: opts.Handles,
-	})
+	bundleResult, err := scanBundle(ctx, opts.Bundle, sink, reporter)
 	if err != nil {
 		if closeErr := sink.Close(); closeErr != nil {
 			err = errors.Join(err, fmt.Errorf("close flat-state writer: %w", closeErr))

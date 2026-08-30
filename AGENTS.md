@@ -76,8 +76,13 @@ trie preimages.
 - Hash artifacts must contain no temporary flat state. Path artifacts must
   preserve geth v1.17.5 completion metadata, `SnapshotRoot`, and state ID 0,
   with no historical layers.
-- Keep exact code and reachable hash-node tracking bounded. Do not replace the
-  operation-local disk index with a set whose memory grows with state size.
+- Deduplicate contract code hashes exactly with an operation-local
+  `map[common.Hash]struct{}`. The supported assumption is fewer than one
+  million unique code hashes; do not add a pre-count scan, hard limit, or disk
+  fallback without an explicit contract change.
+- Keep exact reachable hash-node tracking disk-backed and bounded. Do not
+  replace its operation-local Pebble index with a set whose memory grows with
+  the full state trie.
 - Independently reopen and verify every artifact before publication. Do not
   trust `verification.json` as the source of truth for bundle verification.
 
@@ -102,9 +107,10 @@ trie preimages.
 - Keep human-readable progress on standard error and the single final JSON
   value on standard output. `--quiet` suppresses progress, not diagnostics or
   the final error.
-- Keep long operations streaming and bounded by the configured cache and
-  handle allowances. Do not add a pre-count scan merely to report a percentage
-  or ETA.
+- Keep long operations streaming. The operation-local codehash set is the only
+  state-sized in-memory exception; keep other working state bounded by the
+  configured cache and handle allowances. Do not add a pre-count scan merely
+  to report a percentage or ETA.
 - Add regression coverage for behavior changes. Exercise both `hash` and
   `path`, both `zstd` and `none`, and both direct and bundle-backed paths
   when the changed behavior applies to them.

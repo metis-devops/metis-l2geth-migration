@@ -184,14 +184,18 @@ external canonicality, or L1 finality.
 - `--cache-mb` defaults to 512 MiB and `--handles` defaults to 256 for every
   state operation. Direct migration keeps source and target databases open
   together, so account for both allowances.
-- Exact hash tracking uses an operation-local Pebble index with at most 16 MiB
-  of cache and 16 file handles (or the lower positive configured allowances).
-  It deduplicates contract code and, while verifying hash artifacts, counts
-  reachable trie nodes without an unbounded in-memory map. Export, import, and
-  direct migration keep this index inside the current `.partial-*` directory.
-  Standalone verification uses the operating system temporary directory; set
-  `TMPDIR` to place it on a disk with enough capacity. The index is removed
-  before a successful output is published or a verification command returns.
+- Contract code hashes are deduplicated exactly with an operation-local
+  in-memory set. Its memory use grows with the number of unique code hashes;
+  the supported operating assumption is fewer than one million, without a
+  pre-count scan, hard limit, or disk fallback.
+- While verifying `hash` artifacts, reachable trie-node hashes use a separate
+  operation-local Pebble index with at most 16 MiB of cache and 16 file handles
+  (or the lower positive configured allowances). Import and direct migration
+  keep this verification index inside the current `.partial-*` directory.
+  Standalone artifact verification uses the operating system temporary
+  directory; set `TMPDIR` to place it on a disk with enough capacity. `path`
+  verification does not create this index. The index is removed before a
+  successful output is published or a verification command returns.
 - Progress logs go to standard error; the final JSON result is the only output
   on standard output. Phase changes appear immediately and long phases update
   every 30 seconds. Use `--quiet` to suppress progress logs.
@@ -206,11 +210,12 @@ external canonicality, or L1 finality.
 - Cancellation or failure removes only the partial directory created by that
   invocation. The final path never appears. Resume is not supported; rerun
   with a new output path.
-- Plan disk space for the bundle when using export/import and for the temporary
-  hash index. Portable import additionally needs temporary flat state and, for
-  hash artifacts, its cleanup compaction space. Direct migration generates the
-  target trie during source traversal and does not need a second flat-state
-  staging copy; path artifacts retain their required current flat state.
+- Plan disk space for the bundle when using export/import. `hash` artifact
+  verification additionally needs the temporary trie-node index. Portable
+  import also needs temporary flat state and, for hash artifacts, its cleanup
+  compaction space. Direct migration generates the target trie during source
+  traversal and does not need a second flat-state staging copy; path artifacts
+  retain their required current flat state.
 
 To capture machine output and progress separately:
 

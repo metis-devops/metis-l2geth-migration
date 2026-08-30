@@ -319,12 +319,12 @@ func TestTraverseStateConsumerFailureStopsAccountStream(t *testing.T) {
 	scratch := t.TempDir()
 	wantErr := errors.New("injected account consumer failure")
 	_, _, err = traverseState(context.Background(), disk, trieDB, fixture.root, failingAccountVisitor{err: wantErr}, true, stateTraversalOptions{
-		CodeIndex: codeHashIndexOptions{Parent: scratch, CacheMB: 16, Handles: 16},
+		NodeIndex: trieNodeIndexOptions{Parent: scratch, CacheMB: 16, Handles: 16},
 	})
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("traversal returned %v, want consumer failure %v", err, wantErr)
 	}
-	assertNoTemporaryCodeHashIndexes(t, scratch)
+	assertNoTemporaryTrieNodeIndexes(t, scratch)
 }
 
 func TestTraverseStateStorageConsumerFailureStopsStorageStream(t *testing.T) {
@@ -348,7 +348,7 @@ func TestTraverseStateStorageConsumerFailureStopsStorageStream(t *testing.T) {
 	scratch := t.TempDir()
 	wantErr := errors.New("injected storage consumer failure")
 	_, _, err = traverseState(context.Background(), disk, trieDB, fixture.root, &failingStorageVisitor{err: wantErr}, true, stateTraversalOptions{
-		CodeIndex: codeHashIndexOptions{Parent: scratch, CacheMB: 16, Handles: 16},
+		NodeIndex: trieNodeIndexOptions{Parent: scratch, CacheMB: 16, Handles: 16},
 		ReadCode: func(db ethdb.KeyValueReader, hash common.Hash) []byte {
 			code, _ := db.Get(hash[:])
 			return code
@@ -357,7 +357,7 @@ func TestTraverseStateStorageConsumerFailureStopsStorageStream(t *testing.T) {
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("traversal returned %v, want storage consumer failure %v", err, wantErr)
 	}
-	assertNoTemporaryCodeHashIndexes(t, scratch)
+	assertNoTemporaryTrieNodeIndexes(t, scratch)
 }
 
 type reusingLeafNodeIterator struct {

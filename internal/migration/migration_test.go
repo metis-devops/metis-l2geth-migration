@@ -108,7 +108,7 @@ func TestGoldenLegacyL2GethFixtureBothSchemes(t *testing.T) {
 	if counts := exported.Manifest.Counts; counts.Accounts != 5 || counts.StorageSlots != 9 || counts.CodeReferences != 3 || counts.CodeRecords != 2 {
 		t.Fatalf("golden OVM state shape mismatch: %+v", counts)
 	}
-	assertNoTemporaryCodeHashIndexes(t, bundleDir)
+	assertNoTemporaryTrieNodeIndexes(t, bundleDir)
 	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme} {
 		artifact := filepath.Join(root, "artifact-"+scheme)
 		if _, err := Import(context.Background(), ImportOptions{
@@ -123,7 +123,7 @@ func TestGoldenLegacyL2GethFixtureBothSchemes(t *testing.T) {
 		}
 		assertArtifactHeadMetadata(t, artifact, exported.Manifest.Source)
 		assertGoldenOVMState(t, artifact, scheme, head.StateRoot, expected.OVMETHCodeHash)
-		assertNoTemporaryCodeHashIndexes(t, artifact)
+		assertNoTemporaryTrieNodeIndexes(t, artifact)
 	}
 }
 
@@ -302,7 +302,7 @@ func TestExportSharedCodeBundleCompatibility(t *testing.T) {
 			if gotOrder := strings.Join(recordOrder, ","); gotOrder != wantOrder {
 				t.Fatalf("bundle record order changed:\nhave %s\nwant %s", gotOrder, wantOrder)
 			}
-			assertNoTemporaryCodeHashIndexes(t, exported.BundlePath)
+			assertNoTemporaryTrieNodeIndexes(t, exported.BundlePath)
 		})
 	}
 }
@@ -327,7 +327,6 @@ func TestTraverseStateReadsSharedCodeOnce(t *testing.T) {
 	}()
 	var reads uint64
 	result, _, err := traverseState(context.Background(), disk, trieDB, fixture.root, nil, false, stateTraversalOptions{
-		CodeIndex: codeHashIndexOptions{Parent: t.TempDir(), CacheMB: 16, Handles: 16},
 		ReadCode: func(db ethdb.KeyValueReader, hash common.Hash) []byte {
 			reads++
 			code, _ := db.Get(hash[:])
@@ -345,7 +344,7 @@ func TestTraverseStateReadsSharedCodeOnce(t *testing.T) {
 	}
 }
 
-func TestScanBundleCodeHashIndexSemanticsAndCleanup(t *testing.T) {
+func TestScanBundleCodeHashSetSemantics(t *testing.T) {
 	for _, test := range []struct {
 		name        string
 		codeRecords []bool
@@ -370,12 +369,12 @@ func TestScanBundleCodeHashIndexSemanticsAndCleanup(t *testing.T) {
 			} else if err == nil || !strings.Contains(err.Error(), test.wantError) {
 				t.Fatalf("expected %q error, got %v", test.wantError, err)
 			}
-			assertNoTemporaryCodeHashIndexes(t, scratch)
+			assertDirectoryEmpty(t, scratch)
 		})
 	}
 }
 
-func TestScanBundleCancellationRemovesCodeHashIndex(t *testing.T) {
+func TestScanBundleCancellationUsesNoScratchDatabase(t *testing.T) {
 	dir := writeSharedCodeSemanticBundle(t, []bool{true, false})
 	scratch := t.TempDir()
 	t.Setenv("TMPDIR", scratch)
@@ -384,7 +383,7 @@ func TestScanBundleCancellationRemovesCodeHashIndex(t *testing.T) {
 	if _, err := ScanBundle(ctx, dir, nil); !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected cancellation, got %v", err)
 	}
-	assertNoTemporaryCodeHashIndexes(t, scratch)
+	assertDirectoryEmpty(t, scratch)
 }
 
 func writeSharedCodeSemanticBundle(t *testing.T, codeRecords []bool) string {
@@ -452,18 +451,29 @@ func writeSharedCodeSemanticBundle(t *testing.T, codeRecords []bool) string {
 	return dir
 }
 
-func assertNoTemporaryCodeHashIndexes(t *testing.T, root string) {
+func assertNoTemporaryTrieNodeIndexes(t *testing.T, root string) {
 	t.Helper()
 	if err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if strings.HasPrefix(entry.Name(), codeHashIndexTempPrefix) {
-			return fmt.Errorf("temporary code-hash index survived at %s", path)
+		if strings.HasPrefix(entry.Name(), trieNodeIndexTempPrefix) {
+			return fmt.Errorf("temporary trie-node index survived at %s", path)
 		}
 		return nil
 	}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func assertDirectoryEmpty(t *testing.T, path string) {
+	t.Helper()
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("scratch directory contains %d entries, first is %s", len(entries), entries[0].Name())
 	}
 }
 

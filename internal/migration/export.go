@@ -94,9 +94,7 @@ func Export(ctx context.Context, opts ExportOptions) (result ExportResult, retEr
 		progressView = countProgressSnapshot(counts, nil)
 	}
 	traversePhase := reporter.StartPhase("export_state", progressView, "root", headBefore.StateRoot)
-	state, traverseErr := source.Traverse(ctx, visitor, codeHashIndexOptions{
-		Parent: output.Path(), CacheMB: opts.CacheMB, Handles: opts.Handles,
-	})
+	state, traverseErr := source.Traverse(ctx, visitor)
 	traversePhase.Finish(traverseErr)
 	if traverseErr != nil {
 		if err := recordWriter.Abort(); err != nil {
