@@ -2,6 +2,7 @@ package bundle
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
@@ -291,7 +292,7 @@ func ScanRecords(ctx context.Context, dir string, manifest Manifest, consume fun
 	if _, err := io.ReadFull(reader, magic); err != nil {
 		return ScanResult{}, fmt.Errorf("read state stream header: %w", err)
 	}
-	if !equalBytes(magic, streamMagic[:]) {
+	if !bytes.Equal(magic, streamMagic[:]) {
 		return ScanResult{}, errors.New("invalid state stream magic")
 	}
 	if canonical != nil {
@@ -535,16 +536,4 @@ func validatePayloadLength(typ byte, length uint64) error {
 		return fmt.Errorf("record type %d payload is %d bytes, maximum is %d", typ, length, max)
 	}
 	return nil
-}
-
-func equalBytes(a, b []byte) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }

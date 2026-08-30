@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"time"
@@ -249,7 +250,7 @@ func (m Manifest) Validate() error {
 func sumCounts(values ...uint64) (uint64, bool) {
 	var total uint64
 	for _, value := range values {
-		if ^uint64(0)-total < value {
+		if math.MaxUint64-total < value {
 			return 0, false
 		}
 		total += value
