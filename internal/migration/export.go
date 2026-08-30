@@ -1,6 +1,7 @@
 package migration
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -167,7 +168,7 @@ func (v *recordWriterVisitor) Account(hash common.Hash, account *types.StateAcco
 	if err := v.writer.WriteAccount(hash, fullRLP); err != nil {
 		return fmt.Errorf("write account %s: %w", hash, err)
 	}
-	if common.BytesToHash(account.CodeHash) != types.EmptyCodeHash {
+	if !bytes.Equal(account.CodeHash, types.EmptyCodeHash[:]) {
 		if err := v.writer.CountCodeReference(); err != nil {
 			return fmt.Errorf("count account %s code reference: %w", hash, err)
 		}
