@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"flag"
 	"io"
 	"os"
 	"path/filepath"
@@ -149,6 +150,36 @@ func TestCLIQuiet(t *testing.T) {
 		assertJSON(t, stdout.Bytes())
 		if stderr.Len() != 0 {
 			t.Fatalf("%s --quiet wrote stderr %q", args[0], stderr.String())
+		}
+	}
+}
+
+func TestCLIHelp(t *testing.T) {
+	commands := []string{"export", "import", "migrate", "verify"}
+	helpFlags := []struct {
+		name string
+		arg  string
+	}{
+		{name: "short", arg: "-h"},
+		{name: "long", arg: "--help"},
+	}
+	for _, command := range commands {
+		for _, helpFlag := range helpFlags {
+			t.Run(command+"/"+helpFlag.name, func(t *testing.T) {
+				var stdout, stderr bytes.Buffer
+				if err := run(context.Background(), []string{command, helpFlag.arg}, &stdout, &stderr); err != nil {
+					t.Fatalf("run(%s %s): %v", command, helpFlag.arg, err)
+				}
+				if stdout.Len() != 0 {
+					t.Fatalf("run(%s %s) wrote stdout %q", command, helpFlag.arg, stdout.String())
+				}
+				if want := "Usage of " + command + ":"; !strings.Contains(stderr.String(), want) {
+					t.Fatalf("run(%s %s) stderr does not contain %q: %q", command, helpFlag.arg, want, stderr.String())
+				}
+				if strings.Contains(stderr.String(), flag.ErrHelp.Error()) {
+					t.Fatalf("run(%s %s) reported help as an error: %q", command, helpFlag.arg, stderr.String())
+				}
+			})
 		}
 	}
 }

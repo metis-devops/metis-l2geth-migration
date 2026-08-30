@@ -36,6 +36,10 @@ make build
 ./bin/l2state version
 ```
 
+The version command reports the main-module and go-ethereum module versions
+embedded by the Go toolchain. Local development builds may report a generated
+pseudo-version or `(devel)` when VCS metadata is unavailable.
+
 The module pins go-ethereum to v1.17.5 at commit
 `9621c6ad10934a01b5514886fb6fbd87640b6c05`. It also pins a newer compatible
 `cockroachdb/swiss` revision because the version selected by geth does not
@@ -170,6 +174,9 @@ external canonicality, or L1 finality.
 
 ## Operational behavior
 
+- `-h` and `--help` on every subcommand print that subcommand's usage to
+  standard error and exit successfully without starting an operation or
+  emitting JSON.
 - `--cache-mb` defaults to 512 MiB and `--handles` defaults to 256 for every
   state operation. Direct migration keeps source and target databases open
   together, so account for both allowances.

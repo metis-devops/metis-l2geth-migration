@@ -48,13 +48,13 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	}
 	switch args[0] {
 	case "export":
-		return runExport(ctx, args[1:], stdout, stderr)
+		return normalizeHelp(runExport(ctx, args[1:], stdout, stderr))
 	case "import":
-		return runImport(ctx, args[1:], stdout, stderr)
+		return normalizeHelp(runImport(ctx, args[1:], stdout, stderr))
 	case "migrate":
-		return runMigrate(ctx, args[1:], stdout, stderr)
+		return normalizeHelp(runMigrate(ctx, args[1:], stdout, stderr))
 	case "verify":
-		return runVerify(ctx, args[1:], stdout, stderr)
+		return normalizeHelp(runVerify(ctx, args[1:], stdout, stderr))
 	case "version":
 		_, err := fmt.Fprintf(stdout, "%s %s (go-ethereum %s %s)\n", version.ToolName, version.ToolVersion, version.GethVersion, version.GethCommit)
 		return err
@@ -66,6 +66,13 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		}
 		return fmt.Errorf("unknown command %q", args[0])
 	}
+}
+
+func normalizeHelp(err error) error {
+	if errors.Is(err, flag.ErrHelp) {
+		return nil
+	}
+	return err
 }
 
 func runMigrate(ctx context.Context, args []string, stdout, stderr io.Writer) error {
