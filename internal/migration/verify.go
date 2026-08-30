@@ -49,7 +49,9 @@ func Verify(ctx context.Context, opts VerifyOptions) (result VerificationReport,
 	if opts.Bundle == "" {
 		return VerificationReport{}, errors.New("bundle path is required")
 	}
-	bundleResult, err := scanBundle(ctx, opts.Bundle, nil, reporter)
+	bundleResult, err := scanBundle(ctx, opts.Bundle, nil, reporter, codeHashIndexOptions{
+		CacheMB: opts.CacheMB, Handles: opts.Handles,
+	})
 	if err != nil {
 		return VerificationReport{}, err
 	}
@@ -66,7 +68,7 @@ func Verify(ctx context.Context, opts VerifyOptions) (result VerificationReport,
 	if err := compareStoredReport(stored, bundleResult); err != nil {
 		return VerificationReport{}, err
 	}
-	state, err := verifyDatabase(ctx, filepath.Join(opts.Artifact, "db"), stored.Scheme, bundleResult.Manifest.Source, bundleResult.State, opts.CacheMB, opts.Handles, reporter)
+	state, err := verifyDatabase(ctx, filepath.Join(opts.Artifact, "db"), stored.Scheme, bundleResult.Manifest.Source, bundleResult.State, opts.CacheMB, opts.Handles, reporter, "")
 	if err != nil {
 		return VerificationReport{}, err
 	}
@@ -89,7 +91,7 @@ func compareStoredReport(stored VerificationReport, current BundleResult) error 
 	return nil
 }
 
-func verifyDatabase(ctx context.Context, dbPath, scheme string, source bundle.SourceEvidence, expected StateResult, cacheMB, handles int, progress *progressReporter) (result StateResult, retErr error) {
+func verifyDatabase(ctx context.Context, dbPath, scheme string, source bundle.SourceEvidence, expected StateResult, cacheMB, handles int, progress *progressReporter, scratchParent string) (result StateResult, retErr error) {
 	diskKV, err := pebble.New(dbPath, cacheMB, handles, "l2state/verify", true)
 	if err != nil {
 		return StateResult{}, fmt.Errorf("open artifact Pebble database read-only: %w", err)
@@ -161,7 +163,9 @@ func verifyDatabase(ctx context.Context, dbPath, scheme string, source bundle.So
 		"root", expected.Root,
 	}, totalCountAttrs(expected.Counts)...)
 	statePhase := progress.StartPhase("verify_state", progressView, phaseAttrs...)
-	state, inventory, err := traverseState(ctx, disk, trieDB, expected.Root, visitor, true)
+	state, inventory, err := traverseState(ctx, disk, trieDB, expected.Root, visitor, true, codeHashIndexOptions{
+		Parent: scratchParent, CacheMB: cacheMB, Handles: handles,
+	})
 	if err != nil {
 		verifyErr := fmt.Errorf("verify artifact state: %w", err)
 		statePhase.Finish(verifyErr)

@@ -17,7 +17,8 @@ import (
 	"github.com/metis-devops/metis-l2geth-migration/internal/bundle"
 )
 
-// StateVisitor receives canonical state entries in trie iteration order.
+// StateVisitor receives canonical state entries in trie iteration order. Code
+// is called once for each unique code hash, at its first account reference.
 type StateVisitor interface {
 	Account(hash common.Hash, account *types.StateAccount, fullRLP []byte) error
 	Storage(accountHash, slotHash common.Hash, valueRLP []byte) error
@@ -34,21 +35,36 @@ type stateInventory struct {
 	TrieNodes   uint64
 	CodeEntries uint64
 
-	scheme     string
-	hashNodes  map[common.Hash]struct{}
-	codeHashes map[common.Hash]struct{}
+	scheme    string
+	hashNodes map[common.Hash]struct{}
 }
 
 // TraverseState validates and visits all state reachable from root.
 func TraverseState(ctx context.Context, disk ethdb.Database, trieDB *triedb.Database, root common.Hash, visitor StateVisitor) (StateResult, error) {
-	result, _, err := traverseState(ctx, disk, trieDB, root, visitor, false)
+	result, _, err := traverseState(ctx, disk, trieDB, root, visitor, false, codeHashIndexOptions{})
 	return result, err
 }
 
-func traverseState(ctx context.Context, disk ethdb.Database, trieDB *triedb.Database, root common.Hash, visitor StateVisitor, collectInventory bool) (StateResult, stateInventory, error) {
-	inventory := stateInventory{scheme: trieDB.Scheme()}
+func traverseState(
+	ctx context.Context,
+	disk ethdb.Database,
+	trieDB *triedb.Database,
+	root common.Hash,
+	visitor StateVisitor,
+	collectInventory bool,
+	indexOpts codeHashIndexOptions,
+) (result StateResult, inventory stateInventory, retErr error) {
+	codeIndex, err := newTemporaryCodeHashIndex(indexOpts)
+	if err != nil {
+		return StateResult{}, stateInventory{}, err
+	}
+	defer func() {
+		if err := codeIndex.Close(); err != nil {
+			retErr = errors.Join(retErr, err)
+		}
+	}()
+	inventory = stateInventory{scheme: trieDB.Scheme()}
 	if collectInventory {
-		inventory.codeHashes = make(map[common.Hash]struct{})
 		if inventory.scheme == rawdb.HashScheme {
 			inventory.hashNodes = make(map[common.Hash]struct{})
 		}
@@ -66,10 +82,7 @@ func traverseState(ctx context.Context, disk ethdb.Database, trieDB *triedb.Data
 	}
 	accounts := trie.NewIterator(nodeIt)
 	accountStack := trie.NewStackTrie(nil)
-	var (
-		counts    bundle.Counts
-		seenCodes = make(map[common.Hash]struct{})
-	)
+	var counts bundle.Counts
 	for accounts.Next() {
 		if err := ctx.Err(); err != nil {
 			return StateResult{}, stateInventory{}, err
@@ -148,21 +161,20 @@ func traverseState(ctx context.Context, disk ethdb.Database, trieDB *triedb.Data
 			if computed := crypto.Keccak256Hash(code); computed != codeHash {
 				return StateResult{}, stateInventory{}, fmt.Errorf("account %s code hash mismatch: computed %s account %s", accountHash, computed, codeHash)
 			}
-			if visitor != nil {
-				if err := visitor.Code(accountHash, codeHash, code); err != nil {
-					return StateResult{}, stateInventory{}, err
-				}
-			}
 			counts.CodeReferences++
-			_, seen := seenCodes[codeHash]
-			if !seen {
+			firstReference, err := codeIndex.Add(codeHash)
+			if err != nil {
+				return StateResult{}, stateInventory{}, fmt.Errorf("track account %s code %s: %w", accountHash, codeHash, err)
+			}
+			if firstReference {
+				if visitor != nil {
+					if err := visitor.Code(accountHash, codeHash, code); err != nil {
+						return StateResult{}, stateInventory{}, err
+					}
+				}
 				counts.Records++
 				counts.PayloadBytes += uint64(len(code))
 				counts.CodeRecords++
-			}
-			seenCodes[codeHash] = struct{}{}
-			if collectInventory {
-				inventory.codeHashes[codeHash] = struct{}{}
 			}
 		}
 		if err := accountStack.Update(accounts.Key, canonicalRLP); err != nil {
@@ -177,12 +189,11 @@ func traverseState(ctx context.Context, disk ethdb.Database, trieDB *triedb.Data
 		return StateResult{}, stateInventory{}, fmt.Errorf("state root mismatch: computed %s header %s", computedRoot, root)
 	}
 	if collectInventory {
-		inventory.CodeEntries = uint64(len(inventory.codeHashes))
+		inventory.CodeEntries = counts.CodeRecords
 		if inventory.scheme == rawdb.HashScheme {
 			inventory.TrieNodes = uint64(len(inventory.hashNodes))
 		}
 		inventory.hashNodes = nil
-		inventory.codeHashes = nil
 	}
 	return StateResult{Root: computedRoot, Counts: counts}, inventory, nil
 }

@@ -173,6 +173,13 @@ external canonicality, or L1 finality.
 - `--cache-mb` defaults to 512 MiB and `--handles` defaults to 256 for every
   state operation. Direct migration keeps source and target databases open
   together, so account for both allowances.
+- Exact code-hash deduplication uses an operation-local Pebble index with at
+  most 16 MiB of cache and 16 file handles (or the lower positive configured
+  allowances). Export, import, and direct migration keep this index inside the
+  current `.partial-*` directory. Standalone verification uses the operating
+  system temporary directory; set `TMPDIR` to place it on a disk with enough
+  capacity. The index is removed before a successful output is published or a
+  verification command returns.
 - Progress logs go to standard error; the final JSON result is the only output
   on standard output. Phase changes appear immediately and long phases update
   every 30 seconds. Use `--quiet` to suppress progress logs.
@@ -187,8 +194,9 @@ external canonicality, or L1 finality.
 - Cancellation or failure removes only the partial directory created by that
   invocation. The final path never appears. Resume is not supported; rerun
   with a new output path.
-- Plan disk space for the bundle when using export/import and for temporary
-  flat state, the target trie, and compaction when building either scheme.
+- Plan disk space for the bundle when using export/import, the temporary
+  code-hash index, and the temporary flat state, target trie, and compaction
+  space when building either scheme.
 
 To capture machine output and progress separately:
 

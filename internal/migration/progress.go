@@ -171,13 +171,12 @@ func (c *progressCounts) snapshot() bundle.Counts {
 }
 
 type countingStateVisitor struct {
-	next     StateVisitor
-	counts   *progressCounts
-	seenCode map[common.Hash]struct{}
+	next   StateVisitor
+	counts *progressCounts
 }
 
 func newCountingStateVisitor(next StateVisitor, counts *progressCounts) StateVisitor {
-	return &countingStateVisitor{next: next, counts: counts, seenCode: make(map[common.Hash]struct{})}
+	return &countingStateVisitor{next: next, counts: counts}
 }
 
 func (v *countingStateVisitor) Account(hash common.Hash, account *types.StateAccount, fullRLP []byte) error {
@@ -213,12 +212,9 @@ func (v *countingStateVisitor) Code(accountHash, codeHash common.Hash, code []by
 			return err
 		}
 	}
-	if _, exists := v.seenCode[codeHash]; !exists {
-		v.seenCode[codeHash] = struct{}{}
-		v.counts.codeRecords.Add(1)
-		v.counts.records.Add(1)
-		v.counts.payloadBytes.Add(uint64(len(code)))
-	}
+	v.counts.codeRecords.Add(1)
+	v.counts.records.Add(1)
+	v.counts.payloadBytes.Add(uint64(len(code)))
 	return nil
 }
 

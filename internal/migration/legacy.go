@@ -55,14 +55,15 @@ func (s *legacySource) Head() (bundle.Head, []byte) {
 	return s.head, append([]byte(nil), s.headerRLP...)
 }
 
-func (s *legacySource) Traverse(ctx context.Context, visitor StateVisitor) (result StateResult, retErr error) {
+func (s *legacySource) Traverse(ctx context.Context, visitor StateVisitor, indexOpts codeHashIndexOptions) (result StateResult, retErr error) {
 	trieDB := triedb.NewDatabase(s.db, triedb.HashDefaults)
 	defer func() {
 		if err := trieDB.Close(); err != nil {
 			retErr = errors.Join(retErr, fmt.Errorf("close source trie database: %w", err))
 		}
 	}()
-	return TraverseState(ctx, s.db, trieDB, s.head.StateRoot, visitor)
+	result, _, err := traverseState(ctx, s.db, trieDB, s.head.StateRoot, visitor, false, indexOpts)
+	return result, err
 }
 
 func (s *legacySource) ConfirmStableAndClose(operation string) (evidence bundle.SourceEvidence, retErr error) {

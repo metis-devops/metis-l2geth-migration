@@ -72,6 +72,7 @@ func TestDirectMigrateGoldenLegacyL2GethFixtureBothSchemes(t *testing.T) {
 			}
 			assertArtifactHeadMetadata(t, artifact, migrated.Report.Source)
 			assertGoldenOVMState(t, artifact, scheme, expected.StateRoot, expected.OVMETHCodeHash)
+			assertNoTemporaryCodeHashIndexes(t, artifact)
 		})
 	}
 	after := directoryContentDigest(t, chaindata)

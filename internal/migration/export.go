@@ -84,7 +84,7 @@ func Export(ctx context.Context, opts ExportOptions) (result ExportResult, retEr
 		return ExportResult{}, err
 	}
 	var (
-		visitor      StateVisitor = &recordWriterVisitor{writer: recordWriter, seenCode: make(map[common.Hash]struct{})}
+		visitor      StateVisitor = &recordWriterVisitor{writer: recordWriter}
 		progressView progressSnapshot
 	)
 	if reporter.Enabled() {
@@ -93,7 +93,9 @@ func Export(ctx context.Context, opts ExportOptions) (result ExportResult, retEr
 		progressView = countProgressSnapshot(counts, nil)
 	}
 	traversePhase := reporter.StartPhase("export_state", progressView, "root", headBefore.StateRoot)
-	state, traverseErr := source.Traverse(ctx, visitor)
+	state, traverseErr := source.Traverse(ctx, visitor, codeHashIndexOptions{
+		Parent: output.Path(), CacheMB: opts.CacheMB, Handles: opts.Handles,
+	})
 	traversePhase.Finish(traverseErr)
 	if traverseErr != nil {
 		if err := recordWriter.Abort(); err != nil {
@@ -158,8 +160,7 @@ func Export(ctx context.Context, opts ExportOptions) (result ExportResult, retEr
 }
 
 type recordWriterVisitor struct {
-	writer   *bundle.Writer
-	seenCode map[common.Hash]struct{}
+	writer *bundle.Writer
 }
 
 func (v *recordWriterVisitor) Account(hash common.Hash, account *types.StateAccount, fullRLP []byte) error {
@@ -182,12 +183,8 @@ func (v *recordWriterVisitor) Storage(accountHash, slotHash common.Hash, valueRL
 }
 
 func (v *recordWriterVisitor) Code(accountHash, codeHash common.Hash, code []byte) error {
-	if _, exists := v.seenCode[codeHash]; exists {
-		return nil
-	}
 	if err := v.writer.WriteCode(codeHash, code); err != nil {
 		return fmt.Errorf("write account %s code %s: %w", accountHash, codeHash, err)
 	}
-	v.seenCode[codeHash] = struct{}{}
 	return nil
 }

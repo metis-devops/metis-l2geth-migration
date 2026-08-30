@@ -97,7 +97,9 @@ func Import(ctx context.Context, opts ImportOptions) (result ImportResult, retEr
 	}()
 
 	sink := newFlatStateWriter(disk)
-	bundleResult, err := scanBundle(ctx, opts.Bundle, sink, reporter)
+	bundleResult, err := scanBundle(ctx, opts.Bundle, sink, reporter, codeHashIndexOptions{
+		Parent: output.Path(), CacheMB: opts.CacheMB, Handles: opts.Handles,
+	})
 	if err != nil {
 		if closeErr := sink.Close(); closeErr != nil {
 			err = errors.Join(err, fmt.Errorf("close flat-state writer: %w", closeErr))
@@ -260,7 +262,7 @@ func buildAndVerifyTarget(
 	if finalizeErr != nil {
 		return StateResult{}, diskClosed, finalizeErr
 	}
-	dbState, err := verifyDatabase(ctx, dbPath, scheme, source, expected, cacheMB, handles, reporter)
+	dbState, err := verifyDatabase(ctx, dbPath, scheme, source, expected, cacheMB, handles, reporter, filepath.Dir(dbPath))
 	if err != nil {
 		return StateResult{}, diskClosed, err
 	}
@@ -268,13 +270,12 @@ func buildAndVerifyTarget(
 }
 
 type flatStateWriter struct {
-	batch     ethdb.Batch
-	seenCodes map[common.Hash]struct{}
-	closed    bool
+	batch  ethdb.Batch
+	closed bool
 }
 
 func newFlatStateWriter(db ethdb.Database) *flatStateWriter {
-	return &flatStateWriter{batch: db.NewBatch(), seenCodes: make(map[common.Hash]struct{})}
+	return &flatStateWriter{batch: db.NewBatch()}
 }
 
 func (w *flatStateWriter) Account(hash common.Hash, account *types.StateAccount, _ []byte) error {
@@ -297,9 +298,6 @@ func (w *flatStateWriter) Storage(accountHash, slotHash common.Hash, valueRLP []
 }
 
 func (w *flatStateWriter) Code(_ common.Hash, codeHash common.Hash, code []byte) error {
-	if _, exists := w.seenCodes[codeHash]; exists {
-		return nil
-	}
 	key := prefixedKey(rawdb.CodePrefix, codeHash[:])
 	if err := w.batch.Put(key, code); err != nil {
 		return fmt.Errorf("write code %s: %w", codeHash, err)
@@ -307,7 +305,6 @@ func (w *flatStateWriter) Code(_ common.Hash, codeHash common.Hash, code []byte)
 	if err := w.flushIfNeeded(); err != nil {
 		return err
 	}
-	w.seenCodes[codeHash] = struct{}{}
 	return nil
 }
 

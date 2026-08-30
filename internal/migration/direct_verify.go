@@ -68,7 +68,9 @@ func VerifyDirect(ctx context.Context, opts DirectVerifyOptions) (result DirectV
 	traversePhase := reporter.StartPhase("verify_source_state", progressView,
 		"root", head.StateRoot,
 	)
-	stateResult, traverseErr := source.Traverse(ctx, visitor)
+	stateResult, traverseErr := source.Traverse(ctx, visitor, codeHashIndexOptions{
+		CacheMB: opts.CacheMB, Handles: opts.Handles,
+	})
 	traversePhase.Finish(traverseErr, "recomputed_root", stateResult.Root)
 	if traverseErr != nil {
 		return DirectVerificationReport{}, traverseErr
@@ -87,7 +89,7 @@ func VerifyDirect(ctx context.Context, opts DirectVerifyOptions) (result DirectV
 		stored.Counts != stateResult.Counts || stored.RecomputedRoot != stateResult.Root {
 		return DirectVerificationReport{}, errors.New("direct artifact report evidence does not match the legacy source")
 	}
-	dbState, err := verifyDatabase(ctx, filepath.Join(opts.Artifact, "db"), stored.Scheme, sourceEvidence, stateResult, opts.CacheMB, opts.Handles, reporter)
+	dbState, err := verifyDatabase(ctx, filepath.Join(opts.Artifact, "db"), stored.Scheme, sourceEvidence, stateResult, opts.CacheMB, opts.Handles, reporter, "")
 	if err != nil {
 		return DirectVerificationReport{}, err
 	}

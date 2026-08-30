@@ -115,7 +115,9 @@ func Migrate(ctx context.Context, opts MigrateOptions) (result MigrateResult, re
 		progressView = countProgressSnapshot(counts, nil)
 	}
 	traversePhase := reporter.StartPhase("migrate_state", progressView, "root", head.StateRoot)
-	stateResult, traverseErr := source.Traverse(ctx, visitor)
+	stateResult, traverseErr := source.Traverse(ctx, visitor, codeHashIndexOptions{
+		Parent: output.Path(), CacheMB: opts.CacheMB, Handles: opts.Handles,
+	})
 	traversePhase.Finish(traverseErr)
 	if traverseErr != nil {
 		if closeErr := sink.Close(); closeErr != nil {

@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"math/big"
 	"os"
@@ -107,6 +108,7 @@ func TestGoldenLegacyL2GethFixtureBothSchemes(t *testing.T) {
 	if counts := exported.Manifest.Counts; counts.Accounts != 5 || counts.StorageSlots != 9 || counts.CodeReferences != 3 || counts.CodeRecords != 2 {
 		t.Fatalf("golden OVM state shape mismatch: %+v", counts)
 	}
+	assertNoTemporaryCodeHashIndexes(t, bundleDir)
 	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme} {
 		artifact := filepath.Join(root, "artifact-"+scheme)
 		if _, err := Import(context.Background(), ImportOptions{
@@ -121,6 +123,7 @@ func TestGoldenLegacyL2GethFixtureBothSchemes(t *testing.T) {
 		}
 		assertArtifactHeadMetadata(t, artifact, exported.Manifest.Source)
 		assertGoldenOVMState(t, artifact, scheme, head.StateRoot, expected.OVMETHCodeHash)
+		assertNoTemporaryCodeHashIndexes(t, artifact)
 	}
 }
 
@@ -237,8 +240,199 @@ func TestExportImportAndVerifyBothSchemes(t *testing.T) {
 	}
 }
 
+func TestExportSharedCodeBundleCompatibility(t *testing.T) {
+	fixture := buildLegacyFixture(t)
+	root := t.TempDir()
+	expected := map[string]struct {
+		size   int64
+		sha256 common.Hash
+	}{
+		bundle.CompressionNone: {
+			size:   621,
+			sha256: common.HexToHash("0x0fd92aaf8536e48be3e64e6af4beb4d54ba42d6b8e8ef4b71693191b2edfc72a"),
+		},
+		bundle.CompressionZstd: {
+			size:   430,
+			sha256: common.HexToHash("0x476c95293b215b0724ee77c1cf61fb3f829b1180849033057abf211c404b7ae4"),
+		},
+	}
+	wantChain := common.HexToHash("0x0f4be584bbf3af55cb97815b23cd7a44028af566104a655719ba305906d0ceeb")
+	wantCounts := bundle.Counts{
+		Accounts: 3, StorageSlots: 3, CodeReferences: 2,
+		CodeRecords: 1, Records: 7, PayloadBytes: 229,
+	}
+	wantOrder := strings.Join([]string{
+		"1:0x25baa1f53460dfe937af66419cef1b8dd5251c7daa1faf4061b53f21a5cd51e0:0x0000000000000000000000000000000000000000000000000000000000000000",
+		"2:0x25baa1f53460dfe937af66419cef1b8dd5251c7daa1faf4061b53f21a5cd51e0:0x1b6847dc741a1b0cd08d278845f9d819d87b734759afb55fe2de5cb82a9ae672",
+		"2:0x25baa1f53460dfe937af66419cef1b8dd5251c7daa1faf4061b53f21a5cd51e0:0x405787fa12a823e0f2b7631cc41b3ba8828b3321ca811111fa75cd3aa3bb5ace",
+		"2:0x25baa1f53460dfe937af66419cef1b8dd5251c7daa1faf4061b53f21a5cd51e0:0xb10e2d527612073b26eecdfd717e6a320cf44b4afac2b0732d9fcbe2b7fa0cf6",
+		"3:0x0000000000000000000000000000000000000000000000000000000000000000:0x8c4432ac99bfd0009e1a8e9a45d598159325c5d14ab1587f48c3021a467597e7",
+		"1:0x3e164124bd9d00a221af88f9a0890dbf7cced84de0a4434b7b24ced06e63434d:0x0000000000000000000000000000000000000000000000000000000000000000",
+		"1:0x3ed02be1e351ddbcc2bf3ffafc25fb42a533df024b33c85f9805e17b60f7230c:0x0000000000000000000000000000000000000000000000000000000000000000",
+	}, ",")
+	for _, compression := range []string{bundle.CompressionNone, bundle.CompressionZstd} {
+		t.Run(compression, func(t *testing.T) {
+			exported, err := Export(context.Background(), ExportOptions{
+				SourceChaindata: fixture.chaindata,
+				Output:          filepath.Join(root, "bundle-"+compression),
+				Compression:     compression,
+				CacheMB:         16,
+				Handles:         16,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := expected[compression]
+			if stateFile := exported.Manifest.StateFile; stateFile.Size != want.size || stateFile.SHA256 != want.sha256 || stateFile.RecordChainHash != wantChain {
+				t.Fatalf("bundle bytes changed: have size=%d sha256=%s chain=%s want size=%d sha256=%s chain=%s",
+					stateFile.Size, stateFile.SHA256, stateFile.RecordChainHash,
+					want.size, want.sha256, wantChain,
+				)
+			}
+			if exported.Manifest.Counts != wantCounts {
+				t.Fatalf("bundle counts changed: have %+v want %+v", exported.Manifest.Counts, wantCounts)
+			}
+			var recordOrder []string
+			if _, err := bundle.ScanRecords(context.Background(), exported.BundlePath, exported.Manifest, func(record bundle.Record) error {
+				recordOrder = append(recordOrder, fmt.Sprintf("%d:%s:%s", record.Type, record.AccountHash, record.SubHash))
+				return nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if gotOrder := strings.Join(recordOrder, ","); gotOrder != wantOrder {
+				t.Fatalf("bundle record order changed:\nhave %s\nwant %s", gotOrder, wantOrder)
+			}
+			assertNoTemporaryCodeHashIndexes(t, exported.BundlePath)
+		})
+	}
+}
+
+func TestScanBundleCodeHashIndexSemanticsAndCleanup(t *testing.T) {
+	for _, test := range []struct {
+		name        string
+		codeRecords []bool
+		wantError   string
+	}{
+		{name: "later shared reference", codeRecords: []bool{true, false}},
+		{name: "repeated code record", codeRecords: []bool{true, true}, wantError: "repeats code record"},
+		{name: "code record provided too late", codeRecords: []bool{false, true}, wantError: "has not been provided"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			dir := writeSharedCodeSemanticBundle(t, test.codeRecords)
+			scratch := t.TempDir()
+			t.Setenv("TMPDIR", scratch)
+			result, err := ScanBundle(context.Background(), dir, nil)
+			if test.wantError == "" {
+				if err != nil {
+					t.Fatal(err)
+				}
+				if result.State.Counts.CodeReferences != 2 || result.State.Counts.CodeRecords != 1 {
+					t.Fatalf("unexpected shared-code counts: %+v", result.State.Counts)
+				}
+			} else if err == nil || !strings.Contains(err.Error(), test.wantError) {
+				t.Fatalf("expected %q error, got %v", test.wantError, err)
+			}
+			assertNoTemporaryCodeHashIndexes(t, scratch)
+		})
+	}
+}
+
+func TestScanBundleCancellationRemovesCodeHashIndex(t *testing.T) {
+	dir := writeSharedCodeSemanticBundle(t, []bool{true, false})
+	scratch := t.TempDir()
+	t.Setenv("TMPDIR", scratch)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := ScanBundle(ctx, dir, nil); !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected cancellation, got %v", err)
+	}
+	assertNoTemporaryCodeHashIndexes(t, scratch)
+}
+
+func writeSharedCodeSemanticBundle(t *testing.T, codeRecords []bool) string {
+	t.Helper()
+	if len(codeRecords) != 2 {
+		t.Fatalf("code record selection has length %d, want 2", len(codeRecords))
+	}
+	code := []byte{0x60, 0x00}
+	codeHash := crypto.Keccak256Hash(code)
+	account := types.NewEmptyStateAccount()
+	account.CodeHash = codeHash.Bytes()
+	accountRLP, err := rlp.EncodeToBytes(account)
+	if err != nil {
+		t.Fatal(err)
+	}
+	accountHashes := []common.Hash{common.HexToHash("0x01"), common.HexToHash("0x02")}
+	stack := trie.NewStackTrie(nil)
+	for _, hash := range accountHashes {
+		if err := stack.Update(hash[:], accountRLP); err != nil {
+			t.Fatal(err)
+		}
+	}
+	root := stack.Hash()
+	header := &types.Header{
+		UncleHash: types.EmptyUncleHash, Root: root,
+		TxHash: types.EmptyTxsHash, ReceiptHash: types.EmptyReceiptsHash,
+		Difficulty: big.NewInt(1), Number: big.NewInt(1), GasLimit: 1, Time: 1,
+	}
+	headerRLP, err := rlp.EncodeToBytes(header)
+	if err != nil {
+		t.Fatal(err)
+	}
+	head := bundle.Head{BlockNumber: 1, BlockHash: header.Hash(), StateRoot: root}
+	dir := t.TempDir()
+	writer, err := bundle.NewWriter(dir, bundle.CompressionNone, head, headerRLP)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for index, hash := range accountHashes {
+		if err := writer.WriteAccount(hash, accountRLP); err != nil {
+			t.Fatal(err)
+		}
+		if err := writer.CountCodeReference(); err != nil {
+			t.Fatal(err)
+		}
+		if codeRecords[index] {
+			if err := writer.WriteCode(codeHash, code); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	result, err := writer.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest := bundle.NewManifest(bundle.SourceEvidence{
+		HeadBefore: head, HeadAfter: head, HeaderRLP: hexutil.Bytes(headerRLP),
+	}, result.Counts, bundle.StateFile{
+		Name: result.FileName, Compression: result.Compression, Size: result.Size,
+		SHA256: result.SHA256, RecordChainHash: result.RecordChainHash,
+	})
+	if _, err := bundle.WriteManifest(dir, manifest); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func assertNoTemporaryCodeHashIndexes(t *testing.T, root string) {
+	t.Helper()
+	if err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if strings.HasPrefix(entry.Name(), codeHashIndexTempPrefix) {
+			return fmt.Errorf("temporary code-hash index survived at %s", path)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestExportRejectsMissingLegacyCode(t *testing.T) {
 	fixture := buildLegacyFixture(t)
+	parent := t.TempDir()
+	output := filepath.Join(parent, "bundle")
 	codeHash := crypto.Keccak256Hash(fixture.accounts[1].code)
 	db, err := gethleveldb.New(fixture.chaindata, 16, 16, "test", false)
 	if err != nil {
@@ -252,13 +446,21 @@ func TestExportRejectsMissingLegacyCode(t *testing.T) {
 	}
 	_, err = Export(context.Background(), ExportOptions{
 		SourceChaindata: fixture.chaindata,
-		Output:          filepath.Join(t.TempDir(), "bundle"),
+		Output:          output,
 		Compression:     bundle.CompressionNone,
 		CacheMB:         16,
 		Handles:         16,
 	})
 	if err == nil || !bytes.Contains([]byte(err.Error()), []byte("is missing")) {
 		t.Fatalf("expected missing code error, got %v", err)
+	}
+	assertPathAbsent(t, output)
+	partials, err := filepath.Glob(filepath.Join(parent, ".bundle.partial-*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(partials) != 0 {
+		t.Fatalf("partial bundles survived missing-code failure: %v", partials)
 	}
 }
 
