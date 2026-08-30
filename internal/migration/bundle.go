@@ -130,12 +130,9 @@ func (c *recordConsumer) consume(record bundle.Record) error {
 		if c.counts.Accounts > 0 && bytes.Compare(record.AccountHash[:], c.lastAccount[:]) <= 0 {
 			return fmt.Errorf("account records are not strictly increasing: %s after %s", record.AccountHash, c.lastAccount)
 		}
-		account, canonical, err := decodeFullAccount(record.Payload)
+		account, err := decodeFullAccount(record.AccountHash, record.Payload)
 		if err != nil {
-			return fmt.Errorf("account %s: %w", record.AccountHash, err)
-		}
-		if !bytes.Equal(canonical, record.Payload) {
-			return fmt.Errorf("account %s uses a non-canonical v1.17.5 account encoding", record.AccountHash)
+			return err
 		}
 		c.haveAccount = true
 		c.accountHash = record.AccountHash
