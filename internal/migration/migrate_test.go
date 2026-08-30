@@ -87,7 +87,7 @@ func TestDirectMigrateMatchesBundleImportBothSchemes(t *testing.T) {
 	exported, err := Export(context.Background(), ExportOptions{
 		SourceChaindata: fixture.chaindata,
 		Output:          bundleDir,
-		Compression:     "none",
+		Compression:     bundle.CompressionNone,
 		CacheMB:         16,
 		Handles:         16,
 	})

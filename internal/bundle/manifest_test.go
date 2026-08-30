@@ -143,7 +143,7 @@ func validTestManifest(t *testing.T) (Manifest, []byte) {
 		HeaderRLP:  hexutil.Bytes(headerRLP),
 	}, Counts{}, StateFile{
 		Name:            RecordsFileRaw,
-		Compression:     "none",
+		Compression:     CompressionNone,
 		Size:            1,
 		SHA256:          common.HexToHash("0x01"),
 		RecordChainHash: common.HexToHash("0x02"),

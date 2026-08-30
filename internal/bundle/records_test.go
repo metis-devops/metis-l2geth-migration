@@ -16,7 +16,7 @@ import (
 )
 
 func TestRecordRoundTrip(t *testing.T) {
-	for _, compression := range []string{"none", "zstd"} {
+	for _, compression := range []string{CompressionNone, CompressionZstd} {
 		t.Run(compression, func(t *testing.T) {
 			dir := t.TempDir()
 			head, headerRLP := testHead(t)
@@ -68,7 +68,7 @@ func TestRecordRoundTrip(t *testing.T) {
 func TestScanRecordsRejectsTrailingData(t *testing.T) {
 	dir := t.TempDir()
 	head, headerRLP := testHead(t)
-	writer, err := NewWriter(dir, "none", head, headerRLP)
+	writer, err := NewWriter(dir, CompressionNone, head, headerRLP)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +106,7 @@ func TestScanRecordsRejectsTrailingData(t *testing.T) {
 func TestScanRecordsRejectsZstdSkippableTrailingFrame(t *testing.T) {
 	dir := t.TempDir()
 	head, headerRLP := testHead(t)
-	writer, err := NewWriter(dir, "zstd", head, headerRLP)
+	writer, err := NewWriter(dir, CompressionZstd, head, headerRLP)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +150,7 @@ func TestScanRecordsRejectsZstdSkippableTrailingFrame(t *testing.T) {
 func TestLoadManifestRejectsTrailingJSON(t *testing.T) {
 	dir := t.TempDir()
 	head, headerRLP := testHead(t)
-	writer, err := NewWriter(dir, "none", head, headerRLP)
+	writer, err := NewWriter(dir, CompressionNone, head, headerRLP)
 	if err != nil {
 		t.Fatal(err)
 	}

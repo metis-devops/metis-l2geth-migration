@@ -25,6 +25,10 @@ const (
 	FormatVersion = 2
 	// ManifestFileName is the fixed name of the bundle manifest.
 	ManifestFileName = "manifest.json"
+	// CompressionZstd identifies the canonical zstd-compressed record stream.
+	CompressionZstd = "zstd"
+	// CompressionNone identifies the uncompressed record stream.
+	CompressionNone = "none"
 	// RecordsFileZstd is the fixed name of a zstd-compressed record stream.
 	RecordsFileZstd = "state.records.zst"
 	// RecordsFileRaw is the fixed name of an uncompressed record stream.
@@ -215,13 +219,13 @@ func (m Manifest) Validate() error {
 	if filepath.Base(m.StateFile.Name) != m.StateFile.Name {
 		return errors.New("state file name must not contain a path")
 	}
-	if m.StateFile.Compression != "zstd" && m.StateFile.Compression != "none" {
+	if m.StateFile.Compression != CompressionZstd && m.StateFile.Compression != CompressionNone {
 		return fmt.Errorf("unsupported compression %q", m.StateFile.Compression)
 	}
-	if m.StateFile.Compression == "zstd" && m.StateFile.Name != RecordsFileZstd {
+	if m.StateFile.Compression == CompressionZstd && m.StateFile.Name != RecordsFileZstd {
 		return errors.New("zstd bundle must use state.records.zst")
 	}
-	if m.StateFile.Compression == "none" && m.StateFile.Name != RecordsFileRaw {
+	if m.StateFile.Compression == CompressionNone && m.StateFile.Name != RecordsFileRaw {
 		return errors.New("uncompressed bundle must use state.records")
 	}
 	if m.StateFile.Size <= 0 {

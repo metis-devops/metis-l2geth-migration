@@ -30,7 +30,7 @@ type ExportResult struct {
 // Export writes the latest canonical legacy state into a new audited bundle.
 func Export(ctx context.Context, opts ExportOptions) (result ExportResult, retErr error) {
 	if opts.Compression == "" {
-		opts.Compression = "zstd"
+		opts.Compression = bundle.CompressionZstd
 	}
 	reporter := newProgressReporter("export", opts.Progress,
 		"source", opts.SourceChaindata,

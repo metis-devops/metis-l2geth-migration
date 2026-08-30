@@ -12,6 +12,7 @@ import (
 	"syscall"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/metis-devops/metis-l2geth-migration/internal/bundle"
 	"github.com/metis-devops/metis-l2geth-migration/internal/migration"
 	"github.com/metis-devops/metis-l2geth-migration/internal/version"
 )
@@ -94,7 +95,7 @@ func runExport(ctx context.Context, args []string, stdout, stderr io.Writer) err
 	flags.SetOutput(stderr)
 	source := flags.String("source-chaindata", "", "stopped l2geth LevelDB chaindata directory")
 	output := flags.String("out", "", "new bundle directory")
-	compression := flags.String("compression", "zstd", "record compression: zstd or none")
+	compression := flags.String("compression", bundle.CompressionZstd, "record compression: zstd or none")
 	cache := flags.Int("cache-mb", defaultCacheMB, "database cache allowance in MiB")
 	handles := flags.Int("handles", defaultHandles, "database file handle allowance")
 	quiet := flags.Bool("quiet", false, "disable progress logs on stderr")

@@ -70,9 +70,9 @@ type Writer struct {
 func NewWriter(dir, compression string, head Head, headerRLP []byte) (*Writer, error) {
 	var fileName string
 	switch compression {
-	case "zstd":
+	case CompressionZstd:
 		fileName = RecordsFileZstd
-	case "none":
+	case CompressionNone:
 		fileName = RecordsFileRaw
 	default:
 		return nil, fmt.Errorf("unsupported compression %q", compression)
@@ -91,7 +91,7 @@ func NewWriter(dir, compression string, head Head, headerRLP []byte) (*Writer, e
 		fileName:    fileName,
 		compression: compression,
 	}
-	if compression == "zstd" {
+	if compression == CompressionZstd {
 		encoder, err := newZstdEncoder(destination)
 		if err != nil {
 			createErr := fmt.Errorf("create zstd writer: %w", err)
@@ -270,7 +270,7 @@ func ScanRecords(ctx context.Context, dir string, manifest Manifest, consume fun
 		stream  = tee
 		decoder *zstd.Decoder
 	)
-	if manifest.StateFile.Compression == "zstd" {
+	if manifest.StateFile.Compression == CompressionZstd {
 		decoder, err = zstd.NewReader(tee, zstd.WithDecoderConcurrency(1))
 		if err != nil {
 			return ScanResult{}, fmt.Errorf("open zstd stream: %w", err)
@@ -280,7 +280,7 @@ func ScanRecords(ctx context.Context, dir string, manifest Manifest, consume fun
 	}
 	reader := bufio.NewReaderSize(stream, 256*1024)
 	var canonical *canonicalZstdWriter
-	if manifest.StateFile.Compression == "zstd" {
+	if manifest.StateFile.Compression == CompressionZstd {
 		canonical, err = newCanonicalZstdWriter()
 		if err != nil {
 			return ScanResult{}, err

@@ -90,7 +90,7 @@ func TestGoldenLegacyL2GethFixtureBothSchemes(t *testing.T) {
 	exported, err := Export(context.Background(), ExportOptions{
 		SourceChaindata: chaindata,
 		Output:          bundleDir,
-		Compression:     "none",
+		Compression:     bundle.CompressionNone,
 		CacheMB:         16,
 		Handles:         16,
 	})
@@ -181,7 +181,7 @@ func TestExportImportAndVerifyBothSchemes(t *testing.T) {
 	exported, err := Export(context.Background(), ExportOptions{
 		SourceChaindata: fixture.chaindata,
 		Output:          bundleDir,
-		Compression:     "zstd",
+		Compression:     bundle.CompressionZstd,
 		CacheMB:         32,
 		Handles:         32,
 	})
@@ -253,7 +253,7 @@ func TestExportRejectsMissingLegacyCode(t *testing.T) {
 	_, err = Export(context.Background(), ExportOptions{
 		SourceChaindata: fixture.chaindata,
 		Output:          filepath.Join(t.TempDir(), "bundle"),
-		Compression:     "none",
+		Compression:     bundle.CompressionNone,
 		CacheMB:         16,
 		Handles:         16,
 	})
@@ -268,7 +268,7 @@ func TestExportDoesNotMutateLegacyLevelDB(t *testing.T) {
 	if _, err := Export(context.Background(), ExportOptions{
 		SourceChaindata: fixture.chaindata,
 		Output:          filepath.Join(t.TempDir(), "bundle"),
-		Compression:     "zstd",
+		Compression:     bundle.CompressionZstd,
 		CacheMB:         16,
 		Handles:         16,
 	}); err != nil {
@@ -293,7 +293,7 @@ func TestExportRejectsNonCanonicalHead(t *testing.T) {
 	_, err = Export(context.Background(), ExportOptions{
 		SourceChaindata: fixture.chaindata,
 		Output:          filepath.Join(t.TempDir(), "bundle"),
-		Compression:     "none",
+		Compression:     bundle.CompressionNone,
 		CacheMB:         16,
 		Handles:         16,
 	})
@@ -308,7 +308,7 @@ func TestVerifyRejectsCorruptedRecordFile(t *testing.T) {
 	result, err := Export(context.Background(), ExportOptions{
 		SourceChaindata: fixture.chaindata,
 		Output:          bundleDir,
-		Compression:     "none",
+		Compression:     bundle.CompressionNone,
 		CacheMB:         16,
 		Handles:         16,
 	})
@@ -343,7 +343,7 @@ func TestScanBundleRejectsStorageBeforeAccount(t *testing.T) {
 		t.Fatal(err)
 	}
 	head := bundle.Head{BlockNumber: 1, BlockHash: header.Hash(), StateRoot: header.Root}
-	writer, err := bundle.NewWriter(dir, "none", head, headerRLP)
+	writer, err := bundle.NewWriter(dir, bundle.CompressionNone, head, headerRLP)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -396,7 +396,7 @@ func TestBundleSemanticScanLargeStream(t *testing.T) {
 	}
 	head := bundle.Head{BlockNumber: 9, BlockHash: header.Hash(), StateRoot: root}
 	dir := t.TempDir()
-	writer, err := bundle.NewWriter(dir, "zstd", head, headerRLP)
+	writer, err := bundle.NewWriter(dir, bundle.CompressionZstd, head, headerRLP)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -475,7 +475,7 @@ func TestExportRejectsSymlinkedOutputInsideSource(t *testing.T) {
 	_, err := Export(context.Background(), ExportOptions{
 		SourceChaindata: fixture.chaindata,
 		Output:          output,
-		Compression:     "none",
+		Compression:     bundle.CompressionNone,
 		CacheMB:         16,
 		Handles:         16,
 	})
@@ -565,7 +565,7 @@ func TestVerifyRejectsExtraArtifactState(t *testing.T) {
 	exported, err := Export(context.Background(), ExportOptions{
 		SourceChaindata: fixture.chaindata,
 		Output:          bundleDir,
-		Compression:     "none",
+		Compression:     bundle.CompressionNone,
 		CacheMB:         16,
 		Handles:         16,
 	})
@@ -677,7 +677,7 @@ func TestVerifyRejectsTamperedArtifactHeadMetadata(t *testing.T) {
 	exported, err := Export(context.Background(), ExportOptions{
 		SourceChaindata: fixture.chaindata,
 		Output:          bundleDir,
-		Compression:     "none",
+		Compression:     bundle.CompressionNone,
 		CacheMB:         16,
 		Handles:         16,
 	})
