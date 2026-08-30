@@ -1,42 +1,143 @@
 # Repository guidance
 
-## Purpose and compatibility
+## Mission and boundaries
 
-This repository builds `l2state`, a deliberately narrow migration tool for the latest executed state in a legacy Optimism/Metis l2geth LevelDB. Preserve the documented boundary: the tool migrates accounts, storage, and code committed by `LastBlock`, plus that selected header and its hash-to-number mapping, canonical mapping, `LastBlock`, and `LastHeader` markers. It does not create bootable geth `chaindata` or migrate block bodies, transactions, receipts, total difficulty, `LastFast`, chain configuration, historical headers or state, or trie preimages.
+This repository builds `l2state`, a deliberately narrow migration tool for the
+latest executed state in a legacy Optimism/Metis l2geth LevelDB.
 
-The root module requires Go 1.27 and pins go-ethereum to v1.17.5 at commit `9621c6ad10934a01b5514886fb6fbd87640b6c05`. Do not change the geth version, bundle format, database layout, or supported state schemes as incidental dependency cleanup.
+Preserve the state-only boundary. The tool migrates the accounts, storage, and
+code committed by the canonical `LastBlock`, plus exactly five chain-metadata
+entries: the selected header, its hash-to-number mapping, its canonical
+number-to-hash mapping, `LastBlock`, and `LastHeader`. It does not create
+bootable geth `chaindata` or migrate bodies, transactions, receipts, total
+difficulty, `LastFast`, chain configuration, historical headers or state, or
+trie preimages.
 
 ## Code map
 
-- `cmd/l2state`: CLI parsing and JSON output.
-- `internal/readonlydb`: strict read-only adapter for legacy LevelDB.
-- `internal/bundle`: versioned manifest and ordered record-stream encoding.
-- `internal/migration`: export, import, state traversal, atomic publication, and independent verification.
-- `internal/migration/testdata`: committed legacy l2geth canary and expected evidence.
-- `testdata/legacyfixturegen`: separate maintenance-only module used to regenerate the canary.
+- `cmd/l2state` owns CLI validation, progress-log setup, and final JSON output.
+- `internal/readonlydb` is the strict read-only adapter for legacy LevelDB.
+- `internal/bundle` defines the v2 manifest and deterministic account,
+  storage, and code record stream.
+- `internal/migration/export.go`, `import.go`, and `migrate.go` implement the
+  portable and direct workflows.
+- `internal/migration/verify.go` and `direct_verify.go` independently verify
+  bundle-backed and direct artifacts; their report formats are intentionally
+  distinct.
+- `internal/migration/head_metadata.go`, `progress.go`, and `atomicdir.go` own
+  the minimal header inventory, stderr progress, and no-replace publication.
+- `internal/migration/testdata` contains the committed legacy canary and
+  expected evidence.
+- `testdata/legacyfixturegen` is a separate, maintenance-only module for
+  intentional canary regeneration.
 
-## Correctness and safety invariants
+## Immutable contracts
 
-- Treat the legacy source as immutable. Never enable LevelDB recovery, compaction, or any write path, and require a stopped database or a point-in-time-consistent filesystem snapshot.
-- Fail closed on missing trie nodes or code, a changing or non-canonical head, non-canonical RLP, digest/count/order mismatches, unexpected database keys, or a recomputed root mismatch.
-- Preserve consensus bytes. Do not reinterpret OVM balances or transform account, storage, or code payloads during export.
-- Keep record ordering deterministic and bind evidence to the exact header, block hash, and state root.
-- Output paths must be new. Publish through the sibling `.partial-*` directory only after verification and syncing; cleanup must never target unrelated paths.
-- Hash and path artifacts are state databases with exactly five permitted chain-metadata entries: the selected header, its hash-to-number mapping, its canonical mapping, `LastBlock`, and `LastHeader`. Reject any additional header, head marker, body, receipt, history, or other chain data. Keep hash artifacts free of temporary flat state, and keep the path snapshot metadata and state ID semantics compatible with geth v1.17.5.
+### Source and consensus data
 
-## Development workflow
+- Treat the legacy source as immutable. Never enable recovery, compaction,
+  repair, or any write path. Require a stopped database or a
+  point-in-time-consistent filesystem snapshot.
+- Validate `LastBlock`, its number mapping, canonical mapping, header RLP,
+  header hash, block number, and state root before traversal. Confirm the same
+  canonical head after traversal and fail if it changed.
+- Preserve consensus bytes. Do not reinterpret OVM balances, synthesize
+  preimages, or transform account RLP, storage-value RLP, or code. `UsingOVM`
+  affects execution/RPC semantics, not trie encoding.
+- Fail closed on missing trie nodes or code, non-canonical RLP, malformed or
+  duplicate records, digest/count/order mismatches, and recomputed-root
+  mismatches.
 
-Run commands from the repository root:
+### Bundles and evidence
+
+- Keep account, storage, and unique-code records in deterministic semantic
+  order. Preserve their framing, validation, and header-seeded Keccak record
+  chain.
+- Bundle and bundle-backed verification formats are version 2. Direct
+  verification is a separate version 1 format and must not acquire bundle-only
+  digests or manifest fields.
+- Exact selected-header evidence is mandatory within those versions. Do not
+  accept older reports that omit it or silently add a compatibility mode.
+- Keep fixed hashes as `common.Hash` and arbitrary header bytes as
+  `hexutil.Bytes`; malformed, zero, unprefixed, or wrong-length values must
+  continue to fail strict JSON decoding or validation.
+
+### Target artifacts
+
+- Support only `hash` and `path`, both backed by the pinned geth v1.17.5 APIs
+  and Pebble v2. Require callers and reports to select the scheme explicitly.
+- After state generation, store only the selected header and the four matching
+  lookup/head entries. Reject additional headers, head markers, bodies,
+  receipts, history, orphan trie nodes, unreferenced code, malformed path
+  metadata, and any other unexpected database key.
+- Hash artifacts must contain no temporary flat state. Path artifacts must
+  preserve geth v1.17.5 completion metadata, `SnapshotRoot`, and state ID 0,
+  with no historical layers.
+- Independently reopen and verify every artifact before publication. Do not
+  trust `verification.json` as the source of truth for bundle verification.
+
+### Publication and compatibility
+
+- Output paths must be new and non-aliasing. Export and direct-migration
+  outputs must also be outside the legacy source. Stage work in a sibling
+  `.partial-*` directory; sync and verify it before an atomic no-replace
+  rename. Cleanup must target only the partial directory created by the
+  current invocation.
+- The root module requires Go 1.27 and pins go-ethereum v1.17.5 at commit
+  `9621c6ad10934a01b5514886fb6fbd87640b6c05`. Do not change the geth pin,
+  bundle/report versions, record encoding, database layout, supported schemes,
+  or compression choices as incidental cleanup.
+
+## Implementation rules
+
+- Preserve `context.Context` cancellation through source scans, bundle scans,
+  trie generation, verification, and compaction.
+- Wrap errors with operation context and `%w`. Check and combine relevant
+  close, sync, abort, and cleanup errors instead of discarding them.
+- Keep human-readable progress on standard error and the single final JSON
+  value on standard output. `--quiet` suppresses progress, not diagnostics or
+  the final error.
+- Keep long operations streaming and bounded by the configured cache and
+  handle allowances. Do not add a pre-count scan merely to report a percentage
+  or ETA.
+- Add regression coverage for behavior changes. Exercise both `hash` and
+  `path`, both `zstd` and `none`, and both direct and bundle-backed paths
+  when the changed behavior applies to them.
+- Update operator documentation and agent guidance whenever a public command,
+  report contract, artifact invariant, or validation gate changes.
+
+## Validation
+
+Run focused tests while iterating, then finish every change with:
 
 ```bash
-make fmt-check
-make lint
-make test
-make build
+make ci
+git diff --check
 ```
 
-Use `make ci` for the standard local gate and `make test-race` when changing concurrency, cancellation, database lifecycle, or shared state. Run focused `go test` commands while iterating, but finish with the relevant Make targets.
+`make ci` runs formatting and module-tidiness checks, lint, all root-module
+tests, and the build. Also run `make test-race` when changing concurrency,
+cancellation, progress reporting, database lifecycle, atomic publication, or
+shared state.
 
-Format Go code with `gofmt`. Wrap errors with context and `%w`, handle close/sync/abort errors, and preserve `context.Context` cancellation through long scans. Add regression coverage for behavior changes, including both `hash` and `path` schemes and both `zstd` and `none` compression where applicable.
+Use the following change-sensitive checks:
 
-Do not regenerate the golden legacy fixture during ordinary test maintenance. If fixture regeneration is intentional, use the pinned generator in `testdata/legacyfixturegen`, write to a new temporary directory, compare all generated outputs, and document any provenance change.
+- CLI or progress changes: verify flags and stdout/stderr separation in
+  `cmd/l2state` tests.
+- Bundle or report changes: cover strict JSON, both compression modes,
+  corruption, trailing data, counts, ordering, and direct/bundle format
+  separation.
+- Import or database-layout changes: test both schemes, exact inventory,
+  independent reopening, and a subsequent state commit/read through geth
+  v1.17.5 APIs.
+- Source traversal or direct-migration changes: run the committed legacy
+  canary through direct and portable workflows and confirm the source content
+  remains unchanged.
+
+Do not regenerate the golden fixture during ordinary test maintenance. If
+regeneration is intentional, use the pinned module in
+`testdata/legacyfixturegen`, generate into a new temporary directory, and run
+that module's tests, vet, and module verification. Compare every generated
+output with the committed fixture and document any changed l2geth or
+`OVM_ETH` provenance before replacing it. A canary pass is not evidence that a
+real production snapshot has been accepted.
