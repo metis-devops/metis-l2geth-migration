@@ -8,6 +8,5 @@ RUN  --mount=type=cache,target=/go/pkg/mod \
     go build -trimpath -ldflags="-s -w" -o ./bin/ ./cmd/...
 
 FROM alpine:latest
-WORKDIR /app
 COPY --from=build /app/bin/l2state  /usr/local/bin/
 ENTRYPOINT ["/usr/local/bin/l2state"]
