@@ -77,6 +77,9 @@ func TestLoadVerificationReportRejectsInvalidHashEvidence(t *testing.T) {
 		)
 	}
 	tests = append(tests,
+		testCase{name: "v2 report", mutate: func(document map[string]any) {
+			document["version"] = float64(2)
+		}},
 		testCase{name: "wrong hash length", mutate: func(document map[string]any) {
 			document["manifest_sha256"] = "0x01"
 		}},

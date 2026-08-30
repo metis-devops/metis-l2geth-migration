@@ -30,19 +30,28 @@ func TestRecordRoundTrip(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			accountPayload, err := EncodeAccount(account)
+			if err != nil {
+				t.Fatal(err)
+			}
 			accountHash := common.HexToHash("0x01")
-			if err := writer.WriteAccount(accountHash, accountRLP); err != nil {
+			if err := writer.WriteAccount(accountHash, accountPayload, uint64(len(accountRLP))); err != nil {
 				t.Fatal(err)
 			}
 			result, err := writer.Close()
 			if err != nil {
 				t.Fatal(err)
 			}
+			if result.Counts.PayloadBytes != uint64(len(accountRLP)) || result.RecordPayloadBytes != uint64(len(accountPayload)) {
+				t.Fatalf("payload counts are semantic=%d record=%d, want %d and %d",
+					result.Counts.PayloadBytes, result.RecordPayloadBytes, len(accountRLP), len(accountPayload))
+			}
 			manifest := NewManifest(SourceEvidence{
 				HeadBefore: head, HeadAfter: head, HeaderRLP: hexutil.Bytes(headerRLP),
 			}, result.Counts, StateFile{
 				Name: result.FileName, Compression: result.Compression, Size: result.Size,
-				SHA256: result.SHA256, RecordChainHash: result.RecordChainHash,
+				RecordPayloadBytes: result.RecordPayloadBytes,
+				SHA256:             result.SHA256, RecordChainHash: result.RecordChainHash,
 			})
 			if _, err := WriteManifest(dir, manifest); err != nil {
 				t.Fatal(err)
@@ -58,8 +67,14 @@ func TestRecordRoundTrip(t *testing.T) {
 			if len(records) != 1 || records[0].Type != RecordAccount || records[0].AccountHash != accountHash {
 				t.Fatalf("unexpected records: %+v", records)
 			}
-			if scan.Counts != result.Counts || scan.FileSHA256 != result.SHA256 || scan.RecordChainHash != result.RecordChainHash {
+			if scan.Counts != result.Counts || scan.RecordPayloadBytes != result.RecordPayloadBytes ||
+				scan.FileSHA256 != result.SHA256 || scan.RecordChainHash != result.RecordChainHash {
 				t.Fatalf("scan result mismatch: %+v writer %+v", scan, result)
+			}
+			wrongPayloadBytes := manifest
+			wrongPayloadBytes.StateFile.RecordPayloadBytes++
+			if _, err := ScanRecords(context.Background(), dir, wrongPayloadBytes, nil); err == nil {
+				t.Fatal("record payload byte mismatch unexpectedly verified")
 			}
 		})
 	}
@@ -96,7 +111,8 @@ func TestScanRecordsRejectsTrailingData(t *testing.T) {
 		HeadBefore: head, HeadAfter: head, HeaderRLP: hexutil.Bytes(headerRLP),
 	}, result.Counts, StateFile{
 		Name: result.FileName, Compression: result.Compression, Size: int64(len(data)),
-		SHA256: common.Hash(sum), RecordChainHash: result.RecordChainHash,
+		RecordPayloadBytes: result.RecordPayloadBytes,
+		SHA256:             common.Hash(sum), RecordChainHash: result.RecordChainHash,
 	})
 	if _, err := ScanRecords(context.Background(), dir, manifest, nil); err == nil {
 		t.Fatal("record stream with trailing data unexpectedly verified")
@@ -140,7 +156,8 @@ func TestScanRecordsRejectsZstdSkippableTrailingFrame(t *testing.T) {
 		HeadBefore: head, HeadAfter: head, HeaderRLP: hexutil.Bytes(headerRLP),
 	}, result.Counts, StateFile{
 		Name: result.FileName, Compression: result.Compression, Size: int64(len(data)),
-		SHA256: common.Hash(sum), RecordChainHash: result.RecordChainHash,
+		RecordPayloadBytes: result.RecordPayloadBytes,
+		SHA256:             common.Hash(sum), RecordChainHash: result.RecordChainHash,
 	})
 	if _, err := ScanRecords(context.Background(), dir, manifest, nil); err == nil {
 		t.Fatal("zstd stream with a trailing skippable frame unexpectedly verified")
@@ -162,7 +179,8 @@ func TestLoadManifestRejectsTrailingJSON(t *testing.T) {
 		HeadBefore: head, HeadAfter: head, HeaderRLP: hexutil.Bytes(headerRLP),
 	}, result.Counts, StateFile{
 		Name: result.FileName, Compression: result.Compression, Size: result.Size,
-		SHA256: result.SHA256, RecordChainHash: result.RecordChainHash,
+		RecordPayloadBytes: result.RecordPayloadBytes,
+		SHA256:             result.SHA256, RecordChainHash: result.RecordChainHash,
 	})
 	if _, err := WriteManifest(dir, manifest); err != nil {
 		t.Fatal(err)

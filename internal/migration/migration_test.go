@@ -108,6 +108,10 @@ func TestGoldenLegacyL2GethFixtureBothSchemes(t *testing.T) {
 	if counts := exported.Manifest.Counts; counts.Accounts != 5 || counts.StorageSlots != 9 || counts.CodeReferences != 3 || counts.CodeRecords != 2 {
 		t.Fatalf("golden OVM state shape mismatch: %+v", counts)
 	}
+	if exported.Manifest.StateFile.RecordPayloadBytes >= exported.Manifest.Counts.PayloadBytes {
+		t.Fatalf("golden bundle did not compact account payloads: record=%d expanded=%d",
+			exported.Manifest.StateFile.RecordPayloadBytes, exported.Manifest.Counts.PayloadBytes)
+	}
 	assertNoTemporaryTrieNodeIndexes(t, bundleDir)
 	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme} {
 		artifact := filepath.Join(root, "artifact-"+scheme)
@@ -240,7 +244,7 @@ func TestExportImportAndVerifyBothSchemes(t *testing.T) {
 	}
 }
 
-func TestExportSharedCodeBundleCompatibility(t *testing.T) {
+func TestExportSharedCodeBundleV3Encoding(t *testing.T) {
 	fixture := buildLegacyFixture(t)
 	root := t.TempDir()
 	expected := map[string]struct {
@@ -248,15 +252,15 @@ func TestExportSharedCodeBundleCompatibility(t *testing.T) {
 		sha256 common.Hash
 	}{
 		bundle.CompressionNone: {
-			size:   621,
-			sha256: common.HexToHash("0x0fd92aaf8536e48be3e64e6af4beb4d54ba42d6b8e8ef4b71693191b2edfc72a"),
+			size:   523,
+			sha256: common.HexToHash("0xae67ac7819e64146b41fdc3679680d975085645ea656725f3c8c9d3911d16921"),
 		},
 		bundle.CompressionZstd: {
-			size:   430,
-			sha256: common.HexToHash("0x476c95293b215b0724ee77c1cf61fb3f829b1180849033057abf211c404b7ae4"),
+			size:   369,
+			sha256: common.HexToHash("0x0cbe7c27dce60b2a8f4e224578eafef089bcfbf69a1de9237ee6c5a60511d312"),
 		},
 	}
-	wantChain := common.HexToHash("0x0f4be584bbf3af55cb97815b23cd7a44028af566104a655719ba305906d0ceeb")
+	wantChain := common.HexToHash("0xd903359a2e7ed95edea4a11199d611c511ddf790f41f09e0353223e697b417a5")
 	wantCounts := bundle.Counts{
 		Accounts: 3, StorageSlots: 3, CodeReferences: 2,
 		CodeRecords: 1, Records: 7, PayloadBytes: 229,
@@ -291,6 +295,10 @@ func TestExportSharedCodeBundleCompatibility(t *testing.T) {
 			}
 			if exported.Manifest.Counts != wantCounts {
 				t.Fatalf("bundle counts changed: have %+v want %+v", exported.Manifest.Counts, wantCounts)
+			}
+			if exported.Manifest.StateFile.RecordPayloadBytes != 131 {
+				t.Fatalf("record payload bytes are %d, want 131 expanded from %d",
+					exported.Manifest.StateFile.RecordPayloadBytes, exported.Manifest.Counts.PayloadBytes)
 			}
 			var recordOrder []string
 			if _, err := bundle.ScanRecords(context.Background(), exported.BundlePath, exported.Manifest, func(record bundle.Record) error {
@@ -399,6 +407,10 @@ func writeSharedCodeSemanticBundle(t *testing.T, codeRecords []bool) string {
 	if err != nil {
 		t.Fatal(err)
 	}
+	accountPayload, err := bundle.EncodeAccount(account)
+	if err != nil {
+		t.Fatal(err)
+	}
 	accountHashes := []common.Hash{common.HexToHash("0x01"), common.HexToHash("0x02")}
 	stack := trie.NewStackTrie(nil)
 	for _, hash := range accountHashes {
@@ -423,7 +435,7 @@ func writeSharedCodeSemanticBundle(t *testing.T, codeRecords []bool) string {
 		t.Fatal(err)
 	}
 	for index, hash := range accountHashes {
-		if err := writer.WriteAccount(hash, accountRLP); err != nil {
+		if err := writer.WriteAccount(hash, accountPayload, uint64(len(accountRLP))); err != nil {
 			t.Fatal(err)
 		}
 		if err := writer.CountCodeReference(); err != nil {
@@ -443,7 +455,8 @@ func writeSharedCodeSemanticBundle(t *testing.T, codeRecords []bool) string {
 		HeadBefore: head, HeadAfter: head, HeaderRLP: hexutil.Bytes(headerRLP),
 	}, result.Counts, bundle.StateFile{
 		Name: result.FileName, Compression: result.Compression, Size: result.Size,
-		SHA256: result.SHA256, RecordChainHash: result.RecordChainHash,
+		RecordPayloadBytes: result.RecordPayloadBytes,
+		SHA256:             result.SHA256, RecordChainHash: result.RecordChainHash,
 	})
 	if _, err := bundle.WriteManifest(dir, manifest); err != nil {
 		t.Fatal(err)
@@ -581,6 +594,32 @@ func TestVerifyRejectsCorruptedRecordFile(t *testing.T) {
 	}
 }
 
+func TestScanBundleRejectsExpandedPayloadCountMismatch(t *testing.T) {
+	fixture := buildLegacyFixture(t)
+	bundleDir := filepath.Join(t.TempDir(), "bundle")
+	if _, err := Export(context.Background(), ExportOptions{
+		SourceChaindata: fixture.chaindata,
+		Output:          bundleDir,
+		Compression:     bundle.CompressionNone,
+		CacheMB:         16,
+		Handles:         16,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	manifest, _, err := bundle.LoadManifest(bundleDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest.Counts.PayloadBytes++
+	if _, err := bundle.WriteManifest(bundleDir, manifest); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ScanBundle(context.Background(), bundleDir, nil); err == nil ||
+		!strings.Contains(err.Error(), "semantic counts mismatch") {
+		t.Fatalf("expanded payload count mismatch error is %v", err)
+	}
+}
+
 func TestScanBundleRejectsStorageBeforeAccount(t *testing.T) {
 	dir := t.TempDir()
 	header := &types.Header{
@@ -609,7 +648,8 @@ func TestScanBundleRejectsStorageBeforeAccount(t *testing.T) {
 		HeadBefore: head, HeadAfter: head, HeaderRLP: hexutil.Bytes(headerRLP),
 	}, result.Counts, bundle.StateFile{
 		Name: result.FileName, Compression: result.Compression, Size: result.Size,
-		SHA256: result.SHA256, RecordChainHash: result.RecordChainHash,
+		RecordPayloadBytes: result.RecordPayloadBytes,
+		SHA256:             result.SHA256, RecordChainHash: result.RecordChainHash,
 	})
 	if _, err := bundle.WriteManifest(dir, manifest); err != nil {
 		t.Fatal(err)
@@ -623,6 +663,10 @@ func TestBundleSemanticScanLargeStream(t *testing.T) {
 	const accountCount = 10_000
 	account := types.NewEmptyStateAccount()
 	accountRLP, err := rlp.EncodeToBytes(account)
+	if err != nil {
+		t.Fatal(err)
+	}
+	accountPayload, err := bundle.EncodeAccount(account)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -653,7 +697,7 @@ func TestBundleSemanticScanLargeStream(t *testing.T) {
 	for i := uint64(1); i <= accountCount; i++ {
 		var key common.Hash
 		binary.BigEndian.PutUint64(key[common.HashLength-8:], i)
-		if err := writer.WriteAccount(key, accountRLP); err != nil {
+		if err := writer.WriteAccount(key, accountPayload, uint64(len(accountRLP))); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -665,7 +709,8 @@ func TestBundleSemanticScanLargeStream(t *testing.T) {
 		HeadBefore: head, HeadAfter: head, HeaderRLP: hexutil.Bytes(headerRLP),
 	}, result.Counts, bundle.StateFile{
 		Name: result.FileName, Compression: result.Compression, Size: result.Size,
-		SHA256: result.SHA256, RecordChainHash: result.RecordChainHash,
+		RecordPayloadBytes: result.RecordPayloadBytes,
+		SHA256:             result.SHA256, RecordChainHash: result.RecordChainHash,
 	})
 	if _, err := bundle.WriteManifest(dir, manifest); err != nil {
 		t.Fatal(err)

@@ -24,7 +24,7 @@ const (
 	// FormatName identifies the bundle format in a manifest.
 	FormatName = "metis-l2state"
 	// FormatVersion is the supported bundle format version.
-	FormatVersion = 2
+	FormatVersion = 3
 	// ManifestFileName is the fixed name of the bundle manifest.
 	ManifestFileName = "manifest.json"
 	// CompressionZstd identifies the canonical zstd-compressed record stream.
@@ -92,7 +92,7 @@ func (s SourceEvidence) ValidatedHeader() (*types.Header, error) {
 	return &header, nil
 }
 
-// Counts summarizes the records and payload bytes in a state bundle.
+// Counts summarizes semantic records and their expanded consensus payload bytes.
 type Counts struct {
 	Accounts       uint64 `json:"accounts"`
 	StorageSlots   uint64 `json:"storage_slots"`
@@ -125,11 +125,12 @@ func (c Counts) Validate() error {
 
 // StateFile describes the encoded record stream and its integrity evidence.
 type StateFile struct {
-	Name            string      `json:"name"`
-	Compression     string      `json:"compression"`
-	Size            int64       `json:"size"`
-	SHA256          common.Hash `json:"sha256"`
-	RecordChainHash common.Hash `json:"record_chain_hash"`
+	Name               string      `json:"name"`
+	Compression        string      `json:"compression"`
+	Size               int64       `json:"size"`
+	RecordPayloadBytes uint64      `json:"record_payload_bytes"`
+	SHA256             common.Hash `json:"sha256"`
+	RecordChainHash    common.Hash `json:"record_chain_hash"`
 }
 
 // Manifest describes a versioned state bundle and its source evidence.
@@ -248,6 +249,15 @@ func (m Manifest) Validate() error {
 	}
 	if err := m.Counts.Validate(); err != nil {
 		return err
+	}
+	if m.Counts.Records == 0 && m.StateFile.RecordPayloadBytes != 0 {
+		return errors.New("empty record stream has non-zero record payload bytes")
+	}
+	if m.Counts.Records != 0 && m.StateFile.RecordPayloadBytes == 0 {
+		return errors.New("non-empty record stream has zero record payload bytes")
+	}
+	if m.StateFile.RecordPayloadBytes > m.Counts.PayloadBytes {
+		return errors.New("record payload bytes exceed expanded consensus payload bytes")
 	}
 	if len(m.SupportedSchemes) != 2 || m.SupportedSchemes[0] != "hash" || m.SupportedSchemes[1] != "path" {
 		return errors.New("manifest supported_schemes must be [hash, path]")

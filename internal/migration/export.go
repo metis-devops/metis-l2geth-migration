@@ -121,11 +121,12 @@ func Export(ctx context.Context, opts ExportOptions) (result ExportResult, retEr
 			return err
 		}
 		manifest = bundle.NewManifest(sourceEvidence, state.Counts, bundle.StateFile{
-			Name:            writerResult.FileName,
-			Compression:     writerResult.Compression,
-			Size:            writerResult.Size,
-			SHA256:          writerResult.SHA256,
-			RecordChainHash: writerResult.RecordChainHash,
+			Name:               writerResult.FileName,
+			Compression:        writerResult.Compression,
+			Size:               writerResult.Size,
+			RecordPayloadBytes: writerResult.RecordPayloadBytes,
+			SHA256:             writerResult.SHA256,
+			RecordChainHash:    writerResult.RecordChainHash,
 		})
 		if _, err := bundle.WriteManifest(output.Path(), manifest); err != nil {
 			return err
@@ -163,7 +164,11 @@ type recordWriterVisitor struct {
 }
 
 func (v *recordWriterVisitor) Account(hash common.Hash, account *types.StateAccount, fullRLP []byte) error {
-	if err := v.writer.WriteAccount(hash, fullRLP); err != nil {
+	payload, err := bundle.EncodeAccount(account)
+	if err != nil {
+		return fmt.Errorf("encode account %s: %w", hash, err)
+	}
+	if err := v.writer.WriteAccount(hash, payload, uint64(len(fullRLP))); err != nil {
 		return fmt.Errorf("write account %s: %w", hash, err)
 	}
 	if !bytes.Equal(account.CodeHash, types.EmptyCodeHash[:]) {

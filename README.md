@@ -95,6 +95,13 @@ metis-state-12345/
 └── state.records.zst
 ```
 
+Account records use geth v1.17.5's canonical slim encoding: an empty storage
+root and empty code hash are encoded as empty byte strings. Import and verify
+strictly expand every account back to full consensus RLP before rebuilding the
+account trie. In `manifest.json`, `state_file.record_payload_bytes` measures
+the compact record payloads, while `counts.payload_bytes` measures the expanded
+consensus payloads used to compare portable and direct migration results.
+
 Import the bundle into either scheme:
 
 ```bash
@@ -151,21 +158,24 @@ records the bundle root and its supported schemes.
 
 `UsingOVM` changes legacy execution and RPC interpretation, not MPT encoding.
 The tool does not convert OVM balances into ordinary account balances or
-execute a state transition. It preserves account RLP, storage-value RLP,
-`OVM_ETH` storage, and contract code as consensus data.
+execute a state transition. Source and target account RLP, storage-value RLP,
+`OVM_ETH` storage, and contract code remain identical consensus data; only the
+portable bundle's account payload uses the reversible slim representation.
 
 ## Formats and compatibility
 
-- Bundles use `metis-l2state` format version 2.
+- Bundles use `metis-l2state` format version 3.
 - Bundle-backed verification reports use
-  `metis-l2state-verification` version 2.
+  `metis-l2state-verification` version 3.
 - Direct migrations use `metis-l2state-direct-verification` version 1.
 
-Current validators require the exact selected header RLP and matching
-hash-to-number, canonical, `LastBlock`, and `LastHeader` metadata. Artifacts
-produced by older builds without that evidence are rejected even if they use
-the same report version; recreate them with the current `import` or `migrate`
-command. There is no legacy compatibility mode.
+Version 3 validators reject version 2 bundles and bundle-backed reports; there
+is no legacy compatibility mode, so recreate older bundles with the current
+`export` command. Current validators also require the exact selected header RLP
+and matching hash-to-number, canonical, `LastBlock`, and `LastHeader` metadata.
+Artifacts produced by older builds without that evidence are rejected even if
+they use the same report version; recreate them with the current `import` or
+`migrate` command.
 
 Generated JSON hashes and digests are lowercase, 32-byte, `0x`-prefixed geth
 hashes. Header RLP is encoded as `0x`-prefixed bytes. Missing, malformed,

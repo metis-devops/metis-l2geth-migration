@@ -34,7 +34,7 @@ const (
 	maxCodePayload    = 128 << 20
 )
 
-const recordChainDomain = "metis-l2state-record-chain/v2"
+const recordChainDomain = "metis-l2state-record-chain/v3"
 
 // Record is one decoded account, storage, or code entry from the record stream.
 type Record struct {
@@ -46,12 +46,13 @@ type Record struct {
 
 // WriterResult summarizes a completed record stream and its integrity evidence.
 type WriterResult struct {
-	Counts          Counts
-	FileName        string
-	Compression     string
-	Size            int64
-	SHA256          common.Hash
-	RecordChainHash common.Hash
+	Counts             Counts
+	RecordPayloadBytes uint64
+	FileName           string
+	Compression        string
+	Size               int64
+	SHA256             common.Hash
+	RecordChainHash    common.Hash
 }
 
 // Writer emits a deterministic, integrity-protected state record stream.
@@ -62,6 +63,7 @@ type Writer struct {
 	fileHash    hash.Hash
 	chain       common.Hash
 	counts      Counts
+	recordBytes uint64
 	fileName    string
 	compression string
 	closed      bool
@@ -127,22 +129,26 @@ func (w *Writer) CountCodeReference() error {
 	return nil
 }
 
-// WriteAccount appends an account leaf to the record stream.
-func (w *Writer) WriteAccount(accountHash common.Hash, accountRLP []byte) error {
-	return w.writeRecord(RecordAccount, accountHash[:], nil, accountRLP)
+// WriteAccount appends a slim account payload while counting the expanded
+// consensus account RLP bytes.
+func (w *Writer) WriteAccount(accountHash common.Hash, accountRLP []byte, consensusPayloadBytes uint64) error {
+	if uint64(len(accountRLP)) > consensusPayloadBytes {
+		return fmt.Errorf("slim account payload is %d bytes, expanded consensus payload is %d", len(accountRLP), consensusPayloadBytes)
+	}
+	return w.writeRecord(RecordAccount, accountHash[:], nil, accountRLP, consensusPayloadBytes)
 }
 
 // WriteStorage appends a storage leaf for an account to the record stream.
 func (w *Writer) WriteStorage(accountHash, slotHash common.Hash, valueRLP []byte) error {
-	return w.writeRecord(RecordStorage, accountHash[:], slotHash[:], valueRLP)
+	return w.writeRecord(RecordStorage, accountHash[:], slotHash[:], valueRLP, uint64(len(valueRLP)))
 }
 
 // WriteCode appends contract code to the record stream.
 func (w *Writer) WriteCode(codeHash common.Hash, code []byte) error {
-	return w.writeRecord(RecordCode, codeHash[:], nil, code)
+	return w.writeRecord(RecordCode, codeHash[:], nil, code, uint64(len(code)))
 }
 
-func (w *Writer) writeRecord(typ byte, key, subkey, payload []byte) error {
+func (w *Writer) writeRecord(typ byte, key, subkey, payload []byte, consensusPayloadBytes uint64) error {
 	if w.closed {
 		return errors.New("state record writer is closed")
 	}
@@ -170,7 +176,8 @@ func (w *Writer) writeRecord(typ byte, key, subkey, payload []byte) error {
 	}
 	w.chain = nextChainHash(w.chain, header, payload)
 	w.counts.Records++
-	w.counts.PayloadBytes += uint64(len(payload))
+	w.counts.PayloadBytes += consensusPayloadBytes
+	w.recordBytes += uint64(len(payload))
 	switch typ {
 	case RecordAccount:
 		w.counts.Accounts++
@@ -216,12 +223,13 @@ func (w *Writer) Close() (WriterResult, error) {
 		return WriterResult{}, closeErr
 	}
 	return WriterResult{
-		Counts:          w.counts,
-		FileName:        w.fileName,
-		Compression:     w.compression,
-		Size:            info.Size(),
-		SHA256:          common.BytesToHash(w.fileHash.Sum(nil)),
-		RecordChainHash: w.chain,
+		Counts:             w.counts,
+		RecordPayloadBytes: w.recordBytes,
+		FileName:           w.fileName,
+		Compression:        w.compression,
+		Size:               info.Size(),
+		SHA256:             common.BytesToHash(w.fileHash.Sum(nil)),
+		RecordChainHash:    w.chain,
 	}, nil
 }
 
@@ -245,9 +253,10 @@ func (w *Writer) Abort() error {
 
 // ScanResult summarizes a verified record-stream scan.
 type ScanResult struct {
-	Counts          Counts
-	FileSHA256      common.Hash
-	RecordChainHash common.Hash
+	Counts             Counts
+	RecordPayloadBytes uint64
+	FileSHA256         common.Hash
+	RecordChainHash    common.Hash
 }
 
 // ScanRecords verifies and decodes the manifest's record stream in order.
@@ -310,6 +319,7 @@ func ScanRecords(ctx context.Context, dir string, manifest Manifest, consume fun
 	chain := initialChainHash(manifest.Source.HeadBefore, manifest.Source.HeaderRLP)
 	var (
 		counts      Counts
+		recordBytes uint64
 		headerSpace [1 + 2*common.HashLength + 8]byte
 	)
 	for {
@@ -371,7 +381,7 @@ func ScanRecords(ctx context.Context, dir string, manifest Manifest, consume fun
 		}
 		chain = nextChainHash(chain, header, payload)
 		counts.Records++
-		counts.PayloadBytes += length
+		recordBytes += length
 		switch typ {
 		case RecordAccount:
 			counts.Accounts++
@@ -398,14 +408,22 @@ func ScanRecords(ctx context.Context, dir string, manifest Manifest, consume fun
 			return ScanResult{}, errors.New("zstd state records do not use the canonical single-frame encoding")
 		}
 	}
-	counts.CodeReferences = manifest.Counts.CodeReferences
-	result := ScanResult{
-		Counts:          counts,
-		FileSHA256:      common.BytesToHash(fileHash.Sum(nil)),
-		RecordChainHash: chain,
+	if counts.Accounts != manifest.Counts.Accounts ||
+		counts.StorageSlots != manifest.Counts.StorageSlots ||
+		counts.CodeRecords != manifest.Counts.CodeRecords ||
+		counts.Records != manifest.Counts.Records {
+		return ScanResult{}, fmt.Errorf("record counts mismatch: have %+v want %+v", counts, manifest.Counts)
 	}
-	if result.Counts != manifest.Counts {
-		return ScanResult{}, fmt.Errorf("record counts mismatch: have %+v want %+v", result.Counts, manifest.Counts)
+	if recordBytes != manifest.StateFile.RecordPayloadBytes {
+		return ScanResult{}, fmt.Errorf("record payload bytes mismatch: have %d want %d", recordBytes, manifest.StateFile.RecordPayloadBytes)
+	}
+	counts.CodeReferences = manifest.Counts.CodeReferences
+	counts.PayloadBytes = manifest.Counts.PayloadBytes
+	result := ScanResult{
+		Counts:             counts,
+		RecordPayloadBytes: recordBytes,
+		FileSHA256:         common.BytesToHash(fileHash.Sum(nil)),
+		RecordChainHash:    chain,
 	}
 	if result.FileSHA256 != manifest.StateFile.SHA256 {
 		return ScanResult{}, fmt.Errorf("state records SHA-256 mismatch: have %s want %s", result.FileSHA256, manifest.StateFile.SHA256)

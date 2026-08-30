@@ -17,8 +17,8 @@ trie preimages.
 
 - `cmd/l2state` owns CLI validation, progress-log setup, and final JSON output.
 - `internal/readonlydb` is the strict read-only adapter for legacy LevelDB.
-- `internal/bundle` defines the v2 manifest and deterministic account,
-  storage, and code record stream.
+- `internal/bundle` defines the v3 manifest, canonical slim-account codec, and
+  deterministic account, storage, and code record stream.
 - `internal/migration/export.go`, `import.go`, `migrate.go`, and
   `direct_writer.go` implement the portable and direct workflows. Direct
   migration persists target trie nodes from the same ordered `StackTrie`
@@ -44,8 +44,10 @@ trie preimages.
 - Validate `LastBlock`, its number mapping, canonical mapping, header RLP,
   header hash, block number, and state root before traversal. Confirm the same
   canonical head after traversal and fail if it changed.
-- Preserve consensus bytes. Do not reinterpret OVM balances, synthesize
-  preimages, or transform account RLP, storage-value RLP, or code. `UsingOVM`
+- Preserve source and target consensus bytes. Bundle v3 represents accounts
+  with canonical geth slim RLP, but must restore full canonical account RLP
+  before trie reconstruction or target writes. Do not reinterpret OVM balances,
+  synthesize preimages, or transform storage-value RLP or code. `UsingOVM`
   affects execution/RPC semantics, not trie encoding.
 - Fail closed on missing trie nodes or code, non-canonical RLP, malformed or
   duplicate records, digest/count/order mismatches, and recomputed-root
@@ -56,9 +58,14 @@ trie preimages.
 - Keep account, storage, and unique-code records in deterministic semantic
   order. Preserve their framing, validation, and header-seeded Keccak record
   chain.
-- Bundle and bundle-backed verification formats are version 2. Direct
+- Bundle and bundle-backed verification formats are version 3. Direct
   verification is a separate version 1 format and must not acquire bundle-only
   digests or manifest fields.
+- In v3 account payloads, only zero-length or 32-byte roots and code hashes are
+  valid. Zero length expands to `EmptyRootHash` or `EmptyCodeHash`; explicitly
+  encoding either empty constant is non-canonical and must fail. Keep
+  `state_file.record_payload_bytes` as the compact wire total and
+  `counts.payload_bytes` as the expanded consensus total.
 - Exact selected-header evidence is mandatory within those versions. Do not
   accept older reports that omit it or silently add a compatibility mode.
 - Keep fixed hashes as `common.Hash` and arbitrary header bytes as

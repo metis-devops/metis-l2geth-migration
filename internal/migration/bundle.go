@@ -120,24 +120,24 @@ func (c *recordConsumer) consume(record bundle.Record) error {
 		if c.counts.Accounts > 0 && bytes.Compare(record.AccountHash[:], c.lastAccount[:]) <= 0 {
 			return fmt.Errorf("account records are not strictly increasing: %s after %s", record.AccountHash, c.lastAccount)
 		}
-		account, err := decodeFullAccount(record.AccountHash, record.Payload)
+		account, fullRLP, err := bundle.DecodeAccount(record.Payload)
 		if err != nil {
-			return err
+			return fmt.Errorf("account %s: %w", record.AccountHash, err)
 		}
 		c.haveAccount = true
 		c.accountHash = record.AccountHash
 		c.lastAccount = record.AccountHash
 		c.account = account
-		c.accountRLP = record.Payload
+		c.accountRLP = fullRLP
 		c.storage = nil
 		c.haveSlot = false
 		c.codeSeen = false
 		if c.visitor != nil {
-			if err := c.visitor.Account(record.AccountHash, account, record.Payload); err != nil {
+			if err := c.visitor.Account(record.AccountHash, account, fullRLP); err != nil {
 				return err
 			}
 		}
-		c.addCount(bundle.RecordAccount, len(record.Payload))
+		c.addCount(bundle.RecordAccount, len(fullRLP))
 	case bundle.RecordStorage:
 		if !c.haveAccount {
 			return errors.New("storage record appears before an account record")
