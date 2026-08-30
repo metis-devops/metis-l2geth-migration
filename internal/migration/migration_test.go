@@ -119,6 +119,7 @@ func TestGoldenLegacyL2GethFixtureBothSchemes(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("verify golden %s artifact: %v", scheme, err)
 		}
+		assertArtifactHeadMetadata(t, artifact, exported.Manifest.Source)
 		assertGoldenOVMState(t, artifact, scheme, head.StateRoot, expected.OVMETHCodeHash)
 	}
 }
@@ -225,6 +226,7 @@ func TestExportImportAndVerifyBothSchemes(t *testing.T) {
 			}); err != nil {
 				t.Fatalf("verify artifact: %v", err)
 			}
+			assertArtifactHeadMetadata(t, artifact, exported.Manifest.Source)
 			assertArtifactState(t, artifact, scheme, fixture.root, fixture.accounts)
 			newRoot := mutateAndCommitArtifact(t, artifact, scheme, fixture)
 			if newRoot == fixture.root {
@@ -560,15 +562,17 @@ func TestVerifyRejectsExtraArtifactState(t *testing.T) {
 	fixture := buildLegacyFixture(t)
 	root := t.TempDir()
 	bundleDir := filepath.Join(root, "bundle")
-	if _, err := Export(context.Background(), ExportOptions{
+	exported, err := Export(context.Background(), ExportOptions{
 		SourceChaindata: fixture.chaindata,
 		Output:          bundleDir,
 		Compression:     "none",
 		CacheMB:         16,
 		Handles:         16,
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
+	head := exported.Manifest.Source.HeadBefore
 	tests := []struct {
 		name      string
 		scheme    string
@@ -609,6 +613,30 @@ func TestVerifyRejectsExtraArtifactState(t *testing.T) {
 				return db.Put([]byte("LastStateID"), []byte{0})
 			},
 		},
+		{
+			name: "extra header", scheme: rawdb.HashScheme, wantError: "non-state key",
+			mutate: func(db ethdb.Database) error {
+				rawdb.WriteHeader(db, &types.Header{
+					Number: new(big.Int).SetUint64(head.BlockNumber + 1),
+					Root:   head.StateRoot,
+				})
+				return nil
+			},
+		},
+		{
+			name: "extra canonical hash", scheme: rawdb.PathScheme, wantError: "non-state key",
+			mutate: func(db ethdb.Database) error {
+				rawdb.WriteCanonicalHash(db, common.HexToHash("0xfeed"), head.BlockNumber+1)
+				return nil
+			},
+		},
+		{
+			name: "extra LastFast", scheme: rawdb.HashScheme, wantError: "non-state key",
+			mutate: func(db ethdb.Database) error {
+				rawdb.WriteHeadFastBlockHash(db, head.BlockHash)
+				return nil
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -639,6 +667,127 @@ func TestVerifyRejectsExtraArtifactState(t *testing.T) {
 				t.Fatalf("expected %q error, got %v", tt.wantError, err)
 			}
 		})
+	}
+}
+
+func TestVerifyRejectsTamperedArtifactHeadMetadata(t *testing.T) {
+	fixture := buildLegacyFixture(t)
+	root := t.TempDir()
+	bundleDir := filepath.Join(root, "bundle")
+	exported, err := Export(context.Background(), ExportOptions{
+		SourceChaindata: fixture.chaindata,
+		Output:          bundleDir,
+		Compression:     "none",
+		CacheMB:         16,
+		Handles:         16,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := exported.Manifest.Source
+	head := source.HeadBefore
+	tests := []struct {
+		name      string
+		wantError string
+		mutate    func(ethdb.Database) error
+	}{
+		{
+			name: "missing header", wantError: "head header is missing",
+			mutate: func(db ethdb.Database) error {
+				rawdb.DeleteHeader(db, head.BlockHash, head.BlockNumber)
+				return nil
+			},
+		},
+		{
+			name: "corrupt header RLP", wantError: "header RLP does not match",
+			mutate: func(db ethdb.Database) error {
+				entries, err := expectedHeadMetadata(source)
+				if err != nil {
+					return err
+				}
+				for key, value := range entries {
+					if bytes.Equal(value, source.HeaderRLP) {
+						return db.Put([]byte(key), []byte{0x80})
+					}
+				}
+				return errors.New("expected header metadata entry is missing")
+			},
+		},
+		{
+			name: "missing hash-to-number mapping", wantError: "hash-to-number mapping is missing",
+			mutate: func(db ethdb.Database) error {
+				rawdb.DeleteHeaderNumber(db, head.BlockHash)
+				return nil
+			},
+		},
+		{
+			name: "wrong canonical hash", wantError: "canonical hash",
+			mutate: func(db ethdb.Database) error {
+				rawdb.WriteCanonicalHash(db, common.HexToHash("0xdead"), head.BlockNumber)
+				return nil
+			},
+		},
+		{
+			name: "wrong LastBlock", wantError: "LastBlock",
+			mutate: func(db ethdb.Database) error {
+				rawdb.WriteHeadBlockHash(db, common.HexToHash("0xbeef"))
+				return nil
+			},
+		},
+		{
+			name: "wrong LastHeader", wantError: "LastHeader",
+			mutate: func(db ethdb.Database) error {
+				rawdb.WriteHeadHeaderHash(db, common.HexToHash("0xcafe"))
+				return nil
+			},
+		},
+		{
+			name: "legacy artifact without head metadata", wantError: "head header is missing",
+			mutate: func(db ethdb.Database) error {
+				entries, err := expectedHeadMetadata(source)
+				if err != nil {
+					return err
+				}
+				for key := range entries {
+					if err := db.Delete([]byte(key)); err != nil {
+						return err
+					}
+				}
+				return nil
+			},
+		},
+	}
+	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme} {
+		for _, tt := range tests {
+			t.Run(scheme+"/"+tt.name, func(t *testing.T) {
+				artifact := filepath.Join(root, scheme+"-head-"+strings.ReplaceAll(tt.name, " ", "-"))
+				if _, err := Import(context.Background(), ImportOptions{
+					Bundle: bundleDir, Output: artifact, Scheme: scheme, CacheMB: 16, Handles: 16,
+				}); err != nil {
+					t.Fatal(err)
+				}
+				kv, err := pebble.New(filepath.Join(artifact, "db"), 16, 16, "head-metadata-mutate", false)
+				if err != nil {
+					t.Fatal(err)
+				}
+				db := rawdb.NewDatabase(kv)
+				if err := tt.mutate(db); err != nil {
+					t.Fatal(err)
+				}
+				if err := db.SyncKeyValue(); err != nil {
+					t.Fatal(err)
+				}
+				if err := db.Close(); err != nil {
+					t.Fatal(err)
+				}
+				_, err = Verify(context.Background(), VerifyOptions{
+					Bundle: bundleDir, Artifact: artifact, CacheMB: 16, Handles: 16,
+				})
+				if err == nil || !strings.Contains(err.Error(), tt.wantError) {
+					t.Fatalf("expected %q error, got %v", tt.wantError, err)
+				}
+			})
+		}
 	}
 }
 
@@ -928,6 +1077,42 @@ func assertArtifactState(t *testing.T, artifact, scheme string, root common.Hash
 			}
 		}
 	})
+}
+
+func assertArtifactHeadMetadata(t *testing.T, artifact string, source bundle.SourceEvidence) {
+	t.Helper()
+	kv, err := pebble.New(filepath.Join(artifact, "db"), 16, 16, "head-metadata-read", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	db := rawdb.NewDatabase(kv)
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close artifact database: %v", err)
+		}
+	}()
+	head := source.HeadBefore
+	if headerRLP := rawdb.ReadHeaderRLP(db, head.BlockHash, head.BlockNumber); !bytes.Equal(headerRLP, source.HeaderRLP) {
+		t.Fatal("artifact header RLP does not match source evidence")
+	}
+	if number, ok := rawdb.ReadHeaderNumber(db, head.BlockHash); !ok || number != head.BlockNumber {
+		t.Fatalf("artifact header number mapping is %d/%t, want %d/true", number, ok, head.BlockNumber)
+	}
+	if hash := rawdb.ReadCanonicalHash(db, head.BlockNumber); hash != head.BlockHash {
+		t.Fatalf("artifact canonical hash is %s, want %s", hash, head.BlockHash)
+	}
+	if hash := rawdb.ReadHeadBlockHash(db); hash != head.BlockHash {
+		t.Fatalf("artifact LastBlock is %s, want %s", hash, head.BlockHash)
+	}
+	if hash := rawdb.ReadHeadHeaderHash(db); hash != head.BlockHash {
+		t.Fatalf("artifact LastHeader is %s, want %s", hash, head.BlockHash)
+	}
+	if hash := rawdb.ReadHeadFastBlockHash(db); hash != (common.Hash{}) {
+		t.Fatalf("artifact unexpectedly has LastFast %s", hash)
+	}
+	if body := rawdb.ReadBodyRLP(db, head.BlockHash, head.BlockNumber); len(body) != 0 {
+		t.Fatal("artifact unexpectedly contains a block body")
+	}
 }
 
 func assertArtifactNonce(t *testing.T, artifact, scheme string, root common.Hash, address common.Address, nonce uint64) {

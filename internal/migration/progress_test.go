@@ -154,7 +154,7 @@ func TestVerifyDatabaseInventoryHonorsCanceledContext(t *testing.T) {
 			t.Errorf("close memory database: %v", err)
 		}
 	}()
-	if err := verifyDatabaseInventory(ctx, db, rawdb.HashScheme, bundle.Counts{}, stateInventory{}, nil); !errors.Is(err, context.Canceled) {
+	if err := verifyDatabaseInventory(ctx, db, rawdb.HashScheme, bundle.SourceEvidence{}, bundle.Counts{}, stateInventory{}, nil); !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected context cancellation, got %v", err)
 	}
 }

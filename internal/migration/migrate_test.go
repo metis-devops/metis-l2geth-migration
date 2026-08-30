@@ -70,6 +70,7 @@ func TestDirectMigrateGoldenLegacyL2GethFixtureBothSchemes(t *testing.T) {
 					t.Fatalf("direct artifact unexpectedly contains %s: %v", name, err)
 				}
 			}
+			assertArtifactHeadMetadata(t, artifact, migrated.Report.Source)
 			assertGoldenOVMState(t, artifact, scheme, expected.StateRoot, expected.OVMETHCodeHash)
 		})
 	}
@@ -123,6 +124,8 @@ func TestDirectMigrateMatchesBundleImportBothSchemes(t *testing.T) {
 				t.Fatalf("direct and bundle paths disagree: direct=%+v imported=%+v", direct.Report, imported.Report)
 			}
 			assertArtifactState(t, directArtifact, scheme, fixture.root, fixture.accounts)
+			assertArtifactHeadMetadata(t, directArtifact, direct.Report.Source)
+			assertArtifactHeadMetadata(t, importArtifact, exported.Manifest.Source)
 			if _, err := Verify(context.Background(), VerifyOptions{
 				Bundle: bundleDir, Artifact: directArtifact, CacheMB: 16, Handles: 16,
 			}); err == nil {
@@ -326,6 +329,34 @@ func TestVerifyDirectRejectsTamperedReportAndArtifact(t *testing.T) {
 		})
 		if err == nil || !strings.Contains(err.Error(), "code inventory mismatch") {
 			t.Fatalf("expected target inventory error, got %v", err)
+		}
+	})
+
+	t.Run("head metadata", func(t *testing.T) {
+		fixture := buildLegacyFixture(t)
+		artifact := filepath.Join(t.TempDir(), "artifact")
+		if _, err := Migrate(context.Background(), MigrateOptions{
+			SourceChaindata: fixture.chaindata, Output: artifact, Scheme: rawdb.PathScheme, CacheMB: 16, Handles: 16,
+		}); err != nil {
+			t.Fatal(err)
+		}
+		kv, err := pebble.New(filepath.Join(artifact, "db"), 16, 16, "direct-head-tamper", false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		db := rawdb.NewDatabase(kv)
+		rawdb.WriteHeadHeaderHash(db, common.HexToHash("0xcafe"))
+		if err := db.SyncKeyValue(); err != nil {
+			t.Fatal(err)
+		}
+		if err := db.Close(); err != nil {
+			t.Fatal(err)
+		}
+		_, err = VerifyDirect(context.Background(), DirectVerifyOptions{
+			SourceChaindata: fixture.chaindata, Artifact: artifact, CacheMB: 16, Handles: 16,
+		})
+		if err == nil || !strings.Contains(err.Error(), "LastHeader") {
+			t.Fatalf("expected target head metadata error, got %v", err)
 		}
 	})
 }

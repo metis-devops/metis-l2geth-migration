@@ -66,7 +66,7 @@ func Verify(ctx context.Context, opts VerifyOptions) (result VerificationReport,
 	if err := compareStoredReport(stored, bundleResult); err != nil {
 		return VerificationReport{}, err
 	}
-	state, err := verifyDatabase(ctx, filepath.Join(opts.Artifact, "db"), stored.Scheme, bundleResult.State, opts.CacheMB, opts.Handles, reporter)
+	state, err := verifyDatabase(ctx, filepath.Join(opts.Artifact, "db"), stored.Scheme, bundleResult.Manifest.Source, bundleResult.State, opts.CacheMB, opts.Handles, reporter)
 	if err != nil {
 		return VerificationReport{}, err
 	}
@@ -89,7 +89,7 @@ func compareStoredReport(stored VerificationReport, current BundleResult) error 
 	return nil
 }
 
-func verifyDatabase(ctx context.Context, dbPath, scheme string, expected StateResult, cacheMB, handles int, progress *progressReporter) (result StateResult, retErr error) {
+func verifyDatabase(ctx context.Context, dbPath, scheme string, source bundle.SourceEvidence, expected StateResult, cacheMB, handles int, progress *progressReporter) (result StateResult, retErr error) {
 	diskKV, err := pebble.New(dbPath, cacheMB, handles, "l2state/verify", true)
 	if err != nil {
 		return StateResult{}, fmt.Errorf("open artifact Pebble database read-only: %w", err)
@@ -100,6 +100,15 @@ func verifyDatabase(ctx context.Context, dbPath, scheme string, expected StateRe
 			retErr = errors.Join(retErr, fmt.Errorf("close artifact database: %w", err))
 		}
 	}()
+	headPhase := progress.StartPhase("verify_head_metadata", nil,
+		"block", source.HeadBefore.BlockNumber,
+		"hash", source.HeadBefore.BlockHash,
+	)
+	if err := verifyHeadMetadata(disk, source); err != nil {
+		headPhase.Finish(err)
+		return StateResult{}, err
+	}
+	headPhase.Finish(nil)
 
 	var config *triedb.Config
 	switch scheme {
@@ -164,7 +173,7 @@ func verifyDatabase(ctx context.Context, dbPath, scheme string, expected StateRe
 		return StateResult{}, countsErr
 	}
 	statePhase.Finish(nil, "recomputed_root", state.Root)
-	if err := verifyDatabaseInventory(ctx, disk, scheme, expected.Counts, inventory, progress); err != nil {
+	if err := verifyDatabaseInventory(ctx, disk, scheme, source, expected.Counts, inventory, progress); err != nil {
 		return StateResult{}, err
 	}
 	return state, nil
@@ -195,8 +204,12 @@ func (v *flatStateVerifier) Code(common.Hash, common.Hash, []byte) error {
 	return nil
 }
 
-func verifyDatabaseInventory(ctx context.Context, db ethdb.Database, scheme string, counts bundle.Counts, expected stateInventory, progress *progressReporter) (retErr error) {
+func verifyDatabaseInventory(ctx context.Context, db ethdb.Database, scheme string, source bundle.SourceEvidence, counts bundle.Counts, expected stateInventory, progress *progressReporter) (retErr error) {
 	if err := ctx.Err(); err != nil {
+		return err
+	}
+	headMetadata, err := expectedHeadMetadata(source)
+	if err != nil {
 		return err
 	}
 	it := db.NewIterator(nil, nil)
@@ -214,7 +227,7 @@ func verifyDatabaseInventory(ctx context.Context, db ethdb.Database, scheme stri
 	defer func() {
 		phase.Finish(retErr, finishAttrs...)
 	}()
-	var flatAccounts, flatSlots, trieNodes, codeEntries uint64
+	var flatAccounts, flatSlots, trieNodes, codeEntries, headEntries uint64
 	for it.Next() {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -223,6 +236,11 @@ func verifyDatabaseInventory(ctx context.Context, db ethdb.Database, scheme stri
 			keys.Add(1)
 		}
 		key, value := it.Key(), it.Value()
+		if expectedValue, ok := headMetadata[string(key)]; ok && bytes.Equal(value, expectedValue) {
+			delete(headMetadata, string(key))
+			headEntries++
+			continue
+		}
 		if scheme == rawdb.HashScheme {
 			switch {
 			case rawdb.IsLegacyTrieNode(key, value):
@@ -263,6 +281,9 @@ func verifyDatabaseInventory(ctx context.Context, db ethdb.Database, scheme stri
 	if err := it.Error(); err != nil {
 		return fmt.Errorf("inspect artifact database: %w", err)
 	}
+	if len(headMetadata) != 0 {
+		return fmt.Errorf("artifact head metadata inventory is missing %d entries", len(headMetadata))
+	}
 	if scheme == rawdb.PathScheme {
 		if flatAccounts != counts.Accounts || flatSlots != counts.StorageSlots {
 			return fmt.Errorf("path flat-state inventory mismatch: accounts=%d/%d slots=%d/%d", flatAccounts, counts.Accounts, flatSlots, counts.StorageSlots)
@@ -279,6 +300,7 @@ func verifyDatabaseInventory(ctx context.Context, db ethdb.Database, scheme stri
 		"flat_storage_slots", flatSlots,
 		"trie_nodes", trieNodes,
 		"code_entries", codeEntries,
+		"head_metadata_entries", headEntries,
 	}
 	return nil
 }

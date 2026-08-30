@@ -18,6 +18,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb/pebble"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
+	"github.com/metis-devops/metis-l2geth-migration/internal/bundle"
 )
 
 // ImportOptions configures a bundle import into a hash- or path-scheme database.
@@ -109,7 +110,7 @@ func Import(ctx context.Context, opts ImportOptions) (result ImportResult, retEr
 		return ImportResult{}, err
 	}
 	flushPhase.Finish(nil)
-	dbState, closed, err := buildAndVerifyTarget(ctx, disk, dbPath, opts.Scheme, bundleResult.State, opts.CacheMB, opts.Handles, reporter)
+	dbState, closed, err := buildAndVerifyTarget(ctx, disk, dbPath, opts.Scheme, bundleResult.Manifest.Source, bundleResult.State, opts.CacheMB, opts.Handles, reporter)
 	diskClosed = closed
 	if err != nil {
 		return ImportResult{}, err
@@ -135,6 +136,7 @@ func buildAndVerifyTarget(
 	ctx context.Context,
 	disk ethdb.Database,
 	dbPath, scheme string,
+	source bundle.SourceEvidence,
 	expected StateResult,
 	cacheMB, handles int,
 	reporter *progressReporter,
@@ -215,6 +217,20 @@ func buildAndVerifyTarget(
 	if schemeErr != nil {
 		return StateResult{}, false, schemeErr
 	}
+	headPhase := reporter.StartPhase("write_head_metadata", nil,
+		"block", source.HeadBefore.BlockNumber,
+		"hash", source.HeadBefore.BlockHash,
+	)
+	headErr := func() error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		return writeHeadMetadata(disk, source)
+	}()
+	headPhase.Finish(headErr)
+	if headErr != nil {
+		return StateResult{}, false, headErr
+	}
 	diskClosed := false
 	finalizePhase := reporter.StartPhase("finalize_database", nil)
 	finalizeErr := func() error {
@@ -244,7 +260,7 @@ func buildAndVerifyTarget(
 	if finalizeErr != nil {
 		return StateResult{}, diskClosed, finalizeErr
 	}
-	dbState, err := verifyDatabase(ctx, dbPath, scheme, expected, cacheMB, handles, reporter)
+	dbState, err := verifyDatabase(ctx, dbPath, scheme, source, expected, cacheMB, handles, reporter)
 	if err != nil {
 		return StateResult{}, diskClosed, err
 	}

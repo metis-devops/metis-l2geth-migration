@@ -141,7 +141,7 @@ func Migrate(ctx context.Context, opts MigrateOptions) (result MigrateResult, re
 		return MigrateResult{}, err
 	}
 
-	dbState, closed, err := buildAndVerifyTarget(ctx, disk, dbPath, opts.Scheme, stateResult, opts.CacheMB, opts.Handles, reporter)
+	dbState, closed, err := buildAndVerifyTarget(ctx, disk, dbPath, opts.Scheme, sourceEvidence, stateResult, opts.CacheMB, opts.Handles, reporter)
 	diskClosed = closed
 	if err != nil {
 		return MigrateResult{}, err
