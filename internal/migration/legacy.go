@@ -56,13 +56,28 @@ func (s *legacySource) Head() (bundle.Head, []byte) {
 }
 
 func (s *legacySource) Traverse(ctx context.Context, visitor StateVisitor, indexOpts codeHashIndexOptions) (result StateResult, retErr error) {
+	return s.traverse(ctx, visitor, nil, indexOpts)
+}
+
+func (s *legacySource) TraverseWithTrieNodes(ctx context.Context, visitor StateVisitor, nodes trieNodeSink, indexOpts codeHashIndexOptions) (result StateResult, retErr error) {
+	return s.traverse(ctx, visitor, nodes, indexOpts)
+}
+
+func (s *legacySource) traverse(ctx context.Context, visitor StateVisitor, nodes trieNodeSink, indexOpts codeHashIndexOptions) (result StateResult, retErr error) {
 	trieDB := triedb.NewDatabase(s.db, triedb.HashDefaults)
 	defer func() {
 		if err := trieDB.Close(); err != nil {
 			retErr = errors.Join(retErr, fmt.Errorf("close source trie database: %w", err))
 		}
 	}()
-	result, _, err := traverseState(ctx, s.db, trieDB, s.head.StateRoot, visitor, false, indexOpts)
+	result, _, err := traverseState(ctx, s.db, trieDB, s.head.StateRoot, visitor, false, stateTraversalOptions{
+		CodeIndex: indexOpts,
+		ReadCode: func(db ethdb.KeyValueReader, hash common.Hash) []byte {
+			code, _ := db.Get(hash[:])
+			return code
+		},
+		TrieNodes: nodes,
+	})
 	return result, err
 }
 

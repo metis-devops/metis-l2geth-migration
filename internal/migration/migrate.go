@@ -104,7 +104,7 @@ func Migrate(ctx context.Context, opts MigrateOptions) (result MigrateResult, re
 		}
 	}()
 
-	sink := newFlatStateWriter(disk)
+	sink := newDirectStateWriter(disk, opts.Scheme)
 	var (
 		visitor      StateVisitor = sink
 		progressView progressSnapshot
@@ -115,17 +115,17 @@ func Migrate(ctx context.Context, opts MigrateOptions) (result MigrateResult, re
 		progressView = countProgressSnapshot(counts, nil)
 	}
 	traversePhase := reporter.StartPhase("migrate_state", progressView, "root", head.StateRoot)
-	stateResult, traverseErr := source.Traverse(ctx, visitor, codeHashIndexOptions{
+	stateResult, traverseErr := source.TraverseWithTrieNodes(ctx, visitor, sink, codeHashIndexOptions{
 		Parent: output.Path(), CacheMB: opts.CacheMB, Handles: opts.Handles,
 	})
 	traversePhase.Finish(traverseErr)
 	if traverseErr != nil {
 		if closeErr := sink.Close(); closeErr != nil {
-			traverseErr = errors.Join(traverseErr, fmt.Errorf("close flat-state writer: %w", closeErr))
+			traverseErr = errors.Join(traverseErr, fmt.Errorf("close direct-state writer: %w", closeErr))
 		}
 		return MigrateResult{}, traverseErr
 	}
-	flushPhase := reporter.StartPhase("flush_flat_state", nil)
+	flushPhase := reporter.StartPhase("flush_generated_state", nil, "scheme", opts.Scheme)
 	if err := sink.Close(); err != nil {
 		flushPhase.Finish(err)
 		return MigrateResult{}, err
@@ -143,7 +143,7 @@ func Migrate(ctx context.Context, opts MigrateOptions) (result MigrateResult, re
 		return MigrateResult{}, err
 	}
 
-	dbState, closed, err := buildAndVerifyTarget(ctx, disk, dbPath, opts.Scheme, sourceEvidence, stateResult, opts.CacheMB, opts.Handles, reporter)
+	dbState, closed, err := finalizeAndVerifyTarget(ctx, disk, dbPath, opts.Scheme, sourceEvidence, stateResult, opts.CacheMB, opts.Handles, reporter, false)
 	diskClosed = closed
 	if err != nil {
 		return MigrateResult{}, err

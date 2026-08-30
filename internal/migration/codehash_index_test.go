@@ -1,6 +1,7 @@
 package migration
 
 import (
+	"context"
 	"encoding/binary"
 	"errors"
 	"os"
@@ -57,6 +58,24 @@ func TestTemporaryCodeHashIndexExactAcrossFlushAndCleanup(t *testing.T) {
 	if err != nil || missing {
 		t.Fatalf("look up absent hash: present=%t err=%v", missing, err)
 	}
+	if err := index.MarkTrieNode(first); err != nil {
+		t.Fatal(err)
+	}
+	if err := index.flushTrieNodes(); err != nil {
+		t.Fatal(err)
+	}
+	for _, hash := range []common.Hash{first, common.HexToHash("0x02")} {
+		if err := index.MarkTrieNode(hash); err != nil {
+			t.Fatal(err)
+		}
+	}
+	count, err := index.CountTrieNodes(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 2 {
+		t.Fatalf("reachable trie-node count is %d, want 2", count)
+	}
 
 	if err := index.Close(); err != nil {
 		t.Fatal(err)
@@ -88,6 +107,26 @@ func TestTemporaryCodeHashIndexResourceBounds(t *testing.T) {
 		if got := boundedCodeHashIndexResource(test.configured, test.limit); got != test.want {
 			t.Fatalf("bounded resource for %d: have %d want %d", test.configured, got, test.want)
 		}
+	}
+}
+
+func TestTemporaryCodeHashIndexTrieCountHonorsCancellation(t *testing.T) {
+	index, err := newTemporaryCodeHashIndex(codeHashIndexOptions{Parent: t.TempDir(), CacheMB: 1, Handles: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := index.Close(); err != nil {
+			t.Errorf("close temporary index: %v", err)
+		}
+	}()
+	if err := index.MarkTrieNode(common.HexToHash("0x01")); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := index.CountTrieNodes(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("count returned %v, want context cancellation", err)
 	}
 }
 

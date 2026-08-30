@@ -179,16 +179,35 @@ func buildAndVerifyTarget(
 		"updated_accounts", stats.Updated,
 		"deleted_storage_slots", stats.Deleted,
 	)
+	return finalizeAndVerifyTarget(ctx, disk, dbPath, scheme, source, expected, cacheMB, handles, reporter, true)
+}
+
+func finalizeAndVerifyTarget(
+	ctx context.Context,
+	disk ethdb.Database,
+	dbPath, scheme string,
+	source bundle.SourceEvidence,
+	expected StateResult,
+	cacheMB, handles int,
+	reporter *progressReporter,
+	removeTemporaryFlatState bool,
+) (StateResult, bool, error) {
 	schemePhaseName := "adopt_path_state"
-	if scheme == rawdb.HashScheme {
+	if scheme == rawdb.HashScheme && removeTemporaryFlatState {
 		schemePhaseName = "remove_flat_state"
 	}
-	schemePhase := reporter.StartPhase(schemePhaseName, nil, "scheme", scheme)
+	var schemePhase *phaseProgress
+	if scheme == rawdb.PathScheme || removeTemporaryFlatState {
+		schemePhase = reporter.StartPhase(schemePhaseName, nil, "scheme", scheme)
+	}
 	schemeErr := func() error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
 		if scheme == rawdb.HashScheme {
+			if !removeTemporaryFlatState {
+				return nil
+			}
 			return removeFlatState(ctx, disk)
 		}
 		config := *pathdb.Defaults
@@ -215,7 +234,9 @@ func buildAndVerifyTarget(
 		}
 		return nil
 	}()
-	schemePhase.Finish(schemeErr)
+	if schemePhase != nil {
+		schemePhase.Finish(schemeErr)
+	}
 	if schemeErr != nil {
 		return StateResult{}, false, schemeErr
 	}
@@ -246,15 +267,17 @@ func buildAndVerifyTarget(
 			return fmt.Errorf("close target database: %w", err)
 		}
 		diskClosed = true
-		ranges := [][2][]byte{{rawdb.CodePrefix, prefixLimit(rawdb.CodePrefix)}}
-		if scheme == rawdb.HashScheme {
-			ranges = append([][2][]byte{
+		var ranges [][2][]byte
+		if scheme == rawdb.HashScheme && removeTemporaryFlatState {
+			ranges = [][2][]byte{
 				{rawdb.SnapshotAccountPrefix, prefixLimit(rawdb.SnapshotAccountPrefix)},
 				{rawdb.SnapshotStoragePrefix, prefixLimit(rawdb.SnapshotStoragePrefix)},
-			}, ranges...)
+			}
 		}
-		if err := compactPebbleRanges(ctx, dbPath, cacheMB, handles, ranges); err != nil {
-			return err
+		if len(ranges) != 0 {
+			if err := compactPebbleRanges(ctx, dbPath, cacheMB, handles, ranges); err != nil {
+				return err
+			}
 		}
 		return syncDirectory(dbPath)
 	}()
@@ -342,13 +365,6 @@ func removeFlatState(ctx context.Context, db ethdb.Database) error {
 		if err := deleteKeysWithExactLength(ctx, db, target.prefix, target.keyLength); err != nil {
 			return err
 		}
-		hasEntry, err := hasKeyWithExactLength(ctx, db, target.prefix, target.keyLength)
-		if err != nil {
-			return err
-		}
-		if hasEntry {
-			return fmt.Errorf("temporary flat state prefix %x is not empty after deletion", target.prefix)
-		}
 	}
 	return nil
 }
@@ -382,23 +398,6 @@ func deleteKeysWithExactLength(ctx context.Context, db ethdb.Database, prefix []
 		return fmt.Errorf("flush final temporary flat state deletion: %w", err)
 	}
 	return nil
-}
-
-func hasKeyWithExactLength(ctx context.Context, db ethdb.Database, prefix []byte, keyLength int) (bool, error) {
-	it := db.NewIterator(prefix, nil)
-	defer it.Release()
-	for it.Next() {
-		if err := ctx.Err(); err != nil {
-			return false, err
-		}
-		if len(it.Key()) == keyLength {
-			return true, nil
-		}
-	}
-	if err := it.Error(); err != nil {
-		return false, fmt.Errorf("inspect temporary flat state prefix %x: %w", prefix, err)
-	}
-	return false, nil
 }
 
 func compactPebbleRanges(ctx context.Context, path string, cacheMB, handles int, ranges [][2][]byte) (retErr error) {

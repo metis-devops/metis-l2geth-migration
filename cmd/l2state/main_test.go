@@ -89,8 +89,7 @@ func TestCLIEndToEnd(t *testing.T) {
 	}
 	assertProgressLog(t, stderr.String(), "migrate",
 		"phase=migrate_state",
-		"phase=generate_trie",
-		"estimated=true",
+		"phase=flush_generated_state",
 		"phase=verify_state",
 		"phase=inspect_database",
 	)

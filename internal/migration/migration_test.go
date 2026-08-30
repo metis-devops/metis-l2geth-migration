@@ -307,6 +307,44 @@ func TestExportSharedCodeBundleCompatibility(t *testing.T) {
 	}
 }
 
+func TestTraverseStateReadsSharedCodeOnce(t *testing.T) {
+	fixture := buildLegacyFixture(t)
+	kv, err := gethleveldb.New(fixture.chaindata, 16, 16, "shared-code-read", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	disk := rawdb.NewDatabase(kv)
+	defer func() {
+		if err := disk.Close(); err != nil {
+			t.Errorf("close shared-code database: %v", err)
+		}
+	}()
+	trieDB := triedb.NewDatabase(disk, triedb.HashDefaults)
+	defer func() {
+		if err := trieDB.Close(); err != nil {
+			t.Errorf("close shared-code trie database: %v", err)
+		}
+	}()
+	var reads uint64
+	result, _, err := traverseState(context.Background(), disk, trieDB, fixture.root, nil, false, stateTraversalOptions{
+		CodeIndex: codeHashIndexOptions{Parent: t.TempDir(), CacheMB: 16, Handles: 16},
+		ReadCode: func(db ethdb.KeyValueReader, hash common.Hash) []byte {
+			reads++
+			code, _ := db.Get(hash[:])
+			return code
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reads != result.Counts.CodeRecords {
+		t.Fatalf("read code %d times for %d unique records and %d references", reads, result.Counts.CodeRecords, result.Counts.CodeReferences)
+	}
+	if result.Counts.CodeReferences <= result.Counts.CodeRecords {
+		t.Fatalf("fixture does not exercise shared code: %+v", result.Counts)
+	}
+}
+
 func TestScanBundleCodeHashIndexSemanticsAndCleanup(t *testing.T) {
 	for _, test := range []struct {
 		name        string
@@ -807,6 +845,55 @@ func TestVerifyRejectsExtraArtifactState(t *testing.T) {
 				code := []byte{0x60, 0xaa}
 				hash := crypto.Keccak256Hash(code)
 				return db.Put(prefixedKey(rawdb.CodePrefix, hash[:]), code)
+			},
+		},
+		{
+			name: "corrupted referenced code", scheme: rawdb.HashScheme, wantError: "code hash mismatch",
+			mutate: func(db ethdb.Database) error {
+				it := db.NewIterator(rawdb.CodePrefix, nil)
+				defer it.Release()
+				if !it.Next() {
+					if err := it.Error(); err != nil {
+						return err
+					}
+					return errors.New("artifact contains no code entry to corrupt")
+				}
+				return db.Put(append([]byte(nil), it.Key()...), []byte{0x60, 0xbb})
+			},
+		},
+		{
+			name: "mismatched path flat account", scheme: rawdb.PathScheme, wantError: "value does not match its trie leaf",
+			mutate: func(db ethdb.Database) error {
+				it := db.NewIterator(rawdb.SnapshotAccountPrefix, nil)
+				defer it.Release()
+				if !it.Next() {
+					if err := it.Error(); err != nil {
+						return err
+					}
+					return errors.New("artifact contains no flat account to corrupt")
+				}
+				return db.Put(append([]byte(nil), it.Key()...), []byte{0x80})
+			},
+		},
+		{
+			name: "missing path flat storage", scheme: rawdb.PathScheme, wantError: "key mismatch",
+			mutate: func(db ethdb.Database) error {
+				it := db.NewIterator(rawdb.SnapshotStoragePrefix, nil)
+				defer it.Release()
+				if !it.Next() {
+					if err := it.Error(); err != nil {
+						return err
+					}
+					return errors.New("artifact contains no flat storage to remove")
+				}
+				return db.Delete(append([]byte(nil), it.Key()...))
+			},
+		},
+		{
+			name: "extra path flat account", scheme: rawdb.PathScheme, wantError: "extra flat account",
+			mutate: func(db ethdb.Database) error {
+				account := types.NewEmptyStateAccount()
+				return db.Put(prefixedKey(rawdb.SnapshotAccountPrefix, common.MaxHash[:]), types.SlimAccountRLP(*account))
 			},
 		},
 		{

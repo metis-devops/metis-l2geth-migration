@@ -32,7 +32,7 @@ func Open(path string, cacheMB, handles int) (*Database, error) {
 	db, err := leveldb.OpenFile(path, &opt.Options{
 		ReadOnly:               true,
 		OpenFilesCacheCapacity: handles,
-		BlockCacheCapacity:     cacheMB / 2 * opt.MiB,
+		BlockCacheCapacity:     cacheMB * opt.MiB,
 		Filter:                 filter.NewBloomFilter(10),
 		DisableSeeksCompaction: true,
 		Strict:                 opt.StrictAll,

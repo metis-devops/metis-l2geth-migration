@@ -65,6 +65,7 @@ type Writer struct {
 	fileName    string
 	compression string
 	closed      bool
+	header      [1 + 2*common.HashLength + 8]byte
 }
 
 // NewWriter creates a record stream in dir using the requested compression.
@@ -128,32 +129,38 @@ func (w *Writer) CountCodeReference() error {
 
 // WriteAccount appends an account leaf to the record stream.
 func (w *Writer) WriteAccount(accountHash common.Hash, accountRLP []byte) error {
-	return w.writeRecord(RecordAccount, accountHash[:], accountRLP)
+	return w.writeRecord(RecordAccount, accountHash[:], nil, accountRLP)
 }
 
 // WriteStorage appends a storage leaf for an account to the record stream.
 func (w *Writer) WriteStorage(accountHash, slotHash common.Hash, valueRLP []byte) error {
-	key := make([]byte, 0, 2*common.HashLength)
-	key = append(key, accountHash[:]...)
-	key = append(key, slotHash[:]...)
-	return w.writeRecord(RecordStorage, key, valueRLP)
+	return w.writeRecord(RecordStorage, accountHash[:], slotHash[:], valueRLP)
 }
 
 // WriteCode appends contract code to the record stream.
 func (w *Writer) WriteCode(codeHash common.Hash, code []byte) error {
-	return w.writeRecord(RecordCode, codeHash[:], code)
+	return w.writeRecord(RecordCode, codeHash[:], nil, code)
 }
 
-func (w *Writer) writeRecord(typ byte, key, payload []byte) error {
+func (w *Writer) writeRecord(typ byte, key, subkey, payload []byte) error {
 	if w.closed {
 		return errors.New("state record writer is closed")
 	}
 	if err := validatePayloadLength(typ, uint64(len(payload))); err != nil {
 		return err
 	}
-	header := make([]byte, 1+len(key)+8)
+	keyLen := len(key) + len(subkey)
+	expectedKeyLen, err := recordKeyLength(typ)
+	if err != nil {
+		return err
+	}
+	if keyLen != expectedKeyLen {
+		return fmt.Errorf("record type %d key has length %d, want %d", typ, keyLen, expectedKeyLen)
+	}
+	header := w.header[:1+keyLen+8]
 	header[0] = typ
-	copy(header[1:], key)
+	n := copy(header[1:], key)
+	copy(header[1+n:], subkey)
 	binary.BigEndian.PutUint64(header[len(header)-8:], uint64(len(payload)))
 	if _, err := w.buffer.Write(header); err != nil {
 		return fmt.Errorf("write record header: %w", err)
@@ -301,7 +308,10 @@ func ScanRecords(ctx context.Context, dir string, manifest Manifest, consume fun
 		}
 	}
 	chain := initialChainHash(manifest.Source.HeadBefore, manifest.Source.HeaderRLP)
-	var counts Counts
+	var (
+		counts      Counts
+		headerSpace [1 + 2*common.HashLength + 8]byte
+	)
 	for {
 		if err := ctx.Err(); err != nil {
 			return ScanResult{}, err
@@ -329,7 +339,7 @@ func ScanRecords(ctx context.Context, dir string, manifest Manifest, consume fun
 		if err != nil {
 			return ScanResult{}, err
 		}
-		header := make([]byte, 1+keyLen+8)
+		header := headerSpace[:1+keyLen+8]
 		header[0] = typ
 		if _, err := io.ReadFull(reader, header[1:]); err != nil {
 			return ScanResult{}, fmt.Errorf("read record header: %w", err)

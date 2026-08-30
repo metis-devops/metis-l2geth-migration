@@ -19,8 +19,11 @@ trie preimages.
 - `internal/readonlydb` is the strict read-only adapter for legacy LevelDB.
 - `internal/bundle` defines the v2 manifest and deterministic account,
   storage, and code record stream.
-- `internal/migration/export.go`, `import.go`, and `migrate.go` implement the
-  portable and direct workflows.
+- `internal/migration/export.go`, `import.go`, `migrate.go`, and
+  `direct_writer.go` implement the portable and direct workflows. Direct
+  migration persists target trie nodes from the same ordered `StackTrie`
+  rebuild that validates the source root; portable import uses the pinned
+  `GenerateTrie` API over its streamed flat state.
 - `internal/migration/verify.go` and `direct_verify.go` independently verify
   bundle-backed and direct artifacts; their report formats are intentionally
   distinct.
@@ -73,6 +76,8 @@ trie preimages.
 - Hash artifacts must contain no temporary flat state. Path artifacts must
   preserve geth v1.17.5 completion metadata, `SnapshotRoot`, and state ID 0,
   with no historical layers.
+- Keep exact code and reachable hash-node tracking bounded. Do not replace the
+  operation-local disk index with a set whose memory grows with state size.
 - Independently reopen and verify every artifact before publication. Do not
   trust `verification.json` as the source of truth for bundle verification.
 

@@ -59,7 +59,10 @@ operation:
 
 Use `--scheme path` and a different output path to build a path-scheme
 artifact. Direct migration reads the legacy state once and does not create a
-bundle or record stream.
+bundle or record stream. The same ordered `StackTrie` rebuild that validates
+the source root writes the target trie nodes directly. Hash migration never
+creates temporary flat state; path migration writes the required current flat
+state alongside the generated path nodes before adoption.
 
 To repeat the full source-to-target proof later, retain the original snapshot
 or a content-identical copy:
@@ -136,7 +139,8 @@ metis-hash/
 The schemes differ inside `db/`:
 
 - `hash` contains the current hash-trie nodes and referenced contract code.
-  Temporary flat-state keys are removed after root verification.
+  Direct migration writes those nodes without temporary flat state; portable
+  import removes its temporary flat-state keys before verification.
 - `path` retains current flat state and path-trie nodes, then records geth's
   completed snapshot metadata and state ID 0. It has no historical layers.
 
@@ -180,13 +184,14 @@ external canonicality, or L1 finality.
 - `--cache-mb` defaults to 512 MiB and `--handles` defaults to 256 for every
   state operation. Direct migration keeps source and target databases open
   together, so account for both allowances.
-- Exact code-hash deduplication uses an operation-local Pebble index with at
-  most 16 MiB of cache and 16 file handles (or the lower positive configured
-  allowances). Export, import, and direct migration keep this index inside the
-  current `.partial-*` directory. Standalone verification uses the operating
-  system temporary directory; set `TMPDIR` to place it on a disk with enough
-  capacity. The index is removed before a successful output is published or a
-  verification command returns.
+- Exact hash tracking uses an operation-local Pebble index with at most 16 MiB
+  of cache and 16 file handles (or the lower positive configured allowances).
+  It deduplicates contract code and, while verifying hash artifacts, counts
+  reachable trie nodes without an unbounded in-memory map. Export, import, and
+  direct migration keep this index inside the current `.partial-*` directory.
+  Standalone verification uses the operating system temporary directory; set
+  `TMPDIR` to place it on a disk with enough capacity. The index is removed
+  before a successful output is published or a verification command returns.
 - Progress logs go to standard error; the final JSON result is the only output
   on standard output. Phase changes appear immediately and long phases update
   every 30 seconds. Use `--quiet` to suppress progress logs.
@@ -201,9 +206,11 @@ external canonicality, or L1 finality.
 - Cancellation or failure removes only the partial directory created by that
   invocation. The final path never appears. Resume is not supported; rerun
   with a new output path.
-- Plan disk space for the bundle when using export/import, the temporary
-  code-hash index, and the temporary flat state, target trie, and compaction
-  space when building either scheme.
+- Plan disk space for the bundle when using export/import and for the temporary
+  hash index. Portable import additionally needs temporary flat state and, for
+  hash artifacts, its cleanup compaction space. Direct migration generates the
+  target trie during source traversal and does not need a second flat-state
+  staging copy; path artifacts retain their required current flat state.
 
 To capture machine output and progress separately:
 

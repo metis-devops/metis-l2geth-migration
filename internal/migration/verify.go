@@ -12,7 +12,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/pebble"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -147,9 +146,14 @@ func verifyDatabase(ctx context.Context, dbPath, scheme string, source bundle.So
 			return StateResult{}, err
 		}
 	}
-	var visitor StateVisitor
+	var (
+		visitor      StateVisitor
+		flatVerifier *flatStateVerifier
+	)
 	if scheme == rawdb.PathScheme {
-		visitor = &flatStateVerifier{db: disk}
+		flatVerifier = newFlatStateVerifier(ctx, disk)
+		defer flatVerifier.Release()
+		visitor = flatVerifier
 	}
 	var progressView progressSnapshot
 	if progress.Enabled() {
@@ -163,8 +167,9 @@ func verifyDatabase(ctx context.Context, dbPath, scheme string, source bundle.So
 		"root", expected.Root,
 	}, totalCountAttrs(expected.Counts)...)
 	statePhase := progress.StartPhase("verify_state", progressView, phaseAttrs...)
-	state, inventory, err := traverseState(ctx, disk, trieDB, expected.Root, visitor, true, codeHashIndexOptions{
-		Parent: scratchParent, CacheMB: cacheMB, Handles: handles,
+	state, inventory, err := traverseState(ctx, disk, trieDB, expected.Root, visitor, true, stateTraversalOptions{
+		CodeIndex: codeHashIndexOptions{Parent: scratchParent, CacheMB: cacheMB, Handles: handles},
+		ReadCode:  func(db ethdb.KeyValueReader, hash common.Hash) []byte { return rawdb.ReadCodeWithPrefix(db, hash) },
 	})
 	if err != nil {
 		verifyErr := fmt.Errorf("verify artifact state: %w", err)
@@ -176,6 +181,13 @@ func verifyDatabase(ctx context.Context, dbPath, scheme string, source bundle.So
 		statePhase.Finish(countsErr, "recomputed_root", state.Root)
 		return StateResult{}, countsErr
 	}
+	if flatVerifier != nil {
+		if err := flatVerifier.Finish(); err != nil {
+			verifyErr := fmt.Errorf("verify path flat-state inventory: %w", err)
+			statePhase.Finish(verifyErr, "recomputed_root", state.Root)
+			return StateResult{}, verifyErr
+		}
+	}
 	statePhase.Finish(nil, "recomputed_root", state.Root)
 	if err := verifyDatabaseInventory(ctx, disk, scheme, source, expected.Counts, inventory, progress); err != nil {
 		return StateResult{}, err
@@ -184,28 +196,85 @@ func verifyDatabase(ctx context.Context, dbPath, scheme string, source bundle.So
 }
 
 type flatStateVerifier struct {
-	db ethdb.Database
+	ctx      context.Context
+	accounts ethdb.Iterator
+	storage  ethdb.Iterator
+}
+
+func newFlatStateVerifier(ctx context.Context, db ethdb.Database) *flatStateVerifier {
+	return &flatStateVerifier{
+		ctx:      ctx,
+		accounts: db.NewIterator(rawdb.SnapshotAccountPrefix, nil),
+		storage:  db.NewIterator(rawdb.SnapshotStoragePrefix, nil),
+	}
 }
 
 func (v *flatStateVerifier) Account(hash common.Hash, account *types.StateAccount, _ []byte) error {
-	have := rawdb.ReadAccountSnapshot(v.db, hash)
-	want := types.SlimAccountRLP(*account)
-	if !bytes.Equal(have, want) {
-		return fmt.Errorf("flat account %s does not match its trie leaf", hash)
+	key := prefixedKey(rawdb.SnapshotAccountPrefix, hash[:])
+	if err := v.compareNext(v.accounts, key, types.SlimAccountRLP(*account)); err != nil {
+		return fmt.Errorf("flat account %s: %w", hash, err)
 	}
 	return nil
 }
 
 func (v *flatStateVerifier) Storage(accountHash, slotHash common.Hash, valueRLP []byte) error {
-	have := rawdb.ReadStorageSnapshot(v.db, accountHash, slotHash)
-	if !bytes.Equal(have, valueRLP) {
-		return fmt.Errorf("flat account %s slot %s does not match its trie leaf", accountHash, slotHash)
+	key := make([]byte, 0, len(rawdb.SnapshotStoragePrefix)+2*common.HashLength)
+	key = append(key, rawdb.SnapshotStoragePrefix...)
+	key = append(key, accountHash[:]...)
+	key = append(key, slotHash[:]...)
+	if err := v.compareNext(v.storage, key, valueRLP); err != nil {
+		return fmt.Errorf("flat account %s slot %s: %w", accountHash, slotHash, err)
 	}
 	return nil
 }
 
 func (v *flatStateVerifier) Code(common.Hash, common.Hash, []byte) error {
 	return nil
+}
+
+func (v *flatStateVerifier) compareNext(it ethdb.Iterator, key, value []byte) error {
+	if err := v.ctx.Err(); err != nil {
+		return err
+	}
+	if !it.Next() {
+		if err := it.Error(); err != nil {
+			return fmt.Errorf("iterate flat state: %w", err)
+		}
+		return errors.New("entry is missing")
+	}
+	if !bytes.Equal(it.Key(), key) {
+		return fmt.Errorf("key mismatch: have %x want %x", it.Key(), key)
+	}
+	if !bytes.Equal(it.Value(), value) {
+		return errors.New("value does not match its trie leaf")
+	}
+	return nil
+}
+
+func (v *flatStateVerifier) Finish() error {
+	for _, target := range []struct {
+		name string
+		it   ethdb.Iterator
+	}{
+		{name: "account", it: v.accounts},
+		{name: "storage", it: v.storage},
+	} {
+		if err := v.ctx.Err(); err != nil {
+			return err
+		}
+		if target.it.Next() {
+			return fmt.Errorf("path artifact contains extra flat %s key %x", target.name, target.it.Key())
+		}
+		if err := target.it.Error(); err != nil {
+			return fmt.Errorf("finish flat %s iteration: %w", target.name, err)
+		}
+	}
+	return nil
+}
+
+func (v *flatStateVerifier) Release() {
+	v.accounts.Release()
+	v.storage.Release()
 }
 
 func verifyDatabaseInventory(ctx context.Context, db ethdb.Database, scheme string, source bundle.SourceEvidence, counts bundle.Counts, expected stateInventory, progress *progressReporter) (retErr error) {
@@ -239,18 +308,22 @@ func verifyDatabaseInventory(ctx context.Context, db ethdb.Database, scheme stri
 		if trackProgress {
 			keys.Add(1)
 		}
-		key, value := it.Key(), it.Value()
-		if expectedValue, ok := headMetadata[string(key)]; ok && bytes.Equal(value, expectedValue) {
+		key := it.Key()
+		if expectedValue, ok := headMetadata[string(key)]; ok {
+			if !bytes.Equal(it.Value(), expectedValue) {
+				return fmt.Errorf("artifact head metadata key %x has an unexpected value", key)
+			}
 			delete(headMetadata, string(key))
 			headEntries++
 			continue
 		}
 		if scheme == rawdb.HashScheme {
+			value := it.Value()
 			switch {
 			case rawdb.IsLegacyTrieNode(key, value):
 				trieNodes++
 				continue
-			case isValidCodeEntry(key, value):
+			case isNonEmptyCodeEntry(key, value):
 				codeEntries++
 				continue
 			default:
@@ -264,7 +337,7 @@ func verifyDatabaseInventory(ctx context.Context, db ethdb.Database, scheme stri
 		case isCanonicalPathStorageTrieNodeKey(key):
 			trieNodes++
 			continue
-		case isValidCodeEntry(key, value):
+		case isNonEmptyCodeEntry(key, it.Value()):
 			codeEntries++
 			continue
 		case bytes.HasPrefix(key, rawdb.SnapshotAccountPrefix) && len(key) == len(rawdb.SnapshotAccountPrefix)+common.HashLength:
@@ -346,12 +419,9 @@ func verifyPathMetadata(db ethdb.Database, root common.Hash) error {
 	return nil
 }
 
-func isValidCodeEntry(key, code []byte) bool {
-	ok, hashBytes := rawdb.IsCodeKey(key)
-	if !ok || len(code) == 0 {
-		return false
-	}
-	return crypto.Keccak256Hash(code) == common.BytesToHash(hashBytes)
+func isNonEmptyCodeEntry(key, code []byte) bool {
+	ok, _ := rawdb.IsCodeKey(key)
+	return ok && len(code) != 0
 }
 
 func isCanonicalPathAccountTrieNodeKey(key []byte) bool {

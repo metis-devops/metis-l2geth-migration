@@ -142,7 +142,7 @@ func (c *recordConsumer) consume(record bundle.Record) error {
 		c.lastAccount = record.AccountHash
 		c.account = account
 		c.accountRLP = record.Payload
-		c.storage = trie.NewStackTrie(nil)
+		c.storage = nil
 		c.haveSlot = false
 		c.codeSeen = false
 		if c.visitor != nil {
@@ -161,11 +161,17 @@ func (c *recordConsumer) consume(record bundle.Record) error {
 		if record.AccountHash != c.accountHash {
 			return fmt.Errorf("storage record belongs to %s while current account is %s", record.AccountHash, c.accountHash)
 		}
+		if c.account.Root == types.EmptyRootHash {
+			return fmt.Errorf("account %s has storage records but an empty storage root", c.accountHash)
+		}
 		if c.haveSlot && bytes.Compare(record.SubHash[:], c.lastSlot[:]) <= 0 {
 			return fmt.Errorf("account %s storage records are not strictly increasing: %s after %s", c.accountHash, record.SubHash, c.lastSlot)
 		}
 		if err := validateStorageRLP(record.Payload); err != nil {
 			return fmt.Errorf("account %s slot %s: %w", c.accountHash, record.SubHash, err)
+		}
+		if c.storage == nil {
+			c.storage = trie.NewStackTrie(nil)
 		}
 		if err := c.storage.Update(record.SubHash[:], record.Payload); err != nil {
 			return fmt.Errorf("rebuild storage trie for account %s: %w", c.accountHash, err)
@@ -222,7 +228,10 @@ func (c *recordConsumer) finalizeAccount() error {
 	if !c.haveAccount {
 		return nil
 	}
-	computed := c.storage.Hash()
+	computed := types.EmptyRootHash
+	if c.storage != nil {
+		computed = c.storage.Hash()
+	}
 	if computed != c.account.Root {
 		return fmt.Errorf("account %s storage root mismatch: computed %s account %s", c.accountHash, computed, c.account.Root)
 	}
@@ -232,9 +241,13 @@ func (c *recordConsumer) finalizeAccount() error {
 	}
 	if expectsCode {
 		expected := common.BytesToHash(c.account.CodeHash)
-		available, err := c.knownCodes.Has(expected)
-		if err != nil {
-			return fmt.Errorf("look up account %s code %s: %w", c.accountHash, expected, err)
+		available := c.codeSeen
+		if !available {
+			var err error
+			available, err = c.knownCodes.Has(expected)
+			if err != nil {
+				return fmt.Errorf("look up account %s code %s: %w", c.accountHash, expected, err)
+			}
 		}
 		if !available {
 			return fmt.Errorf("account %s code %s has not been provided", c.accountHash, expected)
