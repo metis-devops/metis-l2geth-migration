@@ -23,8 +23,8 @@ type MigrateOptions struct {
 
 // MigrateResult identifies a directly migrated artifact and its verification report.
 type MigrateResult struct {
-	ArtifactPath string
-	Report       DirectVerificationReport
+	ArtifactPath string                   `json:"artifact"`
+	Report       DirectVerificationReport `json:"verification"`
 }
 
 // Migrate directly rebuilds and verifies a state database without creating a bundle.

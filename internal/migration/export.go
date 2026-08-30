@@ -23,8 +23,8 @@ type ExportOptions struct {
 
 // ExportResult identifies a published bundle and its manifest.
 type ExportResult struct {
-	BundlePath string
-	Manifest   bundle.Manifest
+	BundlePath string          `json:"bundle"`
+	Manifest   bundle.Manifest `json:"manifest"`
 }
 
 // Export writes the latest canonical legacy state into a new audited bundle.

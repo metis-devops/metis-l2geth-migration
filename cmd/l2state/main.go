@@ -86,7 +86,7 @@ func runMigrate(ctx context.Context, args []string, stdout, stderr io.Writer) er
 	if err != nil {
 		return err
 	}
-	return writeArtifactJSON(stdout, result.ArtifactPath, result.Report)
+	return writeJSON(stdout, result)
 }
 
 func runExport(ctx context.Context, args []string, stdout, stderr io.Writer) error {
@@ -115,10 +115,7 @@ func runExport(ctx context.Context, args []string, stdout, stderr io.Writer) err
 	if err != nil {
 		return err
 	}
-	return writeJSON(stdout, struct {
-		Bundle   string `json:"bundle"`
-		Manifest any    `json:"manifest"`
-	}{Bundle: result.BundlePath, Manifest: result.Manifest})
+	return writeJSON(stdout, result)
 }
 
 func runImport(ctx context.Context, args []string, stdout, stderr io.Writer) error {
@@ -140,7 +137,7 @@ func runImport(ctx context.Context, args []string, stdout, stderr io.Writer) err
 	if err != nil {
 		return err
 	}
-	return writeArtifactJSON(stdout, result.ArtifactPath, result.Report)
+	return writeJSON(stdout, result)
 }
 
 func runVerify(ctx context.Context, args []string, stdout, stderr io.Writer) error {
@@ -194,13 +191,6 @@ func writeJSON(w io.Writer, value any) error {
 	encoder := json.NewEncoder(w)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(value)
-}
-
-func writeArtifactJSON(w io.Writer, artifact string, report any) error {
-	return writeJSON(w, struct {
-		Artifact     string `json:"artifact"`
-		Verification any    `json:"verification"`
-	}{Artifact: artifact, Verification: report})
 }
 
 func addArtifactFlags(flags *flag.FlagSet) artifactFlags {

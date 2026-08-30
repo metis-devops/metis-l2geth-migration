@@ -33,8 +33,8 @@ type ImportOptions struct {
 
 // ImportResult identifies a published state artifact and its verification report.
 type ImportResult struct {
-	ArtifactPath string
-	Report       VerificationReport
+	ArtifactPath string             `json:"artifact"`
+	Report       VerificationReport `json:"verification"`
 }
 
 // Import rebuilds and verifies a state database from a bundle.
