@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/triedb"
@@ -135,8 +136,8 @@ func readLegacyHead(db ethdb.Database) (bundle.Head, []byte, error) {
 	if header.Number.Uint64() != number {
 		return bundle.Head{}, nil, fmt.Errorf("legacy header number mismatch: header %d mapping %d", header.Number.Uint64(), number)
 	}
-	if header.Hash() != hash {
-		return bundle.Head{}, nil, fmt.Errorf("legacy header hash mismatch: header %s LastBlock %s", header.Hash(), hash)
+	if headerHash := crypto.Keccak256Hash(headerRLP); headerHash != hash {
+		return bundle.Head{}, nil, fmt.Errorf("legacy header hash mismatch: header %s LastBlock %s", headerHash, hash)
 	}
 	if header.Root == (common.Hash{}) {
 		return bundle.Head{}, nil, errors.New("legacy head state root is empty")

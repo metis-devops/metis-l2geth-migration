@@ -60,6 +60,28 @@ func TestManifestHexTypesJSONRoundTrip(t *testing.T) {
 	}
 }
 
+func TestSourceEvidenceValidatedHeader(t *testing.T) {
+	head, headerRLP := testHead(t)
+	evidence := SourceEvidence{
+		HeadBefore: head,
+		HeadAfter:  head,
+		HeaderRLP:  headerRLP,
+	}
+	header, err := evidence.ValidatedHeader()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if header.Number == nil || header.Number.Uint64() != head.BlockNumber || header.Root != head.StateRoot {
+		t.Fatalf("validated header is %+v, want block %d root %s", header, head.BlockNumber, head.StateRoot)
+	}
+
+	evidence.HeadBefore.BlockHash = common.HexToHash("0xdeadbeef")
+	evidence.HeadAfter = evidence.HeadBefore
+	if _, err := evidence.ValidatedHeader(); err == nil || !strings.Contains(err.Error(), "header block hash mismatch") {
+		t.Fatalf("validated header error is %v, want block hash mismatch", err)
+	}
+}
+
 func TestLoadManifestRejectsInvalidHexEvidence(t *testing.T) {
 	manifest, _ := validTestManifest(t)
 	base, err := json.Marshal(manifest)

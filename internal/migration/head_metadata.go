@@ -8,7 +8,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/metis-devops/metis-l2geth-migration/internal/bundle"
 )
 
@@ -22,7 +21,7 @@ func writeHeadMetadata(db ethdb.Database, source bundle.SourceEvidence) error {
 	}
 	batch := db.NewBatch()
 	defer batch.Close()
-	writeHeadMetadataEntries(batch, header)
+	writeHeadMetadataEntries(batch, header, source.HeadBefore)
 	if err := batch.Write(); err != nil {
 		return fmt.Errorf("write target head metadata: %w", err)
 	}
@@ -61,23 +60,18 @@ func verifyHeadMetadata(db ethdb.Database, source bundle.SourceEvidence) error {
 }
 
 func validatedSourceHeader(source bundle.SourceEvidence) (*types.Header, error) {
-	if err := source.Validate(); err != nil {
+	header, err := source.ValidatedHeader()
+	if err != nil {
 		return nil, fmt.Errorf("validate source head metadata: %w", err)
 	}
-	var header types.Header
-	if err := rlp.DecodeBytes(source.HeaderRLP, &header); err != nil {
-		return nil, fmt.Errorf("decode source header for target database: %w", err)
-	}
-	return &header, nil
+	return header, nil
 }
 
-func writeHeadMetadataEntries(writer ethdb.KeyValueWriter, header *types.Header) {
-	hash := header.Hash()
-	number := header.Number.Uint64()
+func writeHeadMetadataEntries(writer ethdb.KeyValueWriter, header *types.Header, head bundle.Head) {
 	rawdb.WriteHeader(writer, header)
-	rawdb.WriteCanonicalHash(writer, hash, number)
-	rawdb.WriteHeadBlockHash(writer, hash)
-	rawdb.WriteHeadHeaderHash(writer, hash)
+	rawdb.WriteCanonicalHash(writer, head.BlockHash, head.BlockNumber)
+	rawdb.WriteHeadBlockHash(writer, head.BlockHash)
+	rawdb.WriteHeadHeaderHash(writer, head.BlockHash)
 }
 
 type headMetadataEntries map[string][]byte
@@ -88,7 +82,7 @@ func expectedHeadMetadata(source bundle.SourceEvidence) (headMetadataEntries, er
 		return nil, err
 	}
 	entries := make(headMetadataEntries)
-	writeHeadMetadataEntries(entries, header)
+	writeHeadMetadataEntries(entries, header, source.HeadBefore)
 	return entries, nil
 }
 

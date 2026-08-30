@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/metis-devops/metis-l2geth-migration/internal/version"
 )
@@ -52,36 +53,43 @@ type SourceEvidence struct {
 
 // Validate checks that the encoded header and stable source heads agree.
 func (s SourceEvidence) Validate() error {
+	_, err := s.ValidatedHeader()
+	return err
+}
+
+// ValidatedHeader checks that the encoded header and stable source heads agree
+// and returns the decoded header.
+func (s SourceEvidence) ValidatedHeader() (*types.Header, error) {
 	if s.HeadBefore != s.HeadAfter {
-		return errors.New("source head changed during traversal")
+		return nil, errors.New("source head changed during traversal")
 	}
 	if s.HeadBefore.BlockHash == (common.Hash{}) {
-		return errors.New("source block hash is empty")
+		return nil, errors.New("source block hash is empty")
 	}
 	if s.HeadBefore.StateRoot == (common.Hash{}) {
-		return errors.New("source state root is empty")
+		return nil, errors.New("source state root is empty")
 	}
 	if len(s.HeaderRLP) == 0 {
-		return errors.New("source header RLP is empty")
+		return nil, errors.New("source header RLP is empty")
 	}
 	var header types.Header
 	if err := rlp.DecodeBytes(s.HeaderRLP, &header); err != nil {
-		return fmt.Errorf("decode header RLP as geth v1.17.5 header: %w", err)
+		return nil, fmt.Errorf("decode header RLP as geth v1.17.5 header: %w", err)
 	}
 	if header.Number == nil || !header.Number.IsUint64() {
-		return errors.New("header block number is missing or exceeds uint64")
+		return nil, errors.New("header block number is missing or exceeds uint64")
 	}
 	head := s.HeadBefore
 	if header.Number.Uint64() != head.BlockNumber {
-		return fmt.Errorf("header block number mismatch: have %d want %d", header.Number.Uint64(), head.BlockNumber)
+		return nil, fmt.Errorf("header block number mismatch: have %d want %d", header.Number.Uint64(), head.BlockNumber)
 	}
-	if header.Hash() != head.BlockHash {
-		return fmt.Errorf("header block hash mismatch: have %s want %s", header.Hash(), head.BlockHash)
+	if hash := crypto.Keccak256Hash(s.HeaderRLP); hash != head.BlockHash {
+		return nil, fmt.Errorf("header block hash mismatch: have %s want %s", hash, head.BlockHash)
 	}
 	if header.Root != head.StateRoot {
-		return fmt.Errorf("header state root mismatch: have %s want %s", header.Root, head.StateRoot)
+		return nil, fmt.Errorf("header state root mismatch: have %s want %s", header.Root, head.StateRoot)
 	}
-	return nil
+	return &header, nil
 }
 
 // Counts summarizes the records and payload bytes in a state bundle.

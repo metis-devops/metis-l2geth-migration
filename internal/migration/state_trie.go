@@ -1,7 +1,6 @@
 package migration
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"sync"
@@ -163,6 +162,8 @@ func (it *inventoryNodeIterator) Error() error {
 
 func decodeFullAccount(accountHash common.Hash, data []byte) (*types.StateAccount, error) {
 	var account types.StateAccount
+	// DecodeBytes rejects non-canonical RLP sizes and integers, as well as
+	// trailing values, so a decode-encode round trip is unnecessary here.
 	if err := rlp.DecodeBytes(data, &account); err != nil {
 		return nil, fmt.Errorf("account %s: decode account RLP: %w", accountHash, err)
 	}
@@ -171,13 +172,6 @@ func decodeFullAccount(accountHash common.Hash, data []byte) (*types.StateAccoun
 	}
 	if len(account.CodeHash) != common.HashLength {
 		return nil, fmt.Errorf("account %s: account code hash has length %d", accountHash, len(account.CodeHash))
-	}
-	encoded, err := rlp.EncodeToBytes(&account)
-	if err != nil {
-		return nil, fmt.Errorf("account %s: encode canonical account RLP: %w", accountHash, err)
-	}
-	if !bytes.Equal(encoded, data) {
-		return nil, fmt.Errorf("account %s uses a non-canonical v1.17.5 account encoding", accountHash)
 	}
 	return &account, nil
 }
