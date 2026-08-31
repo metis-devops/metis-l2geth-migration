@@ -17,15 +17,28 @@ type directStateWriter struct {
 	batch    ethdb.Batch
 	recorder *capturingKeyValueWriter
 	scheme   string
+	flushAt  int
 	closed   bool
 }
 
 func newDirectStateWriter(db ethdb.Database, scheme string) *directStateWriter {
+	return newDirectStateWriterWithFlushLimit(db, scheme, ethdb.IdealBatchSize)
+}
+
+// newDeferredDirectStateWriter retains every write in its batch until Close.
+// It is used for bounded storage probes whose writes must be discardable when
+// the trie crosses the partitioning threshold.
+func newDeferredDirectStateWriter(db ethdb.Database, scheme string) *directStateWriter {
+	return newDirectStateWriterWithFlushLimit(db, scheme, 0)
+}
+
+func newDirectStateWriterWithFlushLimit(db ethdb.Database, scheme string, flushAt int) *directStateWriter {
 	batch := db.NewBatchWithSize(ethdb.IdealBatchSize)
 	return &directStateWriter{
 		batch:    batch,
 		recorder: &capturingKeyValueWriter{target: batch},
 		scheme:   scheme,
+		flushAt:  flushAt,
 	}
 }
 
@@ -78,11 +91,19 @@ func (w *directStateWriter) TrieNode(owner common.Hash, path []byte, hash common
 	return w.flushIfNeeded()
 }
 
+func (w *directStateWriter) DeleteTrieNode(owner common.Hash, path []byte, hash common.Hash) error {
+	rawdb.DeleteTrieNode(w.recorder, owner, path, hash, w.scheme)
+	if err := w.recorder.Err(); err != nil {
+		return fmt.Errorf("delete %s trie node owner=%s path=%x hash=%s: %w", w.scheme, owner, path, hash, err)
+	}
+	return w.flushIfNeeded()
+}
+
 func (w *directStateWriter) flushIfNeeded() error {
 	if err := w.recorder.Err(); err != nil {
 		return err
 	}
-	if w.batch.ValueSize() < ethdb.IdealBatchSize {
+	if w.flushAt <= 0 || w.batch.ValueSize() < w.flushAt {
 		return nil
 	}
 	if err := w.batch.Write(); err != nil {

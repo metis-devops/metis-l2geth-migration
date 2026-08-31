@@ -18,6 +18,7 @@ type MigrateOptions struct {
 	Scheme          string
 	CacheMB         int
 	Handles         int
+	Workers         int
 	Progress        ProgressOptions
 }
 
@@ -29,10 +30,12 @@ type MigrateResult struct {
 
 // Migrate directly rebuilds and verifies a state database without creating a bundle.
 func Migrate(ctx context.Context, opts MigrateOptions) (result MigrateResult, retErr error) {
+	workers := normalizeMigrateWorkers(opts.Workers)
 	reporter := newProgressReporter("migrate", opts.Progress,
 		"source", opts.SourceChaindata,
 		"output", opts.Output,
 		"scheme", opts.Scheme,
+		"workers", workers,
 	)
 	defer func() {
 		attrs := []any{"artifact", result.ArtifactPath}
@@ -95,25 +98,22 @@ func Migrate(ctx context.Context, opts MigrateOptions) (result MigrateResult, re
 		}
 	}()
 
-	sink := newDirectStateWriter(disk, opts.Scheme)
 	var (
-		visitor      StateVisitor = sink
+		counts       *progressCounts
 		progressView progressSnapshot
 	)
 	if reporter.Enabled() {
-		counts := new(progressCounts)
-		visitor = newCountingStateVisitor(visitor, counts)
+		counts = new(progressCounts)
 		progressView = countProgressSnapshot(counts, nil)
 	}
-	traversePhase := reporter.StartPhase("migrate_state", progressView, "root", head.StateRoot)
-	stateResult, traverseErr := source.TraverseWithTrieNodes(ctx, visitor, sink)
+	traversePhase := reporter.StartPhase("migrate_state", progressView, "root", head.StateRoot, "workers", workers)
+	stateResult, finalWriter, traverseErr := source.migratePartitionedState(ctx, disk, opts.Scheme, workers, counts)
 	traversePhase.Finish(traverseErr)
 	if traverseErr != nil {
-		sink.Abort()
 		return MigrateResult{}, traverseErr
 	}
 	flushPhase := reporter.StartPhase("flush_generated_state", nil, "scheme", opts.Scheme)
-	if err := sink.CloseContext(ctx); err != nil {
+	if err := finalWriter.CloseContext(ctx); err != nil {
 		flushPhase.Finish(err)
 		return MigrateResult{}, err
 	}
@@ -155,7 +155,14 @@ func validateMigrateOptions(opts MigrateOptions) error {
 	if opts.Scheme != rawdb.HashScheme && opts.Scheme != rawdb.PathScheme {
 		return fmt.Errorf("scheme must be %q or %q", rawdb.HashScheme, rawdb.PathScheme)
 	}
+	if opts.Workers > maxMigrateWorkers {
+		return fmt.Errorf("workers must not exceed %d", maxMigrateWorkers)
+	}
 	return rejectOutputInsideSource(opts.SourceChaindata, opts.Output)
+}
+
+func normalizeMigrateWorkers(workers int) int {
+	return max(workers, minMigrateWorkers)
 }
 
 func publishDirectArtifact(ctx context.Context, output *atomicDir, report DirectVerificationReport, opts MigrateOptions, reporter *progressReporter) error {

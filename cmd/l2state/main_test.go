@@ -74,7 +74,7 @@ func TestCLIEndToEnd(t *testing.T) {
 	stderr.Reset()
 	if err := run(context.Background(), []string{
 		"migrate", "--source-chaindata", source, "--out", directArtifactPath, "--scheme", "hash",
-		"--cache-mb", "16", "--handles", "16",
+		"--cache-mb", "16", "--handles", "16", "--workers", "1",
 	}, &stdout, &stderr); err != nil {
 		t.Fatalf("migrate command: %v stderr=%s", err, stderr.String())
 	}
@@ -88,6 +88,7 @@ func TestCLIEndToEnd(t *testing.T) {
 	}
 	assertProgressLog(t, stderr.String(), "migrate",
 		"phase=migrate_state",
+		"workers=2",
 		"phase=flush_generated_state",
 		"phase=verify_state",
 		"phase=inspect_database",
@@ -193,6 +194,11 @@ func TestCLIVerifyInputModes(t *testing.T) {
 		{name: "direct artifact required", args: []string{"verify", "--source-chaindata", "source"}, want: "--artifact is required"},
 		{name: "migrate positional", args: []string{"migrate", "unexpected"}, want: "does not accept positional"},
 		{name: "migrate has no compression", args: []string{"migrate", "--compression", "none"}, want: "flag provided but not defined"},
+		{
+			name: "migrate workers maximum",
+			args: []string{"migrate", "--source-chaindata", "source", "--out", "output", "--scheme", "hash", "--workers", "17"},
+			want: "workers must not exceed 16",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -201,6 +207,13 @@ func TestCLIVerifyInputModes(t *testing.T) {
 				t.Fatalf("run(%v) error is %v, want %q", tt.args, err, tt.want)
 			}
 		})
+	}
+}
+
+func TestDefaultMigrateWorkersIsBounded(t *testing.T) {
+	workers := defaultMigrateWorkers()
+	if workers < 2 || workers > 4 {
+		t.Fatalf("default migrate workers = %d, want [2,4]", workers)
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -80,6 +81,7 @@ func runMigrate(ctx context.Context, args []string, stdout, stderr io.Writer) er
 	flags.SetOutput(stderr)
 	source := flags.String("source-chaindata", "", "stopped l2geth LevelDB chaindata directory")
 	target := addArtifactFlags(flags)
+	workers := flags.Int("workers", defaultMigrateWorkers(), "global account/storage workers; values below 2 are raised to 2, maximum 16")
 	if err := parseFlags(flags, args, "migrate"); err != nil {
 		return err
 	}
@@ -89,6 +91,7 @@ func runMigrate(ctx context.Context, args []string, stdout, stderr io.Writer) er
 		Scheme:          *target.scheme,
 		CacheMB:         *target.cache,
 		Handles:         *target.handles,
+		Workers:         *workers,
 		Progress:        newProgressOptions(stderr, *target.quiet),
 	})
 	if err != nil {
@@ -211,6 +214,10 @@ func addArtifactFlags(flags *flag.FlagSet) artifactFlags {
 	}
 }
 
+func defaultMigrateWorkers() int {
+	return max(2, min(4, runtime.GOMAXPROCS(0)))
+}
+
 func parseFlags(flags *flag.FlagSet, args []string, command string) error {
 	if err := flags.Parse(args); err != nil {
 		return err
@@ -233,7 +240,7 @@ func printUsage(w io.Writer) error {
 	_, err := fmt.Fprintf(w, `Usage:
   l2state export --source-chaindata PATH --out BUNDLE [--compression zstd|none] [--quiet]
   l2state import --bundle BUNDLE --out ARTIFACT --scheme hash|path [--quiet]
-  l2state migrate --source-chaindata PATH --out ARTIFACT --scheme hash|path [--quiet]
+  l2state migrate --source-chaindata PATH --out ARTIFACT --scheme hash|path [--workers N] [--quiet]
   l2state verify --bundle BUNDLE [--artifact ARTIFACT] [--quiet]
   l2state verify --source-chaindata PATH --artifact ARTIFACT [--quiet]
   l2state version
