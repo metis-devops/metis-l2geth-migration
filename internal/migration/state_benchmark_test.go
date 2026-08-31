@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"fmt"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -16,6 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	gethleveldb "github.com/ethereum/go-ethereum/ethdb/leveldb"
+	gethpebble "github.com/ethereum/go-ethereum/ethdb/pebble"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
@@ -114,11 +116,155 @@ func BenchmarkPortableImport(b *testing.B) {
 	}
 }
 
-func writeTraversalBenchmarkHead(b *testing.B, chaindata string, root common.Hash) {
+func BenchmarkPartitionedMigrateBuild(b *testing.B) {
+	for _, workload := range migrateBenchmarkWorkloads() {
+		b.Run(workload.name, func(b *testing.B) {
+			chaindata := filepath.Join(b.TempDir(), "chaindata")
+			root, counts := buildTraversalBenchmarkState(b, chaindata, workload.workload)
+			writeTraversalBenchmarkHead(b, chaindata, root)
+			for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme} {
+				b.Run(scheme+"/serial-reference", func(b *testing.B) {
+					benchmarkMigrateBuild(b, chaindata, scheme, 0, root, counts)
+				})
+				for _, workers := range []int{2, 4, 8, 16} {
+					b.Run(fmt.Sprintf("%s/workers=%d", scheme, workers), func(b *testing.B) {
+						benchmarkMigrateBuild(b, chaindata, scheme, workers, root, counts)
+					})
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkPartitionedMigrateEndToEnd(b *testing.B) {
+	for _, workload := range migrateBenchmarkWorkloads() {
+		b.Run(workload.name, func(b *testing.B) {
+			chaindata := filepath.Join(b.TempDir(), "chaindata")
+			root, counts := buildTraversalBenchmarkState(b, chaindata, workload.workload)
+			writeTraversalBenchmarkHead(b, chaindata, root)
+			for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme} {
+				for _, workers := range []int{2, 4, 8, 16} {
+					b.Run(fmt.Sprintf("%s/workers=%d", scheme, workers), func(b *testing.B) {
+						b.ReportAllocs()
+						for range b.N {
+							output := filepath.Join(b.TempDir(), "artifact")
+							result, err := Migrate(context.Background(), MigrateOptions{
+								SourceChaindata: chaindata, Output: output, Scheme: scheme,
+								CacheMB: 128, Handles: 128, Workers: workers,
+							})
+							if err != nil {
+								b.Fatal(err)
+							}
+							if result.Report.RecomputedRoot != root || result.Report.Counts != counts {
+								b.Fatalf("unexpected migration result: %+v", result.Report)
+							}
+						}
+					})
+				}
+			}
+		})
+	}
+}
+
+type namedMigrateBenchmarkWorkload struct {
+	name     string
+	workload traversalBenchmarkWorkload
+}
+
+func migrateBenchmarkWorkloads() []namedMigrateBenchmarkWorkload {
+	return []namedMigrateBenchmarkWorkload{
+		{
+			name: "many-small-storage",
+			workload: traversalBenchmarkWorkload{
+				accounts: 512, storageEvery: 1, slotsPerAccount: 8, codeSize: traversalBenchmarkCodeSize,
+			},
+		},
+		{
+			name: "distributed-large-storage",
+			workload: traversalBenchmarkWorkload{
+				accounts: 8, storageEvery: 1, slotsPerAccount: 8 * migrateStoragePartitionThreshold,
+				codeSize: traversalBenchmarkCodeSize,
+			},
+		},
+		{
+			name: "single-giant-storage",
+			workload: traversalBenchmarkWorkload{
+				accounts: 1, storageEvery: 1, slotsPerAccount: 32 * migrateStoragePartitionThreshold,
+				codeSize: traversalBenchmarkCodeSize,
+			},
+		},
+		{
+			name: "shared-large-code",
+			workload: traversalBenchmarkWorkload{
+				accounts: 5_000, storageEvery: 5_001, slotsPerAccount: 0, codeSize: traversalBenchmarkCodeSize,
+			},
+		},
+	}
+}
+
+func benchmarkMigrateBuild(
+	b *testing.B,
+	chaindata, scheme string,
+	workers int,
+	wantRoot common.Hash,
+	wantCounts bundle.Counts,
+) {
 	b.Helper()
+	b.ReportAllocs()
+	for range b.N {
+		b.StopTimer()
+		runRoot := b.TempDir()
+		dbPath := filepath.Join(runRoot, "db")
+		if err := os.Mkdir(dbPath, 0o755); err != nil {
+			b.Fatal(err)
+		}
+		source, err := openLegacySource(chaindata, 128, 128, newProgressReporter("benchmark", ProgressOptions{}))
+		if err != nil {
+			b.Fatal(err)
+		}
+		kv, err := gethpebble.New(dbPath, 128, 128, "partitioned-migrate-benchmark", false)
+		if err != nil {
+			b.Fatal(err)
+		}
+		target := rawdb.NewDatabase(kv)
+		b.StartTimer()
+		var result StateResult
+		if workers == 0 {
+			writer := newDirectStateWriter(target, scheme)
+			result, err = source.TraverseWithTrieNodes(context.Background(), writer, writer)
+			if err == nil {
+				err = writer.Close()
+			} else {
+				writer.Abort()
+			}
+		} else {
+			var finalWriter *directStateWriter
+			result, finalWriter, err = source.migratePartitionedState(context.Background(), target, scheme, workers, nil)
+			if err == nil {
+				err = finalWriter.Close()
+			}
+		}
+		b.StopTimer()
+		if closeErr := source.Close(); err == nil {
+			err = closeErr
+		}
+		if closeErr := target.Close(); err == nil {
+			err = closeErr
+		}
+		if err != nil {
+			b.Fatal(err)
+		}
+		if result.Root != wantRoot || result.Counts != wantCounts {
+			b.Fatalf("unexpected build result: %+v", result)
+		}
+	}
+}
+
+func writeTraversalBenchmarkHead(t testing.TB, chaindata string, root common.Hash) {
+	t.Helper()
 	kv, err := gethleveldb.New(chaindata, 128, 128, "portable-import-benchmark-head", false)
 	if err != nil {
-		b.Fatal(err)
+		t.Fatal(err)
 	}
 	disk := rawdb.NewDatabase(kv)
 	header := &types.Header{
@@ -131,10 +277,10 @@ func writeTraversalBenchmarkHead(b *testing.B, chaindata string, root common.Has
 	rawdb.WriteHeadBlockHash(disk, header.Hash())
 	rawdb.WriteHeadHeaderHash(disk, header.Hash())
 	if err := disk.SyncKeyValue(); err != nil {
-		b.Fatal(err)
+		t.Fatal(err)
 	}
 	if err := disk.Close(); err != nil {
-		b.Fatal(err)
+		t.Fatal(err)
 	}
 }
 
@@ -178,18 +324,18 @@ func benchmarkTraverseState(b *testing.B, workload traversalBenchmarkWorkload) {
 	b.ReportMetric(float64(wantCounts.StorageSlots)*float64(b.N)/b.Elapsed().Seconds(), "storage-slots/s")
 }
 
-func buildTraversalBenchmarkState(b *testing.B, chaindata string, workload traversalBenchmarkWorkload) (common.Hash, bundle.Counts) {
-	b.Helper()
+func buildTraversalBenchmarkState(t testing.TB, chaindata string, workload traversalBenchmarkWorkload) (common.Hash, bundle.Counts) {
+	t.Helper()
 	kv, err := gethleveldb.New(chaindata, 128, 128, "traverse-benchmark-fixture", false)
 	if err != nil {
-		b.Fatal(err)
+		t.Fatal(err)
 	}
 	disk := rawdb.NewDatabase(kv)
 	diskClosed := false
 	defer func() {
 		if !diskClosed {
 			if err := disk.Close(); err != nil {
-				b.Errorf("close benchmark fixture database: %v", err)
+				t.Errorf("close benchmark fixture database: %v", err)
 			}
 		}
 	}()
@@ -199,12 +345,13 @@ func buildTraversalBenchmarkState(b *testing.B, chaindata string, workload trave
 	}
 	codeHash := crypto.Keccak256Hash(sharedCode)
 	if err := disk.Put(codeHash[:], sharedCode); err != nil {
-		b.Fatal(err)
+		t.Fatal(err)
 	}
-	counts := bundle.Counts{
-		CodeRecords:  1,
-		Records:      1,
-		PayloadBytes: uint64(len(sharedCode)),
+	var counts bundle.Counts
+	if workload.accounts >= 2 {
+		counts = bundle.Counts{
+			CodeRecords: 1, Records: 1, PayloadBytes: uint64(len(sharedCode)),
+		}
 	}
 	built := make([]traversalBenchmarkAccount, 0, workload.accounts)
 	for i := 1; i <= workload.accounts; i++ {
@@ -226,7 +373,7 @@ func buildTraversalBenchmarkState(b *testing.B, chaindata string, workload trave
 				valueHash := crypto.Keccak256Hash([]byte("value"), slotSeed[:])
 				valueRLP, err := rlp.EncodeToBytes(common.TrimLeftZeroes(valueHash[:]))
 				if err != nil {
-					b.Fatal(err)
+					t.Fatal(err)
 				}
 				slots = append(slots, benchmarkSlot{hash: slotHash, value: valueRLP})
 			}
@@ -236,7 +383,7 @@ func buildTraversalBenchmarkState(b *testing.B, chaindata string, workload trave
 			stack := trie.NewStackTrie(nil)
 			for _, slot := range slots {
 				if err := stack.Update(slot.hash[:], slot.value); err != nil {
-					b.Fatal(err)
+					t.Fatal(err)
 				}
 				rawdb.WriteStorageSnapshot(disk, accountHash, slot.hash, slot.value)
 				counts.StorageSlots++
@@ -266,10 +413,10 @@ func buildTraversalBenchmarkState(b *testing.B, chaindata string, workload trave
 	for _, entry := range built {
 		encoded, err := rlp.EncodeToBytes(&entry.account)
 		if err != nil {
-			b.Fatal(err)
+			t.Fatal(err)
 		}
 		if err := accountStack.Update(entry.hash[:], encoded); err != nil {
-			b.Fatal(err)
+			t.Fatal(err)
 		}
 		counts.Accounts++
 		counts.Records++
@@ -278,19 +425,19 @@ func buildTraversalBenchmarkState(b *testing.B, chaindata string, workload trave
 	root := accountStack.Hash()
 	stats, err := triedb.GenerateTrie(disk, rawdb.HashScheme, root, nil)
 	if err != nil {
-		b.Fatal(err)
+		t.Fatal(err)
 	}
 	if stats.Updated != 0 || stats.Deleted != 0 {
-		b.Fatalf("benchmark fixture state reconciled unexpectedly: %+v", stats)
+		t.Fatalf("benchmark fixture state reconciled unexpectedly: %+v", stats)
 	}
 	if err := removeFlatStateForTest(context.Background(), disk); err != nil {
-		b.Fatal(err)
+		t.Fatal(err)
 	}
 	if err := disk.SyncKeyValue(); err != nil {
-		b.Fatal(err)
+		t.Fatal(err)
 	}
 	if err := disk.Close(); err != nil {
-		b.Fatal(err)
+		t.Fatal(err)
 	}
 	diskClosed = true
 	return root, counts

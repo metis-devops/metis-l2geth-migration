@@ -58,15 +58,27 @@ operation:
 ./bin/l2state migrate \
   --source-chaindata /snapshot/geth/chaindata \
   --out /states/metis-hash \
-  --scheme hash
+  --scheme hash \
+  --workers 4
 ```
 
 Use `--scheme path` and a different output path to build a path-scheme
-artifact. Direct migration reads the legacy state once and does not create a
-bundle or record stream. The same ordered `StackTrie` rebuild that validates
-the source root writes the target trie nodes directly. Hash migration never
-creates temporary flat state; path migration writes the required current flat
-state alongside the generated path nodes before adoption.
+artifact. Direct migration does not create a bundle, record stream, or flat
+staging pass. It divides the account-hash space into the 16 first-nibble MPT
+partitions, preserves ascending order within each partition, and uses geth's
+`PartialStackTrie` assembly to reproduce the canonical root and exact node
+layout. Storage tries with at most 1024 slots stay on the serial streaming fast
+path; larger tries are rebuilt through the same 16-way partitioning after a
+bounded, uncommitted probe. Hash migration never creates temporary flat state;
+path migration writes the required current flat state alongside the generated
+path nodes before adoption.
+
+`--workers` is a global account/storage work limit. Values below 2 are raised
+to 2, values above 16 are rejected, and the default is the smaller of 4 and
+`GOMAXPROCS`, with a minimum of 2. Increase it only when the source and target
+storage can sustain the additional concurrent reads and writes. The generated
+database is still reopened and verified by the independent serial verifier
+before publication; `--workers` affects construction only.
 
 To repeat the full source-to-target proof later, retain the original snapshot
 or a content-identical copy:
@@ -208,6 +220,10 @@ external canonicality, or L1 finality.
 - `--cache-mb` defaults to 512 MiB and `--handles` defaults to 256 for every
   state operation. Direct migration keeps source and target databases open
   together, so account for both allowances.
+- `migrate --workers` defaults to `max(2, min(4, GOMAXPROCS))`, raises smaller
+  values to 2, and rejects values above 16. Account and large-storage partition
+  tasks share this single limit; it does not multiply at nested storage tries.
+  Worker count does not change the final serial verification pass.
 - Contract code hashes are deduplicated exactly with an operation-local
   in-memory set. Its memory use grows with the number of unique code hashes;
   the supported operating assumption is fewer than one million, without a

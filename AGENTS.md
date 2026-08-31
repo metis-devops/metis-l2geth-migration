@@ -19,11 +19,14 @@ trie preimages.
 - `internal/readonlydb` is the strict read-only adapter for legacy LevelDB.
 - `internal/bundle` defines the v3 manifest, canonical slim-account codec, and
   deterministic account, storage, and code record stream.
-- `internal/migration/export.go`, `import.go`, `migrate.go`, and
-  `direct_writer.go` implement the portable and direct workflows. Both persist
-  target trie nodes from the same ordered `StackTrie` rebuild that validates
-  their source or bundle root. Portable import retains a test-only pinned
-  `GenerateTrie` reference builder for independent layout comparison.
+- `internal/migration/export.go`, `import.go`, `migrate.go`,
+  `migrate_partitioned.go`, and `direct_writer.go` implement the portable and
+  direct workflows. Portable import persists nodes from its ordered
+  `StackTrie`. Direct migrate uses 16 first-nibble `PartialStackTrie`
+  partitions, with a serial fast path for storage tries of at most 1024 slots,
+  and assembles the same canonical root and target layout. Portable import
+  retains a test-only pinned `GenerateTrie` reference builder for independent
+  layout comparison.
 - `internal/migration/verify.go` and `direct_verify.go` independently verify
   bundle-backed and direct artifacts; their report formats are intentionally
   distinct.
@@ -86,6 +89,10 @@ trie preimages.
 - Hash artifacts must contain no temporary flat state. Path artifacts must
   preserve geth v1.17.5 completion metadata, `SnapshotRoot`, and state ID 0,
   with no historical layers.
+- Direct-migrate partition roots must reproduce the serial trie node set.
+  Handle empty, single-populated, and multi-populated partitions with the
+  pinned `MountPartitionRoot`/`AssembleBranch` APIs, including deletion of a
+  folded single-partition orphan. Do not leave partition-only nodes behind.
 - Deduplicate contract code hashes exactly with an operation-local
   `map[common.Hash]struct{}`. The supported assumption is fewer than one
   million unique code hashes; do not add a pre-count scan, hard limit, or disk
@@ -128,6 +135,12 @@ trie preimages.
   state-sized in-memory exception; keep other working state bounded by the
   configured cache and handle allowances. Do not add a pre-count scan merely
   to report a percentage or ETA.
+- Direct migrate always uses the partitioned builder. Normalize workers below
+  2 to 2, reject values above 16, and share one limiter across account and
+  nested storage partitions. Release an account lease before waiting for a
+  large storage partition and join every task before closing either database.
+  Keep the 1024-slot storage probe uncommitted so crossing the threshold can
+  discard it without leaking target keys or duplicate counts.
 - Add regression coverage for behavior changes. Exercise both `hash` and
   `path`, both `zstd` and `none`, and both direct and bundle-backed paths
   when the changed behavior applies to them.
@@ -162,6 +175,11 @@ Use the following change-sensitive checks:
 - Source traversal or direct-migration changes: run the committed legacy
   canary through direct and portable workflows and confirm the source content
   remains unchanged.
+- Partitioned direct-migration changes: compare hash and path node inventories
+  with the serial and test-only `GenerateTrie` references; cover exact range
+  boundaries, empty/single/multiple partitions, 1024/1025 storage slots,
+  shared code across partitions, global worker bounds, cancellation, and
+  nested-worker race behavior.
 
 Do not regenerate the golden fixture during ordinary test maintenance. If
 regeneration is intentional, use the pinned module in
