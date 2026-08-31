@@ -20,10 +20,10 @@ trie preimages.
 - `internal/bundle` defines the v3 manifest, canonical slim-account codec, and
   deterministic account, storage, and code record stream.
 - `internal/migration/export.go`, `import.go`, `migrate.go`, and
-  `direct_writer.go` implement the portable and direct workflows. Direct
-  migration persists target trie nodes from the same ordered `StackTrie`
-  rebuild that validates the source root; portable import uses the pinned
-  `GenerateTrie` API over its streamed flat state.
+  `direct_writer.go` implement the portable and direct workflows. Both persist
+  target trie nodes from the same ordered `StackTrie` rebuild that validates
+  their source or bundle root. Portable import retains a test-only pinned
+  `GenerateTrie` reference builder for independent layout comparison.
 - `internal/migration/verify.go` and `direct_verify.go` independently verify
   bundle-backed and direct artifacts; their report formats are intentionally
   distinct.
@@ -71,6 +71,9 @@ trie preimages.
 - Keep fixed hashes as `common.Hash` and arbitrary header bytes as
   `hexutil.Bytes`; malformed, zero, unprefixed, or wrong-length values must
   continue to fail strict JSON decoding or validation.
+- Bundle roots must contain exactly `manifest.json` and their one record file;
+  reject root/entry symlinks, extra entries, non-regular files, metadata over
+  1 MiB, and import outputs inside the input bundle.
 
 ### Target artifacts
 
@@ -92,6 +95,9 @@ trie preimages.
   the full state trie.
 - Independently reopen and verify every artifact before publication. Do not
   trust `verification.json` as the source of truth for bundle verification.
+- Artifact roots must contain exactly the real `db/` directory and real
+  `verification.json` file. Reject root or entry symlinks and extra top-level
+  entries before and after standalone verification.
 
 ### Publication and compatibility
 
@@ -100,6 +106,10 @@ trie preimages.
   `.partial-*` directory; sync and verify it before an atomic no-replace
   rename. Cleanup must target only the partial directory created by the
   current invocation.
+- If rename succeeds but syncing the parent fails, retain the final directory
+  and return `PublicationDurabilityError`. Never report success, remove it, or
+  attempt an automatic rollback; operators must verify it before deciding what
+  to retain.
 - The root module requires Go 1.27 and pins go-ethereum v1.17.5 at commit
   `9621c6ad10934a01b5514886fb6fbd87640b6c05`. Do not change the geth pin,
   bundle/report versions, record encoding, database layout, supported schemes,
@@ -107,8 +117,8 @@ trie preimages.
 
 ## Implementation rules
 
-- Preserve `context.Context` cancellation through source scans, bundle scans,
-  trie generation, verification, and compaction.
+- Preserve `context.Context` cancellation through source scans, chunked bundle
+  reads/writes, path adoption, and verification.
 - Wrap errors with operation context and `%w`. Check and combine relevant
   close, sync, abort, and cleanup errors instead of discarding them.
 - Keep human-readable progress on standard error and the single final JSON
@@ -134,9 +144,9 @@ git diff --check
 ```
 
 `make ci` runs formatting and module-tidiness checks, lint, all root-module
-tests, and the build. Also run `make test-race` when changing concurrency,
-cancellation, progress reporting, database lifecycle, atomic publication, or
-shared state.
+tests, fixture-module tidy/verify/test/vet, and the build. Also run
+`make test-race` when changing concurrency, cancellation, progress reporting,
+database lifecycle, atomic publication, or shared state.
 
 Use the following change-sensitive checks:
 
@@ -146,7 +156,8 @@ Use the following change-sensitive checks:
   corruption, trailing data, counts, ordering, and direct/bundle format
   separation.
 - Import or database-layout changes: test both schemes, exact inventory,
-  independent reopening, and a subsequent state commit/read through geth
+  independent reopening, full logical comparison with the test-only
+  `GenerateTrie` reference, and a subsequent state commit/read through geth
   v1.17.5 APIs.
 - Source traversal or direct-migration changes: run the committed legacy
   canary through direct and portable workflows and confirm the source content

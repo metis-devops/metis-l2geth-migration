@@ -44,16 +44,7 @@ func Migrate(ctx context.Context, opts MigrateOptions) (result MigrateResult, re
 		}
 		reporter.Finish(retErr, attrs...)
 	}()
-	if opts.SourceChaindata == "" {
-		return MigrateResult{}, errors.New("source chaindata path is required")
-	}
-	if opts.Output == "" {
-		return MigrateResult{}, errors.New("artifact output path is required")
-	}
-	if opts.Scheme != rawdb.HashScheme && opts.Scheme != rawdb.PathScheme {
-		return MigrateResult{}, fmt.Errorf("scheme must be %q or %q", rawdb.HashScheme, rawdb.PathScheme)
-	}
-	if err := rejectOutputInsideSource(opts.SourceChaindata, opts.Output); err != nil {
+	if err := validateMigrateOptions(opts); err != nil {
 		return MigrateResult{}, err
 	}
 	source, err := openLegacySource(opts.SourceChaindata, opts.CacheMB, opts.Handles, reporter)
@@ -118,13 +109,11 @@ func Migrate(ctx context.Context, opts MigrateOptions) (result MigrateResult, re
 	stateResult, traverseErr := source.TraverseWithTrieNodes(ctx, visitor, sink)
 	traversePhase.Finish(traverseErr)
 	if traverseErr != nil {
-		if closeErr := sink.Close(); closeErr != nil {
-			traverseErr = errors.Join(traverseErr, fmt.Errorf("close direct-state writer: %w", closeErr))
-		}
+		sink.Abort()
 		return MigrateResult{}, traverseErr
 	}
 	flushPhase := reporter.StartPhase("flush_generated_state", nil, "scheme", opts.Scheme)
-	if err := sink.Close(); err != nil {
+	if err := sink.CloseContext(ctx); err != nil {
 		flushPhase.Finish(err)
 		return MigrateResult{}, err
 	}
@@ -141,7 +130,7 @@ func Migrate(ctx context.Context, opts MigrateOptions) (result MigrateResult, re
 		return MigrateResult{}, err
 	}
 
-	dbState, closed, err := finalizeAndVerifyTarget(ctx, disk, dbPath, opts.Scheme, sourceEvidence, stateResult, opts.CacheMB, opts.Handles, reporter, false)
+	dbState, closed, err := finalizeAndVerifyTarget(ctx, disk, dbPath, opts.Scheme, sourceEvidence, stateResult, opts.CacheMB, opts.Handles, reporter)
 	diskClosed = closed
 	if err != nil {
 		return MigrateResult{}, err
@@ -150,19 +139,57 @@ func Migrate(ctx context.Context, opts MigrateOptions) (result MigrateResult, re
 		return MigrateResult{}, fmt.Errorf("target state result mismatch: database %+v source %+v", dbState, stateResult)
 	}
 	report := newDirectVerificationReport(sourceEvidence, stateResult, opts.Scheme)
-	publishPhase := reporter.StartPhase("publish_artifact", nil, "output", opts.Output)
-	if _, err := writeDirectVerificationReport(output.Path(), report); err != nil {
-		publishPhase.Finish(err)
+	if err := publishDirectArtifact(ctx, output, report, opts, reporter); err != nil {
 		return MigrateResult{}, err
+	}
+	return MigrateResult{ArtifactPath: opts.Output, Report: report}, nil
+}
+
+func validateMigrateOptions(opts MigrateOptions) error {
+	if opts.SourceChaindata == "" {
+		return errors.New("source chaindata path is required")
+	}
+	if opts.Output == "" {
+		return errors.New("artifact output path is required")
+	}
+	if opts.Scheme != rawdb.HashScheme && opts.Scheme != rawdb.PathScheme {
+		return fmt.Errorf("scheme must be %q or %q", rawdb.HashScheme, rawdb.PathScheme)
+	}
+	return rejectOutputInsideSource(opts.SourceChaindata, opts.Output)
+}
+
+func publishDirectArtifact(ctx context.Context, output *atomicDir, report DirectVerificationReport, opts MigrateOptions, reporter *progressReporter) error {
+	phase := reporter.StartPhase("publish_artifact", nil, "output", opts.Output)
+	if err := ctx.Err(); err != nil {
+		phase.Finish(err)
+		return err
+	}
+	if _, err := writeDirectVerificationReport(output.Path(), report); err != nil {
+		phase.Finish(err)
+		return err
+	}
+	stored, err := loadDirectVerificationReport(output.Path())
+	if err != nil {
+		phase.Finish(err)
+		return fmt.Errorf("re-open generated direct verification report: %w", err)
+	}
+	if !sameDirectVerificationReport(stored, report) {
+		err := errors.New("re-opened direct verification report does not match generated report")
+		phase.Finish(err)
+		return err
 	}
 	if err := rejectOutputInsideSource(opts.SourceChaindata, opts.Output); err != nil {
-		publishPhase.Finish(err)
-		return MigrateResult{}, err
+		phase.Finish(err)
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		phase.Finish(err)
+		return err
 	}
 	if err := output.Commit(); err != nil {
-		publishPhase.Finish(err)
-		return MigrateResult{}, err
+		phase.Finish(err)
+		return err
 	}
-	publishPhase.Finish(nil)
-	return MigrateResult{ArtifactPath: opts.Output, Report: report}, nil
+	phase.Finish(nil)
+	return nil
 }

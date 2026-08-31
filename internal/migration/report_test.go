@@ -20,6 +20,9 @@ func TestVerificationReportHexTypesJSONRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := os.Mkdir(filepath.Join(dir, "db"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	var wire struct {
 		ManifestSHA256  string `json:"manifest_sha256"`
 		StateFileSHA256 string `json:"state_file_sha256"`
@@ -99,11 +102,43 @@ func TestLoadVerificationReportRejectsInvalidHashEvidence(t *testing.T) {
 				t.Fatal(err)
 			}
 			dir := t.TempDir()
+			if err := os.Mkdir(filepath.Join(dir, "db"), 0o755); err != nil {
+				t.Fatal(err)
+			}
 			if err := os.WriteFile(filepath.Join(dir, VerificationFileName), data, 0o644); err != nil {
 				t.Fatal(err)
 			}
 			if _, err := loadVerificationReport(dir); err == nil {
 				t.Fatal("invalid verification report unexpectedly loaded")
+			}
+		})
+	}
+}
+
+func TestVerificationReportRejectsInvalidSemanticEvidence(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		mutate func(*VerificationReport)
+	}{
+		{name: "invalid counts", mutate: func(report *VerificationReport) {
+			report.Counts = bundle.Counts{Accounts: 1, Records: 1}
+		}},
+		{name: "empty block hash", mutate: func(report *VerificationReport) {
+			report.Head.BlockHash = common.Hash{}
+		}},
+		{name: "empty recomputed root", mutate: func(report *VerificationReport) {
+			report.Head.StateRoot = common.Hash{}
+			report.RecomputedRoot = common.Hash{}
+		}},
+		{name: "bundle database engine", mutate: func(report *VerificationReport) {
+			report.DBEngine = "pebble-v2"
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			report := validTestVerificationReport()
+			test.mutate(&report)
+			if err := report.Validate(); err == nil {
+				t.Fatalf("invalid report %+v was accepted", report)
 			}
 		})
 	}

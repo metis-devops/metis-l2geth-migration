@@ -257,6 +257,37 @@ func TestStoragePipelineConsumerFailureStopsProducer(t *testing.T) {
 	}
 }
 
+func TestStoragePipelineStartsOnlyBeyondThreshold(t *testing.T) {
+	for _, count := range []int{storageTriePipelineThreshold, storageTriePipelineThreshold + 1} {
+		t.Run(fmt.Sprintf("slots=%d", count), func(t *testing.T) {
+			entries := make([]iteratorLeaf, count)
+			for index := range entries {
+				entries[index] = iteratorLeaf{key: iteratorKey(byte(index + 1)), value: []byte{byte(index%0x7f + 1)}}
+			}
+			traverser := &stateTraverser{ctx: context.Background()}
+			first, err := traverser.consumeStoragePrefix(
+				common.HexToHash("0xa1"), trie.NewStackTrie(nil),
+				trie.NewIterator(&reusingLeafNodeIterator{leaves: entries, index: -1}),
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if traverser.counts.StorageSlots != storageTriePipelineThreshold {
+				t.Fatalf("consumed %d prefix slots", traverser.counts.StorageSlots)
+			}
+			if count == storageTriePipelineThreshold {
+				if first != nil {
+					t.Fatalf("exact-threshold trie returned an extra leaf: %+v", first)
+				}
+				return
+			}
+			if first == nil || first.slotHash != common.BytesToHash(entries[storageTriePipelineThreshold].key) {
+				t.Fatalf("first pipelined leaf is %+v", first)
+			}
+		})
+	}
+}
+
 func TestStoragePipelineCompletesInOrderAndMatchesSerialRoot(t *testing.T) {
 	entries := make([]iteratorLeaf, storageTriePipelineThreshold+storageTrieReadAhead+1)
 	wantSlots := make([]common.Hash, 0, len(entries))
@@ -349,9 +380,8 @@ func TestTraverseStateStorageConsumerFailureStopsStorageStream(t *testing.T) {
 	wantErr := errors.New("injected storage consumer failure")
 	_, _, err = traverseState(context.Background(), disk, trieDB, fixture.root, &failingStorageVisitor{err: wantErr}, true, stateTraversalOptions{
 		NodeIndex: trieNodeIndexOptions{Parent: scratch, CacheMB: 16, Handles: 16},
-		ReadCode: func(db ethdb.KeyValueReader, hash common.Hash) []byte {
-			code, _ := db.Get(hash[:])
-			return code
+		ReadCode: func(db ethdb.KeyValueReader, hash common.Hash) ([]byte, error) {
+			return db.Get(hash[:])
 		},
 	})
 	if !errors.Is(err, wantErr) {

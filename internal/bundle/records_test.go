@@ -1,9 +1,12 @@
 package bundle
 
 import (
+	"bufio"
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
+	"errors"
+	"io"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -15,12 +18,169 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+func TestRecordPayloadLengthBounds(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		typ     byte
+		length  uint64
+		wantErr bool
+	}{
+		{name: "account maximum", typ: RecordAccount, length: maxAccountPayload},
+		{name: "account oversized", typ: RecordAccount, length: maxAccountPayload + 1, wantErr: true},
+		{name: "storage maximum", typ: RecordStorage, length: maxStoragePayload},
+		{name: "storage oversized", typ: RecordStorage, length: maxStoragePayload + 1, wantErr: true},
+		{name: "empty code", typ: RecordCode, length: 0, wantErr: true},
+		{name: "code maximum", typ: RecordCode, length: maxCodePayload},
+		{name: "code oversized", typ: RecordCode, length: maxCodePayload + 1, wantErr: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			err := validatePayloadLength(test.typ, test.length)
+			if (err != nil) != test.wantErr {
+				t.Fatalf("validation returned %v", err)
+			}
+		})
+	}
+}
+
+func TestScanRecordsBorrowedReusesPayloadAndOwnedDoesNot(t *testing.T) {
+	dir := t.TempDir()
+	head, headerRLP := testHead(t)
+	writer, err := NewWriter(context.Background(), dir, CompressionNone, head, headerRLP)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for nonce := uint64(1); nonce <= 2; nonce++ {
+		account := types.NewEmptyStateAccount()
+		account.Nonce = nonce
+		fullRLP, err := rlp.EncodeToBytes(account)
+		if err != nil {
+			t.Fatal(err)
+		}
+		payload, err := EncodeAccount(account)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := writer.WriteAccount(common.BigToHash(new(big.Int).SetUint64(nonce)), payload, uint64(len(fullRLP))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	result, err := writer.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest := NewManifest(SourceEvidence{HeadBefore: head, HeadAfter: head, HeaderRLP: hexutil.Bytes(headerRLP)}, result.Counts, StateFile{
+		Name: result.FileName, Compression: result.Compression, Size: result.Size,
+		RecordPayloadBytes: result.RecordPayloadBytes, SHA256: result.SHA256, RecordChainHash: result.RecordChainHash,
+	})
+	if _, err := WriteManifest(dir, manifest); err != nil {
+		t.Fatal(err)
+	}
+	var borrowedPointers []*byte
+	if _, err := ScanRecordsBorrowed(context.Background(), dir, manifest, func(record Record) error {
+		borrowedPointers = append(borrowedPointers, &record.Payload[0])
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(borrowedPointers) != 2 || borrowedPointers[0] != borrowedPointers[1] {
+		t.Fatalf("borrowed scanner did not reuse payload storage: %p %p", borrowedPointers[0], borrowedPointers[1])
+	}
+	var ownedPayloads [][]byte
+	if _, err := ScanRecords(context.Background(), dir, manifest, func(record Record) error {
+		ownedPayloads = append(ownedPayloads, record.Payload)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if &ownedPayloads[0][0] == &ownedPayloads[1][0] {
+		t.Fatal("owned scanner reused payload storage")
+	}
+}
+
+func TestWriterHonorsCanceledContextBeforeRecord(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	dir := t.TempDir()
+	head, headerRLP := testHead(t)
+	writer, err := NewWriter(ctx, dir, CompressionNone, head, headerRLP)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cancel()
+	if err := writer.WriteCode(common.HexToHash("0x01"), []byte{0x60}); !errors.Is(err, context.Canceled) {
+		t.Fatalf("write returned %v, want cancellation", err)
+	}
+	if err := writer.Abort(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestWriterHonorsCancellationDuringRecord(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	destination := &cancelOnWrite{cancel: cancel}
+	writer := &Writer{ctx: ctx, buffer: bufio.NewWriterSize(destination, 1)}
+	err := writer.WriteCode(common.HexToHash("0x01"), make([]byte, ioChunkSize+1))
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("write returned %v, want cancellation", err)
+	}
+}
+
+func TestScannerPayloadReadHonorsMidRecordCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	source := &cancelAfterReader{remaining: ioChunkSize + 1, cancel: cancel}
+	scanner := &recordScanner{
+		ctx:    ctx,
+		reader: bufio.NewReaderSize(source, ioChunkSize),
+	}
+	scanner.chainHasher.Start(new(common.Hash), []byte{bundleRecordAccountHeaderByteForTest})
+	err := scanner.readPayload(make([]byte, ioChunkSize+1))
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("payload read returned %v, want cancellation", err)
+	}
+}
+
+const bundleRecordAccountHeaderByteForTest = RecordAccount
+
+type cancelAfterReader struct {
+	remaining int
+	cancel    context.CancelFunc
+	canceled  bool
+}
+
+type cancelOnWrite struct {
+	cancel context.CancelFunc
+	writes int
+}
+
+func (w *cancelOnWrite) Write(data []byte) (int, error) {
+	w.writes++
+	if w.writes == 1 {
+		w.cancel()
+	}
+	return len(data), nil
+}
+
+func (r *cancelAfterReader) Read(destination []byte) (int, error) {
+	if r.remaining == 0 {
+		return 0, io.EOF
+	}
+	read := min(len(destination), r.remaining)
+	for index := range read {
+		destination[index] = 1
+	}
+	r.remaining -= read
+	if !r.canceled {
+		r.canceled = true
+		r.cancel()
+	}
+	return read, nil
+}
+
 func TestRecordRoundTrip(t *testing.T) {
 	for _, compression := range []string{CompressionNone, CompressionZstd} {
 		t.Run(compression, func(t *testing.T) {
 			dir := t.TempDir()
 			head, headerRLP := testHead(t)
-			writer, err := NewWriter(dir, compression, head, headerRLP)
+			writer, err := NewWriter(context.Background(), dir, compression, head, headerRLP)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -67,7 +227,8 @@ func TestRecordRoundTrip(t *testing.T) {
 			if len(records) != 1 || records[0].Type != RecordAccount || records[0].AccountHash != accountHash {
 				t.Fatalf("unexpected records: %+v", records)
 			}
-			if scan.Counts != result.Counts || scan.RecordPayloadBytes != result.RecordPayloadBytes ||
+			wantWireCounts := WireCounts{Accounts: 1, Records: 1, PayloadBytes: result.RecordPayloadBytes}
+			if scan.Counts != wantWireCounts ||
 				scan.FileSHA256 != result.SHA256 || scan.RecordChainHash != result.RecordChainHash {
 				t.Fatalf("scan result mismatch: %+v writer %+v", scan, result)
 			}
@@ -83,7 +244,7 @@ func TestRecordRoundTrip(t *testing.T) {
 func TestScanRecordsRejectsTrailingData(t *testing.T) {
 	dir := t.TempDir()
 	head, headerRLP := testHead(t)
-	writer, err := NewWriter(dir, CompressionNone, head, headerRLP)
+	writer, err := NewWriter(context.Background(), dir, CompressionNone, head, headerRLP)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,6 +275,9 @@ func TestScanRecordsRejectsTrailingData(t *testing.T) {
 		RecordPayloadBytes: result.RecordPayloadBytes,
 		SHA256:             common.Hash(sum), RecordChainHash: result.RecordChainHash,
 	})
+	if _, err := WriteManifest(dir, manifest); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := ScanRecords(context.Background(), dir, manifest, nil); err == nil {
 		t.Fatal("record stream with trailing data unexpectedly verified")
 	}
@@ -122,7 +286,7 @@ func TestScanRecordsRejectsTrailingData(t *testing.T) {
 func TestScanRecordsRejectsZstdSkippableTrailingFrame(t *testing.T) {
 	dir := t.TempDir()
 	head, headerRLP := testHead(t)
-	writer, err := NewWriter(dir, CompressionZstd, head, headerRLP)
+	writer, err := NewWriter(context.Background(), dir, CompressionZstd, head, headerRLP)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,6 +323,9 @@ func TestScanRecordsRejectsZstdSkippableTrailingFrame(t *testing.T) {
 		RecordPayloadBytes: result.RecordPayloadBytes,
 		SHA256:             common.Hash(sum), RecordChainHash: result.RecordChainHash,
 	})
+	if _, err := WriteManifest(dir, manifest); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := ScanRecords(context.Background(), dir, manifest, nil); err == nil {
 		t.Fatal("zstd stream with a trailing skippable frame unexpectedly verified")
 	}
@@ -167,7 +334,7 @@ func TestScanRecordsRejectsZstdSkippableTrailingFrame(t *testing.T) {
 func TestLoadManifestRejectsTrailingJSON(t *testing.T) {
 	dir := t.TempDir()
 	head, headerRLP := testHead(t)
-	writer, err := NewWriter(dir, CompressionNone, head, headerRLP)
+	writer, err := NewWriter(context.Background(), dir, CompressionNone, head, headerRLP)
 	if err != nil {
 		t.Fatal(err)
 	}

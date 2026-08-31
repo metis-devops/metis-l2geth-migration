@@ -185,13 +185,31 @@ func (v *countingStateVisitor) Account(hash common.Hash, account *types.StateAcc
 			return err
 		}
 	}
+	v.countAccount(account, fullRLP)
+	return nil
+}
+
+func (v *countingStateVisitor) AccountFromBundle(hash common.Hash, account *types.StateAccount, fullRLP, slimRLP []byte) error {
+	if v.next != nil {
+		if visitor, ok := v.next.(bundleAccountVisitor); ok {
+			if err := visitor.AccountFromBundle(hash, account, fullRLP, slimRLP); err != nil {
+				return err
+			}
+		} else if err := v.next.Account(hash, account, fullRLP); err != nil {
+			return err
+		}
+	}
+	v.countAccount(account, fullRLP)
+	return nil
+}
+
+func (v *countingStateVisitor) countAccount(account *types.StateAccount, fullRLP []byte) {
 	v.counts.accounts.Add(1)
 	v.counts.records.Add(1)
 	v.counts.payloadBytes.Add(uint64(len(fullRLP)))
 	if common.BytesToHash(account.CodeHash) != types.EmptyCodeHash {
 		v.counts.codeReferences.Add(1)
 	}
-	return nil
 }
 
 func (v *countingStateVisitor) Storage(accountHash, slotHash common.Hash, valueRLP []byte) error {
@@ -272,15 +290,5 @@ func counterProgressSnapshot(counter *atomic.Uint64, name, rateName string) prog
 			attrs = append(attrs, rateName, uint64(float64(value)/elapsed.Seconds()))
 		}
 		return attrs
-	}
-}
-
-func percentageProgressSnapshot(percent *atomic.Uint64, estimated bool) progressSnapshot {
-	return func(_ time.Duration, completed bool) []any {
-		value := percent.Load()
-		if completed {
-			value = 100
-		}
-		return []any{"progress", fmt.Sprintf("%d%%", value), "estimated", estimated}
 	}
 }

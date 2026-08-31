@@ -19,6 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/metis-devops/metis-l2geth-migration/internal/bundle"
 	"github.com/metis-devops/metis-l2geth-migration/internal/readonlydb"
+	leveldb "github.com/syndtr/goleveldb/leveldb"
 )
 
 type legacySource struct {
@@ -72,9 +73,12 @@ func (s *legacySource) traverse(ctx context.Context, visitor StateVisitor, nodes
 		}
 	}()
 	result, _, err := traverseState(ctx, s.db, trieDB, s.head.StateRoot, visitor, false, stateTraversalOptions{
-		ReadCode: func(db ethdb.KeyValueReader, hash common.Hash) []byte {
-			code, _ := db.Get(hash[:])
-			return code
+		ReadCode: func(db ethdb.KeyValueReader, hash common.Hash) ([]byte, error) {
+			code, err := db.Get(hash[:])
+			if errors.Is(err, leveldb.ErrNotFound) {
+				return nil, nil
+			}
+			return code, err
 		},
 		TrieNodes: nodes,
 	})
@@ -145,34 +149,48 @@ func readLegacyHead(db ethdb.Database) (bundle.Head, []byte, error) {
 }
 
 func rejectOutputInsideSource(source, output string) error {
-	sourceAbs, err := filepath.EvalSymlinks(source)
+	return rejectOutputInsideDirectory(source, output,
+		"output must not be inside the source chaindata directory",
+		"output aliases the source chaindata directory",
+	)
+}
+
+func rejectOutputInsideBundle(bundlePath, output string) error {
+	return rejectOutputInsideDirectory(bundlePath, output,
+		"artifact output must not be inside the input bundle directory",
+		"artifact output aliases the input bundle directory",
+	)
+}
+
+func rejectOutputInsideDirectory(input, output, insideMessage, aliasMessage string) error {
+	inputAbs, err := filepath.EvalSymlinks(input)
 	if err != nil {
-		return fmt.Errorf("resolve source path: %w", err)
+		return fmt.Errorf("resolve input path: %w", err)
 	}
-	sourceAbs, err = filepath.Abs(sourceAbs)
+	inputAbs, err = filepath.Abs(inputAbs)
 	if err != nil {
-		return fmt.Errorf("resolve absolute source path: %w", err)
+		return fmt.Errorf("resolve absolute input path: %w", err)
 	}
 	outputAbs, err := resolvePathWithMissing(output)
 	if err != nil {
 		return fmt.Errorf("resolve output path: %w", err)
 	}
-	rel, err := filepath.Rel(sourceAbs, outputAbs)
+	rel, err := filepath.Rel(inputAbs, outputAbs)
 	if err != nil {
-		return fmt.Errorf("compare source and output paths: %w", err)
+		return fmt.Errorf("compare input and output paths: %w", err)
 	}
 	if rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator))) {
-		return errors.New("output must not be inside the source chaindata directory")
+		return errors.New(insideMessage)
 	}
-	sourceInfo, err := os.Stat(sourceAbs)
+	inputInfo, err := os.Stat(inputAbs)
 	if err != nil {
-		return fmt.Errorf("stat source path: %w", err)
+		return fmt.Errorf("stat input path: %w", err)
 	}
 	for probe := outputAbs; ; probe = filepath.Dir(probe) {
 		info, statErr := os.Stat(probe)
 		switch {
-		case statErr == nil && os.SameFile(sourceInfo, info):
-			return errors.New("output aliases the source chaindata directory")
+		case statErr == nil && os.SameFile(inputInfo, info):
+			return errors.New(aliasMessage)
 		case statErr == nil:
 		case errors.Is(statErr, os.ErrNotExist):
 		default:

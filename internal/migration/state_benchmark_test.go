@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"math/big"
+	"os"
 	"path/filepath"
 	"sort"
 	"testing"
@@ -61,6 +63,81 @@ func BenchmarkTraverseStateStoragePipeline(b *testing.B) {
 	})
 }
 
+func BenchmarkPortableImport(b *testing.B) {
+	chaindata := filepath.Join(b.TempDir(), "chaindata")
+	root, _ := buildTraversalBenchmarkState(b, chaindata, traversalBenchmarkWorkload{
+		accounts: traversalBenchmarkAccounts, storageEvery: traversalBenchmarkStorageEvery,
+		slotsPerAccount: traversalBenchmarkSlotsPerAccount, codeSize: traversalBenchmarkCodeSize,
+	})
+	writeTraversalBenchmarkHead(b, chaindata, root)
+	outputRoot := b.TempDir()
+	for _, compression := range []string{bundle.CompressionNone, bundle.CompressionZstd} {
+		bundleDir := filepath.Join(outputRoot, "bundle-"+compression)
+		exported, err := Export(context.Background(), ExportOptions{
+			SourceChaindata: chaindata, Output: bundleDir, Compression: compression, CacheMB: 128, Handles: 128,
+		})
+		if err != nil {
+			b.Fatal(err)
+		}
+		for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme} {
+			b.Run(compression+"/"+scheme+"/direct", func(b *testing.B) {
+				b.ReportAllocs()
+				for range b.N {
+					runRoot, err := os.MkdirTemp(outputRoot, "direct-import-")
+					if err != nil {
+						b.Fatal(err)
+					}
+					output := filepath.Join(runRoot, "artifact")
+					if _, err := Import(context.Background(), ImportOptions{
+						Bundle: bundleDir, Output: output, Scheme: scheme, CacheMB: 128, Handles: 128,
+					}); err != nil {
+						b.Fatal(err)
+					}
+				}
+			})
+			b.Run(compression+"/"+scheme+"/generate-trie-reference", func(b *testing.B) {
+				b.ReportAllocs()
+				for range b.N {
+					runRoot, err := os.MkdirTemp(outputRoot, "generate-trie-reference-")
+					if err != nil {
+						b.Fatal(err)
+					}
+					output := filepath.Join(runRoot, "db")
+					result := buildGenerateTrieReference(b, bundleDir, output, scheme, exported.Manifest.Source)
+					reporter := newProgressReporter("reference-benchmark", ProgressOptions{})
+					if _, err := verifyDatabase(context.Background(), output, scheme, exported.Manifest.Source, result.State, 128, 128, reporter, filepath.Dir(output)); err != nil {
+						b.Fatal(err)
+					}
+				}
+			})
+		}
+	}
+}
+
+func writeTraversalBenchmarkHead(b *testing.B, chaindata string, root common.Hash) {
+	b.Helper()
+	kv, err := gethleveldb.New(chaindata, 128, 128, "portable-import-benchmark-head", false)
+	if err != nil {
+		b.Fatal(err)
+	}
+	disk := rawdb.NewDatabase(kv)
+	header := &types.Header{
+		UncleHash: types.EmptyUncleHash, Root: root,
+		TxHash: types.EmptyTxsHash, ReceiptHash: types.EmptyReceiptsHash,
+		Difficulty: big.NewInt(1), Number: big.NewInt(1), GasLimit: 30_000_000, Time: 1,
+	}
+	rawdb.WriteHeader(disk, header)
+	rawdb.WriteCanonicalHash(disk, header.Hash(), 1)
+	rawdb.WriteHeadBlockHash(disk, header.Hash())
+	rawdb.WriteHeadHeaderHash(disk, header.Hash())
+	if err := disk.SyncKeyValue(); err != nil {
+		b.Fatal(err)
+	}
+	if err := disk.Close(); err != nil {
+		b.Fatal(err)
+	}
+}
+
 func benchmarkTraverseState(b *testing.B, workload traversalBenchmarkWorkload) {
 	b.Helper()
 	chaindata := filepath.Join(b.TempDir(), "chaindata")
@@ -82,9 +159,8 @@ func benchmarkTraverseState(b *testing.B, workload traversalBenchmarkWorkload) {
 		}
 	})
 	opts := stateTraversalOptions{
-		ReadCode: func(db ethdb.KeyValueReader, hash common.Hash) []byte {
-			code, _ := db.Get(hash[:])
-			return code
+		ReadCode: func(db ethdb.KeyValueReader, hash common.Hash) ([]byte, error) {
+			return db.Get(hash[:])
 		},
 	}
 	b.ReportAllocs()
@@ -207,7 +283,7 @@ func buildTraversalBenchmarkState(b *testing.B, chaindata string, workload trave
 	if stats.Updated != 0 || stats.Deleted != 0 {
 		b.Fatalf("benchmark fixture state reconciled unexpectedly: %+v", stats)
 	}
-	if err := removeFlatState(context.Background(), disk); err != nil {
+	if err := removeFlatStateForTest(context.Background(), disk); err != nil {
 		b.Fatal(err)
 	}
 	if err := disk.SyncKeyValue(); err != nil {

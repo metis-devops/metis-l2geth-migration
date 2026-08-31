@@ -1,6 +1,7 @@
 package migration
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"sync"
@@ -49,31 +50,49 @@ func (t *stateTraverser) traverseStorage(accountHash, expectedRoot common.Hash) 
 }
 
 func (t *stateTraverser) consumeStorage(accountHash common.Hash, storageStack *trie.StackTrie, storage *trie.Iterator) error {
-	for range storageTriePipelineThreshold {
-		if err := t.ctx.Err(); err != nil {
-			return err
-		}
-		if !storage.Next() {
-			if storage.Err != nil {
-				return fmt.Errorf("iterate storage trie for account %s: %w", accountHash, storage.Err)
-			}
-			return nil
-		}
-		if err := t.processStorageSlot(accountHash, storageStack, storage.Key, storage.Value); err != nil {
-			return err
-		}
+	first, err := t.consumeStoragePrefix(accountHash, storageStack, storage)
+	if err != nil || first == nil {
+		return err
 	}
 	stream := newStorageTrieStream(t.ctx, accountHash, storage)
 	defer stream.close()
+	if err := t.processStorageSlot(accountHash, storageStack, first.slotHash[:], first.value); err != nil {
+		return err
+	}
 	for leaf := range stream.leaves {
 		if err := t.processStorageSlot(accountHash, storageStack, leaf.slotHash[:], leaf.value); err != nil {
 			return err
 		}
 	}
-	if err := stream.wait(); err != nil {
-		return err
+	return stream.wait()
+}
+
+func (t *stateTraverser) consumeStoragePrefix(accountHash common.Hash, storageStack *trie.StackTrie, storage *trie.Iterator) (*storageTrieLeaf, error) {
+	for range storageTriePipelineThreshold {
+		if err := t.ctx.Err(); err != nil {
+			return nil, err
+		}
+		if !storage.Next() {
+			if storage.Err != nil {
+				return nil, fmt.Errorf("iterate storage trie for account %s: %w", accountHash, storage.Err)
+			}
+			return nil, nil
+		}
+		if err := t.processStorageSlot(accountHash, storageStack, storage.Key, storage.Value); err != nil {
+			return nil, err
+		}
 	}
-	return nil
+	if !storage.Next() {
+		if storage.Err != nil {
+			return nil, fmt.Errorf("iterate storage trie for account %s: %w", accountHash, storage.Err)
+		}
+		return nil, nil
+	}
+	if len(storage.Key) != common.HashLength {
+		return nil, fmt.Errorf("account %s storage key has length %d", accountHash, len(storage.Key))
+	}
+	first := storageTrieLeaf{slotHash: common.Hash(storage.Key), value: bytes.Clone(storage.Value)}
+	return &first, nil
 }
 
 func (t *stateTraverser) processStorageSlot(accountHash common.Hash, stack *trie.StackTrie, key, value []byte) error {

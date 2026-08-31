@@ -1,6 +1,7 @@
 package migration
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -29,11 +30,19 @@ func newDirectStateWriter(db ethdb.Database, scheme string) *directStateWriter {
 }
 
 func (w *directStateWriter) Account(hash common.Hash, account *types.StateAccount, _ []byte) error {
+	return w.writeFlatAccount(hash, types.SlimAccountRLP(*account))
+}
+
+func (w *directStateWriter) AccountFromBundle(hash common.Hash, _ *types.StateAccount, _, slimRLP []byte) error {
+	return w.writeFlatAccount(hash, slimRLP)
+}
+
+func (w *directStateWriter) writeFlatAccount(hash common.Hash, slimRLP []byte) error {
 	if w.scheme == rawdb.HashScheme {
 		return nil
 	}
 	key := prefixedKey(rawdb.SnapshotAccountPrefix, hash[:])
-	if err := w.batch.Put(key, types.SlimAccountRLP(*account)); err != nil {
+	if err := w.batch.Put(key, slimRLP); err != nil {
 		return fmt.Errorf("write flat account %s: %w", hash, err)
 	}
 	return w.flushIfNeeded()
@@ -98,6 +107,26 @@ func (w *directStateWriter) Close() error {
 	return nil
 }
 
+// CloseContext flushes the final batch only while ctx remains active. A
+// cancellation immediately before the flush discards the pending batch.
+func (w *directStateWriter) CloseContext(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		w.Abort()
+		return err
+	}
+	return w.Close()
+}
+
+// Abort closes the writer without flushing its pending batch. It is
+// idempotent so failure and deferred-cleanup paths may both call it.
+func (w *directStateWriter) Abort() {
+	if w == nil || w.closed {
+		return
+	}
+	w.closed = true
+	w.batch.Close()
+}
+
 // capturingKeyValueWriter lets rawdb's pinned trie-layout helper remain the
 // single source of truth without allowing its log.Crit error path to terminate
 // the process. The original error is returned by the enclosing operation.
@@ -125,5 +154,6 @@ func (w *capturingKeyValueWriter) Err() error {
 }
 
 var _ StateVisitor = (*directStateWriter)(nil)
+var _ bundleAccountVisitor = (*directStateWriter)(nil)
 var _ trieNodeSink = (*directStateWriter)(nil)
 var _ ethdb.KeyValueWriter = (*capturingKeyValueWriter)(nil)

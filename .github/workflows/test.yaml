@@ -1,5 +1,8 @@
 name: test
 
+env:
+  GOTOOLCHAIN: local
+
 on:
   push:
     branches:
@@ -16,15 +19,65 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
-          go-version: "stable"
-          check-latest: true
+          go-version: "1.27.0"
+          check-latest: false
       - name: Golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: latest
+          version: v2.13.1
           skip-cache: true
           install-only: true
       - run: make ci test-race
+
+  cross-build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.27.0"
+          check-latest: false
+      - name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
+        env:
+          CGO_ENABLED: "0"
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: go build -trimpath -o "${RUNNER_TEMP}/l2state-${GOOS}-${GOARCH}" ./cmd/l2state
+
+  fuzz:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - package: ./internal/bundle
+            fuzz: FuzzDecodeAccount
+          - package: ./internal/bundle
+            fuzz: FuzzRecordFraming
+          - package: ./internal/strictio
+            fuzz: FuzzStrictJSON
+          - package: ./internal/migration
+            fuzz: FuzzSemanticRecords
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.27.0"
+          check-latest: false
+      - name: Fuzz ${{ matrix.fuzz }}
+        run: go test "${{ matrix.package }}" -run '^$' -fuzz '^${{ matrix.fuzz }}$' -fuzztime 30s
 
   image:
     runs-on: ubuntu-latest
@@ -37,6 +90,13 @@ jobs:
           context: .
           pull: true
           push: false
-          load: false
+          load: true
+          tags: l2state:test
+          provenance: false
+          sbom: false
+          build-args: |
+            TOOL_VERSION=git-${{ github.sha }}
           cache-from: type=gha,scope=smock-check-${{ runner.os }}-${{ runner.arch }}
           cache-to: type=gha,mode=max,scope=smock-check-${{ runner.os }}-${{ runner.arch }},ignore-error=true
+      - name: Verify production image version
+        run: docker run --rm l2state:test version | grep -F "l2state git-${GITHUB_SHA} "

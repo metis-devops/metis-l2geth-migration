@@ -49,8 +49,7 @@ func TestCLIEndToEnd(t *testing.T) {
 	assertHexJSONField(t, stdout.Bytes(), "verification.record_chain_hash", 32)
 	assertProgressLog(t, stderr.String(), "import",
 		"phase=scan_bundle",
-		"phase=generate_trie",
-		"estimated=true",
+		"phase=flush_generated_state",
 		"phase=verify_state",
 		"phase=inspect_database",
 	)

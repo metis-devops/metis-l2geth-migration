@@ -39,6 +39,10 @@ make build
 The version command reports the main-module and go-ethereum module versions
 embedded by the Go toolchain. Local development builds may report a generated
 pseudo-version or `(devel)` when VCS metadata is unavailable.
+Official images exclude `.git` from their build context and inject
+`git-<full GitHub SHA>` explicitly, so manifests and verification reports retain
+exact production-image provenance. Ad hoc Docker builds default to
+`container-devel` unless `TOOL_VERSION` is supplied.
 
 The module pins go-ethereum to v1.17.5 at commit
 `9621c6ad10934a01b5514886fb6fbd87640b6c05`. It also pins a newer compatible
@@ -101,6 +105,10 @@ strictly expand every account back to full consensus RLP before rebuilding the
 account trie. In `manifest.json`, `state_file.record_payload_bytes` measures
 the compact record payloads, while `counts.payload_bytes` measures the expanded
 consensus payloads used to compare portable and direct migration results.
+Portable import consumes this ordered stream with the same `StackTrie` rebuild
+used for root validation and writes target trie nodes during that scan. Hash
+imports never create temporary flat state; path imports write only the current
+flat state required by geth before adopting the generated path trie.
 
 Import the bundle into either scheme:
 
@@ -146,8 +154,8 @@ metis-hash/
 The schemes differ inside `db/`:
 
 - `hash` contains the current hash-trie nodes and referenced contract code.
-  Direct migration writes those nodes without temporary flat state; portable
-  import removes its temporary flat-state keys before verification.
+  Direct and portable migration write those nodes without temporary flat
+  state.
 - `path` retains current flat state and path-trie nodes, then records geth's
   completed snapshot metadata and state ID 0. It has no historical layers.
 
@@ -176,6 +184,12 @@ and matching hash-to-number, canonical, `LastBlock`, and `LastHeader` metadata.
 Artifacts produced by older builds without that evidence are rejected even if
 they use the same report version; recreate them with the current `import` or
 `migrate` command.
+
+Version 3 inputs also have exact top-level layouts. Bundle and artifact roots,
+their required files, and the artifact `db` entry must not be symbolic links.
+Extra top-level entries, including `.DS_Store`, README, or checksum files, are
+rejected. Manifest and verification JSON files are limited to 1 MiB. An import
+output must be outside its input bundle.
 
 Generated JSON hashes and digests are lowercase, 32-byte, `0x`-prefixed geth
 hashes. Header RLP is encoded as `0x`-prefixed bytes. Missing, malformed,
@@ -209,23 +223,26 @@ external canonicality, or L1 finality.
 - Progress logs go to standard error; the final JSON result is the only output
   on standard output. Phase changes appear immediately and long phases update
   every 30 seconds. Use `--quiet` to suppress progress logs.
-- Import and verification have exact record totals. Trie-generation
-  percentages are estimates. Export and direct migration do not report a
-  percentage or ETA because finding the source total would require another
-  full traversal.
+- Import and verification have exact record totals. Export and direct
+  migration do not report a percentage or ETA because finding the source total
+  would require another full traversal.
 - The final output path must not exist. Export and direct migration also reject
   the source chaindata path and paths inside it. Work is staged in a sibling
   `.partial-*` directory, synced, verified, and published with an
   operating-system no-replace rename.
-- Cancellation or failure removes only the partial directory created by that
-  invocation. The final path never appears. Resume is not supported; rerun
-  with a new output path.
+- Cancellation or any failure before publication removes only the partial
+  directory created by that invocation, and the final path never appears. If
+  the no-replace rename succeeds but syncing the parent directory fails, the
+  command returns a `PublicationDurabilityError` and retains the final path
+  with durability explicitly unknown. Do not rerun with that path; verify it
+  against the original bundle or source before deciding whether to retain it.
+- Resume is not supported; ordinary failures must be rerun with a new output
+  path.
 - Plan disk space for the bundle when using export/import. `hash` artifact
-  verification additionally needs the temporary trie-node index. Portable
-  import also needs temporary flat state and, for hash artifacts, its cleanup
-  compaction space. Direct migration generates the target trie during source
-  traversal and does not need a second flat-state staging copy; path artifacts
-  retain their required current flat state.
+  verification additionally needs the temporary trie-node index. Both import
+  workflows generate target trie nodes during their single source or bundle
+  scan and need no second flat-state staging copy; path artifacts retain their
+  required current flat state.
 
 To capture machine output and progress separately:
 
@@ -248,7 +265,9 @@ make test-race
 The tests cover both schemes, zstd and uncompressed bundles, direct and
 portable migrations, independent verification, continued state access through
 geth v1.17.5 APIs, corruption and ordering failures, exact database inventory,
-read-only source handling, cancellation, and atomic publication.
+strict top-level layouts, read-only source handling, cancellation, atomic
+publication fault injection, a GenerateTrie reference build, parser fuzzing,
+and supported cross-build targets.
 
 The committed canary was generated with legacy l2geth commit `e795a258d3f2`,
 default `UsingOVM=true`, and no trie preimages. It includes the complete

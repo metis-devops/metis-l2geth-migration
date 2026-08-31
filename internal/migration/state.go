@@ -23,7 +23,7 @@ type StateVisitor interface {
 	Code(accountHash, codeHash common.Hash, code []byte) error
 }
 
-type codeReader func(ethdb.KeyValueReader, common.Hash) []byte
+type codeReader func(ethdb.KeyValueReader, common.Hash) ([]byte, error)
 
 type stateTraversalOptions struct {
 	NodeIndex trieNodeIndexOptions
@@ -97,7 +97,7 @@ func newStateTraverser(
 ) *stateTraverser {
 	readCode := opts.ReadCode
 	if readCode == nil {
-		readCode = rawdb.ReadCode
+		readCode = readCodeWithFallback
 	}
 	inventory := &stateInventory{scheme: trieDB.Scheme()}
 	traverser := &stateTraverser{
@@ -203,7 +203,10 @@ func (t *stateTraverser) processCode(accountHash, codeHash common.Hash) error {
 	if !t.codeHashes.Add(codeHash) {
 		return nil
 	}
-	code := t.readCode(t.disk, codeHash)
+	code, err := t.readCode(t.disk, codeHash)
+	if err != nil {
+		return fmt.Errorf("read account %s code %s: %w", accountHash, codeHash, err)
+	}
 	if len(code) == 0 {
 		return fmt.Errorf("account %s code %s is missing", accountHash, codeHash)
 	}
@@ -219,6 +222,19 @@ func (t *stateTraverser) processCode(accountHash, codeHash common.Hash) error {
 	t.counts.PayloadBytes += uint64(len(code))
 	t.counts.CodeRecords++
 	return nil
+}
+
+func readCodeWithFallback(db ethdb.KeyValueReader, hash common.Hash) ([]byte, error) {
+	for _, key := range [][]byte{prefixedKey(rawdb.CodePrefix, hash[:]), hash[:]} {
+		has, err := db.Has(key)
+		if err != nil {
+			return nil, err
+		}
+		if has {
+			return db.Get(key)
+		}
+	}
+	return nil, nil
 }
 
 func (t *stateTraverser) finalize() (StateResult, stateInventory, error) {

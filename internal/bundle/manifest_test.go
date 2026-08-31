@@ -19,6 +19,9 @@ func TestManifestHexTypesJSONRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(dir, manifest.StateFile.Name), []byte{0}, 0o644); err != nil {
+		t.Fatal(err)
+	}
 	var wire struct {
 		Source struct {
 			HeaderRLP string `json:"header_rlp"`
@@ -115,6 +118,26 @@ func TestManifestRejectsV2AndInvalidRecordPayloadBytes(t *testing.T) {
 				t.Fatalf("validation error is %v, want it to contain %q", err, test.wantErr)
 			}
 		})
+	}
+}
+
+func TestCountsValidatePayloadRelationships(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		counts Counts
+	}{
+		{name: "empty payload", counts: Counts{PayloadBytes: 1}},
+		{name: "non-empty without account", counts: Counts{StorageSlots: 1, Records: 1, PayloadBytes: 1}},
+		{name: "non-empty without payload", counts: Counts{Accounts: 1, Records: 1}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if err := test.counts.Validate(); err == nil {
+				t.Fatalf("invalid counts %+v were accepted", test.counts)
+			}
+		})
+	}
+	if err := (Counts{Accounts: 1, Records: 1, PayloadBytes: 70}).Validate(); err != nil {
+		t.Fatal(err)
 	}
 }
 

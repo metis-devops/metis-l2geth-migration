@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -48,13 +49,7 @@ func Export(ctx context.Context, opts ExportOptions) (result ExportResult, retEr
 		}
 		reporter.Finish(retErr, attrs...)
 	}()
-	if opts.SourceChaindata == "" {
-		return ExportResult{}, errors.New("source chaindata path is required")
-	}
-	if opts.Output == "" {
-		return ExportResult{}, errors.New("bundle output path is required")
-	}
-	if err := rejectOutputInsideSource(opts.SourceChaindata, opts.Output); err != nil {
+	if err := validateExportOptions(opts); err != nil {
 		return ExportResult{}, err
 	}
 	source, err := openLegacySource(opts.SourceChaindata, opts.CacheMB, opts.Handles, reporter)
@@ -80,7 +75,7 @@ func Export(ctx context.Context, opts ExportOptions) (result ExportResult, retEr
 		return ExportResult{}, err
 	}
 
-	recordWriter, err := bundle.NewWriter(output.Path(), opts.Compression, headBefore, headerRLP)
+	recordWriter, err := bundle.NewWriter(ctx, output.Path(), opts.Compression, headBefore, headerRLP)
 	if err != nil {
 		return ExportResult{}, err
 	}
@@ -103,42 +98,7 @@ func Export(ctx context.Context, opts ExportOptions) (result ExportResult, retEr
 		return ExportResult{}, traverseErr
 	}
 	finalizePhase := reporter.StartPhase("finalize_bundle", nil, "output", opts.Output)
-	var (
-		writerResult bundle.WriterResult
-		manifest     bundle.Manifest
-	)
-	finalizeErr := func() error {
-		var err error
-		writerResult, err = recordWriter.Close()
-		if err != nil {
-			return err
-		}
-		if writerResult.Counts != state.Counts {
-			return fmt.Errorf("export record counts mismatch: writer %+v traversal %+v", writerResult.Counts, state.Counts)
-		}
-		sourceEvidence, err := source.ConfirmStableAndClose("export")
-		if err != nil {
-			return err
-		}
-		manifest = bundle.NewManifest(sourceEvidence, state.Counts, bundle.StateFile{
-			Name:               writerResult.FileName,
-			Compression:        writerResult.Compression,
-			Size:               writerResult.Size,
-			RecordPayloadBytes: writerResult.RecordPayloadBytes,
-			SHA256:             writerResult.SHA256,
-			RecordChainHash:    writerResult.RecordChainHash,
-		})
-		if _, err := bundle.WriteManifest(output.Path(), manifest); err != nil {
-			return err
-		}
-		if err := syncFile(filepath.Join(output.Path(), bundle.ManifestFileName)); err != nil {
-			return err
-		}
-		if _, _, err := bundle.LoadManifest(output.Path()); err != nil {
-			return fmt.Errorf("re-open generated manifest: %w", err)
-		}
-		return nil
-	}()
+	manifest, writerResult, finalizeErr := finalizeExportBundle(ctx, source, recordWriter, state, output.Path())
 	finalizePhase.Finish(finalizeErr,
 		"records", writerResult.Counts.Records,
 		"state_file_size", writerResult.Size,
@@ -146,17 +106,91 @@ func Export(ctx context.Context, opts ExportOptions) (result ExportResult, retEr
 	if finalizeErr != nil {
 		return ExportResult{}, finalizeErr
 	}
-	publishPhase := reporter.StartPhase("publish_bundle", nil, "output", opts.Output)
-	if err := rejectOutputInsideSource(opts.SourceChaindata, opts.Output); err != nil {
-		publishPhase.Finish(err)
+	if err := publishExportBundle(ctx, output, opts, reporter); err != nil {
 		return ExportResult{}, err
+	}
+	return ExportResult{BundlePath: opts.Output, Manifest: manifest}, nil
+}
+
+func validateExportOptions(opts ExportOptions) error {
+	if opts.SourceChaindata == "" {
+		return errors.New("source chaindata path is required")
+	}
+	if opts.Output == "" {
+		return errors.New("bundle output path is required")
+	}
+	return rejectOutputInsideSource(opts.SourceChaindata, opts.Output)
+}
+
+func finalizeExportBundle(ctx context.Context, source *legacySource, writer *bundle.Writer, state StateResult, outputPath string) (bundle.Manifest, bundle.WriterResult, error) {
+	if err := ctx.Err(); err != nil {
+		if abortErr := writer.Abort(); abortErr != nil {
+			return bundle.Manifest{}, bundle.WriterResult{}, errors.Join(err, abortErr)
+		}
+		return bundle.Manifest{}, bundle.WriterResult{}, err
+	}
+	writerResult, err := writer.Close()
+	if err != nil {
+		return bundle.Manifest{}, bundle.WriterResult{}, err
+	}
+	if writerResult.Counts != state.Counts {
+		return bundle.Manifest{}, writerResult, fmt.Errorf("export record counts mismatch: writer %+v traversal %+v", writerResult.Counts, state.Counts)
+	}
+	if err := ctx.Err(); err != nil {
+		return bundle.Manifest{}, writerResult, err
+	}
+	sourceEvidence, err := source.ConfirmStableAndClose("export")
+	if err != nil {
+		return bundle.Manifest{}, writerResult, err
+	}
+	manifest := bundle.NewManifest(sourceEvidence, state.Counts, bundle.StateFile{
+		Name: writerResult.FileName, Compression: writerResult.Compression, Size: writerResult.Size,
+		RecordPayloadBytes: writerResult.RecordPayloadBytes,
+		SHA256:             writerResult.SHA256, RecordChainHash: writerResult.RecordChainHash,
+	})
+	if _, err := bundle.WriteManifest(outputPath, manifest); err != nil {
+		return bundle.Manifest{}, writerResult, err
+	}
+	if err := syncFile(filepath.Join(outputPath, bundle.ManifestFileName)); err != nil {
+		return bundle.Manifest{}, writerResult, err
+	}
+	stored, _, err := bundle.LoadManifest(outputPath)
+	if err != nil {
+		return bundle.Manifest{}, writerResult, fmt.Errorf("re-open generated manifest: %w", err)
+	}
+	if !sameManifest(stored, manifest) {
+		return bundle.Manifest{}, writerResult, errors.New("re-opened manifest does not match generated manifest")
+	}
+	return manifest, writerResult, nil
+}
+
+func sameManifest(left, right bundle.Manifest) bool {
+	return left.Format == right.Format && left.Version == right.Version && left.CreatedAt.Equal(right.CreatedAt) &&
+		left.ToolVersion == right.ToolVersion && left.GethVersion == right.GethVersion && left.GethCommit == right.GethCommit &&
+		sameSourceEvidence(left.Source, right.Source) && left.Counts == right.Counts && left.StateFile == right.StateFile &&
+		slices.Equal(left.SupportedSchemes, right.SupportedSchemes)
+}
+
+func publishExportBundle(ctx context.Context, output *atomicDir, opts ExportOptions, reporter *progressReporter) error {
+	phase := reporter.StartPhase("publish_bundle", nil, "output", opts.Output)
+	if err := ctx.Err(); err != nil {
+		phase.Finish(err)
+		return err
+	}
+	if err := rejectOutputInsideSource(opts.SourceChaindata, opts.Output); err != nil {
+		phase.Finish(err)
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		phase.Finish(err)
+		return err
 	}
 	if err := output.Commit(); err != nil {
-		publishPhase.Finish(err)
-		return ExportResult{}, err
+		phase.Finish(err)
+		return err
 	}
-	publishPhase.Finish(nil)
-	return ExportResult{BundlePath: opts.Output, Manifest: manifest}, nil
+	phase.Finish(nil)
+	return nil
 }
 
 type recordWriterVisitor struct {

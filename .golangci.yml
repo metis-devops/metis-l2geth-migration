@@ -20,7 +20,7 @@ linters:
     dupl:
       threshold: 150
     gocognit:
-      min-complexity: 150
+      min-complexity: 30
     revive:
       rules:
         - name: exported

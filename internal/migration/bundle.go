@@ -24,13 +24,19 @@ type BundleResult struct {
 
 // ScanBundle strictly validates a bundle and rebuilds its committed state root.
 func ScanBundle(ctx context.Context, dir string, visitor StateVisitor) (BundleResult, error) {
-	return scanBundle(ctx, dir, visitor, nil)
+	return scanBundle(ctx, dir, bundleScanOptions{Visitor: visitor}, nil)
+}
+
+type bundleScanOptions struct {
+	Visitor       StateVisitor
+	TrieNodes     trieNodeSink
+	BorrowRecords bool
 }
 
 func scanBundle(
 	ctx context.Context,
 	dir string,
-	visitor StateVisitor,
+	opts bundleScanOptions,
 	progress *progressReporter,
 ) (result BundleResult, retErr error) {
 	manifest, manifestBytes, err := bundle.LoadManifest(dir)
@@ -49,12 +55,12 @@ func scanBundle(
 	var (
 		counts         *progressCounts
 		progressView   progressSnapshot
-		trackedVisitor = visitor
+		trackedVisitor = opts.Visitor
 	)
 	if progress.Enabled() {
 		counts = new(progressCounts)
 		progressView = countProgressSnapshot(counts, &manifest.Counts)
-		trackedVisitor = newCountingStateVisitor(visitor, counts)
+		trackedVisitor = newCountingStateVisitor(opts.Visitor, counts)
 	}
 	phaseAttrs := append([]any{"bundle", dir}, totalCountAttrs(manifest.Counts)...)
 	phase := progress.StartPhase("scan_bundle", progressView, phaseAttrs...)
@@ -62,15 +68,22 @@ func scanBundle(
 	defer func() {
 		phase.Finish(retErr, finishAttrs...)
 	}()
-	consumer := &recordConsumer{
-		expectedRoot: manifest.Source.HeadBefore.StateRoot,
-		visitor:      trackedVisitor,
-		accountStack: trie.NewStackTrie(nil),
-		knownCodes:   newHashSet(),
+	consumer := newRecordConsumer(manifest.Source.HeadBefore.StateRoot, trackedVisitor, opts.TrieNodes)
+	var records bundle.ScanResult
+	if opts.BorrowRecords {
+		records, err = bundle.ScanRecordsBorrowed(ctx, dir, manifest, consumer.consume)
+	} else {
+		records, err = bundle.ScanRecords(ctx, dir, manifest, consumer.consume)
 	}
-	records, err := bundle.ScanRecords(ctx, dir, manifest, consumer.consume)
 	if err != nil {
 		return BundleResult{}, err
+	}
+	_, manifestAfter, err := bundle.LoadManifest(dir)
+	if err != nil {
+		return BundleResult{}, fmt.Errorf("re-read bundle manifest: %w", err)
+	}
+	if !bytes.Equal(manifestAfter, manifestBytes) {
+		return BundleResult{}, errors.New("bundle manifest changed during record scan")
 	}
 	state, err := consumer.finish()
 	if err != nil {
@@ -92,7 +105,9 @@ func scanBundle(
 type recordConsumer struct {
 	expectedRoot common.Hash
 	visitor      StateVisitor
+	trieNodes    trieNodeSink
 	accountStack *trie.StackTrie
+	nodeWriteErr error
 	counts       bundle.Counts
 	knownCodes   hashSet
 
@@ -108,103 +123,160 @@ type recordConsumer struct {
 	finished    bool
 }
 
+type bundleAccountVisitor interface {
+	AccountFromBundle(hash common.Hash, account *types.StateAccount, fullRLP, slimRLP []byte) error
+}
+
+func newRecordConsumer(expectedRoot common.Hash, visitor StateVisitor, nodes trieNodeSink) *recordConsumer {
+	consumer := &recordConsumer{
+		expectedRoot: expectedRoot,
+		visitor:      visitor,
+		trieNodes:    nodes,
+		knownCodes:   newHashSet(),
+	}
+	consumer.accountStack = newTraversalStackTrie(common.Hash{}, nodes, &consumer.nodeWriteErr)
+	return consumer
+}
+
 func (c *recordConsumer) consume(record bundle.Record) error {
 	if c.finished {
 		return errors.New("record received after semantic scanner finished")
 	}
 	switch record.Type {
 	case bundle.RecordAccount:
-		if err := c.finalizeAccount(); err != nil {
-			return err
-		}
-		if c.counts.Accounts > 0 && bytes.Compare(record.AccountHash[:], c.lastAccount[:]) <= 0 {
-			return fmt.Errorf("account records are not strictly increasing: %s after %s", record.AccountHash, c.lastAccount)
-		}
-		account, fullRLP, err := bundle.DecodeAccount(record.Payload)
-		if err != nil {
-			return fmt.Errorf("account %s: %w", record.AccountHash, err)
-		}
-		c.haveAccount = true
-		c.accountHash = record.AccountHash
-		c.lastAccount = record.AccountHash
-		c.account = account
-		c.accountRLP = fullRLP
-		c.storage = nil
-		c.haveSlot = false
-		c.codeSeen = false
-		if c.visitor != nil {
-			if err := c.visitor.Account(record.AccountHash, account, fullRLP); err != nil {
-				return err
-			}
-		}
-		c.addCount(bundle.RecordAccount, len(fullRLP))
+		return c.consumeAccount(record)
 	case bundle.RecordStorage:
-		if !c.haveAccount {
-			return errors.New("storage record appears before an account record")
-		}
-		if c.codeSeen {
-			return fmt.Errorf("account %s storage record appears after its code record", c.accountHash)
-		}
-		if record.AccountHash != c.accountHash {
-			return fmt.Errorf("storage record belongs to %s while current account is %s", record.AccountHash, c.accountHash)
-		}
-		if c.account.Root == types.EmptyRootHash {
-			return fmt.Errorf("account %s has storage records but an empty storage root", c.accountHash)
-		}
-		if c.haveSlot && bytes.Compare(record.SubHash[:], c.lastSlot[:]) <= 0 {
-			return fmt.Errorf("account %s storage records are not strictly increasing: %s after %s", c.accountHash, record.SubHash, c.lastSlot)
-		}
-		if err := validateStorageRLP(record.Payload); err != nil {
-			return fmt.Errorf("account %s slot %s: %w", c.accountHash, record.SubHash, err)
-		}
-		if c.storage == nil {
-			c.storage = trie.NewStackTrie(nil)
-		}
-		if err := c.storage.Update(record.SubHash[:], record.Payload); err != nil {
-			return fmt.Errorf("rebuild storage trie for account %s: %w", c.accountHash, err)
-		}
-		c.haveSlot = true
-		c.lastSlot = record.SubHash
-		if c.visitor != nil {
-			if err := c.visitor.Storage(c.accountHash, record.SubHash, record.Payload); err != nil {
-				return err
-			}
-		}
-		c.addCount(bundle.RecordStorage, len(record.Payload))
+		return c.consumeStorage(record)
 	case bundle.RecordCode:
-		if !c.haveAccount {
-			return errors.New("code record appears before an account record")
-		}
-		if c.codeSeen {
-			return fmt.Errorf("account %s has more than one code record", c.accountHash)
-		}
-		expected := common.BytesToHash(c.account.CodeHash)
-		if expected == types.EmptyCodeHash {
-			return fmt.Errorf("account %s has a code record but its code hash is empty", c.accountHash)
-		}
-		if record.SubHash != expected {
-			return fmt.Errorf("account %s code hash mismatch: record %s account %s", c.accountHash, record.SubHash, expected)
-		}
-		if len(record.Payload) == 0 {
-			return fmt.Errorf("account %s has empty contract code", c.accountHash)
-		}
-		if computed := crypto.Keccak256Hash(record.Payload); computed != expected {
-			return fmt.Errorf("account %s code content hash mismatch: computed %s account %s", c.accountHash, computed, expected)
-		}
-		if !c.knownCodes.Add(expected) {
-			return fmt.Errorf("account %s repeats code record %s already provided by an earlier account", c.accountHash, expected)
-		}
-		c.codeSeen = true
-		if c.visitor != nil {
-			if err := c.visitor.Code(c.accountHash, expected, record.Payload); err != nil {
-				return err
-			}
-		}
-		c.addCount(bundle.RecordCode, len(record.Payload))
+		return c.consumeCode(record)
 	default:
 		return fmt.Errorf("unknown semantic record type %d", record.Type)
 	}
+}
+
+func (c *recordConsumer) consumeAccount(record bundle.Record) error {
+	if err := c.finalizeAccount(); err != nil {
+		return err
+	}
+	if c.counts.Accounts > 0 && bytes.Compare(record.AccountHash[:], c.lastAccount[:]) <= 0 {
+		return fmt.Errorf("account records are not strictly increasing: %s after %s", record.AccountHash, c.lastAccount)
+	}
+	account, fullRLP, err := bundle.DecodeAccount(record.Payload)
+	if err != nil {
+		return fmt.Errorf("account %s: %w", record.AccountHash, err)
+	}
+	c.startAccount(record.AccountHash, account, fullRLP)
+	if err := c.visitAccount(record.AccountHash, account, fullRLP, record.Payload); err != nil {
+		return err
+	}
+	c.addCount(bundle.RecordAccount, len(fullRLP))
 	return nil
+}
+
+func (c *recordConsumer) startAccount(hash common.Hash, account *types.StateAccount, fullRLP []byte) {
+	c.haveAccount = true
+	c.accountHash = hash
+	c.lastAccount = hash
+	c.account = account
+	c.accountRLP = fullRLP
+	c.storage = nil
+	c.haveSlot = false
+	c.codeSeen = false
+}
+
+func (c *recordConsumer) visitAccount(hash common.Hash, account *types.StateAccount, fullRLP, slimRLP []byte) error {
+	if c.visitor == nil {
+		return nil
+	}
+	if visitor, ok := c.visitor.(bundleAccountVisitor); ok {
+		return visitor.AccountFromBundle(hash, account, fullRLP, slimRLP)
+	}
+	return c.visitor.Account(hash, account, fullRLP)
+}
+
+func (c *recordConsumer) consumeStorage(record bundle.Record) error {
+	if err := c.validateStorageRecord(record); err != nil {
+		return err
+	}
+	if c.storage == nil {
+		c.storage = newTraversalStackTrie(c.accountHash, c.trieNodes, &c.nodeWriteErr)
+	}
+	if err := c.storage.Update(record.SubHash[:], record.Payload); err != nil {
+		return fmt.Errorf("rebuild storage trie for account %s: %w", c.accountHash, err)
+	}
+	if c.nodeWriteErr != nil {
+		return fmt.Errorf("write storage trie nodes for account %s: %w", c.accountHash, c.nodeWriteErr)
+	}
+	c.haveSlot = true
+	c.lastSlot = record.SubHash
+	if c.visitor != nil {
+		if err := c.visitor.Storage(c.accountHash, record.SubHash, record.Payload); err != nil {
+			return err
+		}
+	}
+	c.addCount(bundle.RecordStorage, len(record.Payload))
+	return nil
+}
+
+func (c *recordConsumer) validateStorageRecord(record bundle.Record) error {
+	if !c.haveAccount {
+		return errors.New("storage record appears before an account record")
+	}
+	if c.codeSeen {
+		return fmt.Errorf("account %s storage record appears after its code record", c.accountHash)
+	}
+	if record.AccountHash != c.accountHash {
+		return fmt.Errorf("storage record belongs to %s while current account is %s", record.AccountHash, c.accountHash)
+	}
+	if c.account.Root == types.EmptyRootHash {
+		return fmt.Errorf("account %s has storage records but an empty storage root", c.accountHash)
+	}
+	if c.haveSlot && bytes.Compare(record.SubHash[:], c.lastSlot[:]) <= 0 {
+		return fmt.Errorf("account %s storage records are not strictly increasing: %s after %s", c.accountHash, record.SubHash, c.lastSlot)
+	}
+	if err := validateStorageRLP(record.Payload); err != nil {
+		return fmt.Errorf("account %s slot %s: %w", c.accountHash, record.SubHash, err)
+	}
+	return nil
+}
+
+func (c *recordConsumer) consumeCode(record bundle.Record) error {
+	expected, err := c.validateCodeRecord(record)
+	if err != nil {
+		return err
+	}
+	c.knownCodes.Add(expected)
+	c.codeSeen = true
+	if c.visitor != nil {
+		if err := c.visitor.Code(c.accountHash, expected, record.Payload); err != nil {
+			return err
+		}
+	}
+	c.addCount(bundle.RecordCode, len(record.Payload))
+	return nil
+}
+
+func (c *recordConsumer) validateCodeRecord(record bundle.Record) (common.Hash, error) {
+	if !c.haveAccount {
+		return common.Hash{}, errors.New("code record appears before an account record")
+	}
+	if c.codeSeen {
+		return common.Hash{}, fmt.Errorf("account %s has more than one code record", c.accountHash)
+	}
+	expected := common.BytesToHash(c.account.CodeHash)
+	if expected == types.EmptyCodeHash {
+		return common.Hash{}, fmt.Errorf("account %s has a code record but its code hash is empty", c.accountHash)
+	}
+	if record.SubHash != expected {
+		return common.Hash{}, fmt.Errorf("account %s code hash mismatch: record %s account %s", c.accountHash, record.SubHash, expected)
+	}
+	if computed := crypto.Keccak256Hash(record.Payload); computed != expected {
+		return common.Hash{}, fmt.Errorf("account %s code content hash mismatch: computed %s account %s", c.accountHash, computed, expected)
+	}
+	if c.knownCodes.Has(expected) {
+		return common.Hash{}, fmt.Errorf("account %s repeats code record %s already provided by an earlier account", c.accountHash, expected)
+	}
+	return expected, nil
 }
 
 func (c *recordConsumer) finalizeAccount() error {
@@ -214,6 +286,9 @@ func (c *recordConsumer) finalizeAccount() error {
 	computed := types.EmptyRootHash
 	if c.storage != nil {
 		computed = c.storage.Hash()
+		if c.nodeWriteErr != nil {
+			return fmt.Errorf("write final storage trie nodes for account %s: %w", c.accountHash, c.nodeWriteErr)
+		}
 	}
 	if computed != c.account.Root {
 		return fmt.Errorf("account %s storage root mismatch: computed %s account %s", c.accountHash, computed, c.account.Root)
@@ -236,6 +311,9 @@ func (c *recordConsumer) finalizeAccount() error {
 	if err := c.accountStack.Update(c.accountHash[:], c.accountRLP); err != nil {
 		return fmt.Errorf("rebuild account trie: %w", err)
 	}
+	if c.nodeWriteErr != nil {
+		return fmt.Errorf("write account trie nodes: %w", c.nodeWriteErr)
+	}
 	c.haveAccount = false
 	c.account = nil
 	c.accountRLP = nil
@@ -252,6 +330,9 @@ func (c *recordConsumer) finish() (StateResult, error) {
 		return StateResult{}, err
 	}
 	root := c.accountStack.Hash()
+	if c.nodeWriteErr != nil {
+		return StateResult{}, fmt.Errorf("write final account trie nodes: %w", c.nodeWriteErr)
+	}
 	if root != c.expectedRoot {
 		return StateResult{}, fmt.Errorf("bundle state root mismatch: computed %s manifest %s", root, c.expectedRoot)
 	}

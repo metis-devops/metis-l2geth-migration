@@ -94,6 +94,16 @@ func VerifyDirect(ctx context.Context, opts DirectVerifyOptions) (result DirectV
 	if dbState != stateResult {
 		return DirectVerificationReport{}, fmt.Errorf("artifact state result mismatch: database %+v source %+v", dbState, stateResult)
 	}
+	if err := validateArtifactLayout(opts.Artifact); err != nil {
+		return DirectVerificationReport{}, err
+	}
+	storedAfter, err := loadDirectVerificationReport(opts.Artifact)
+	if err != nil {
+		return DirectVerificationReport{}, fmt.Errorf("re-read direct verification report: %w", err)
+	}
+	if !sameDirectVerificationReport(storedAfter, stored) {
+		return DirectVerificationReport{}, errors.New("direct verification report changed during verification")
+	}
 	return newDirectVerificationReport(sourceEvidence, stateResult, stored.Scheme), nil
 }
 

@@ -23,11 +23,22 @@ var (
 	// GethVersion is the go-ethereum module version linked into the binary.
 	GethVersion string
 
+	// buildToolVersion may be injected with -ldflags=-X when the build context
+	// deliberately excludes VCS metadata, as production containers do.
+	buildToolVersion    string
 	compiledGethVersion = gethVersionFromSource()
 )
 
 func init() {
 	ToolVersion, GethVersion = versions(debug.ReadBuildInfo())
+	ToolVersion = overrideToolVersion(ToolVersion, buildToolVersion)
+}
+
+func overrideToolVersion(detected, override string) string {
+	if override != "" {
+		return override
+	}
+	return detected
 }
 
 func versions(info *debug.BuildInfo, ok bool) (string, string) {

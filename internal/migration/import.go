@@ -6,14 +6,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
-	"sync/atomic"
 
-	cpebble "github.com/cockroachdb/pebble/v2"
-	"github.com/cockroachdb/pebble/v2/bloom"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/pebble"
 	"github.com/ethereum/go-ethereum/triedb"
@@ -39,29 +34,19 @@ type ImportResult struct {
 
 // Import rebuilds and verifies a state database from a bundle.
 func Import(ctx context.Context, opts ImportOptions) (result ImportResult, retErr error) {
-	reporter := newProgressReporter("import", opts.Progress,
-		"bundle", opts.Bundle,
-		"output", opts.Output,
-		"scheme", opts.Scheme,
-	)
+	reporter := newProgressReporter("import", opts.Progress, "bundle", opts.Bundle, "output", opts.Output, "scheme", opts.Scheme)
 	defer func() {
 		attrs := []any{"artifact", result.ArtifactPath}
 		if result.ArtifactPath != "" {
-			attrs = append(attrs,
-				"block", result.Report.Head.BlockNumber,
-				"root", result.Report.RecomputedRoot,
-			)
+			attrs = append(attrs, "block", result.Report.Head.BlockNumber, "root", result.Report.RecomputedRoot)
 		}
 		reporter.Finish(retErr, attrs...)
 	}()
-	if opts.Bundle == "" {
-		return ImportResult{}, errors.New("bundle path is required")
+	if err := validateImportOptions(opts); err != nil {
+		return ImportResult{}, err
 	}
-	if opts.Output == "" {
-		return ImportResult{}, errors.New("artifact output path is required")
-	}
-	if opts.Scheme != rawdb.HashScheme && opts.Scheme != rawdb.PathScheme {
-		return ImportResult{}, fmt.Errorf("scheme must be %q or %q", rawdb.HashScheme, rawdb.PathScheme)
+	if err := rejectOutputInsideBundle(opts.Bundle, opts.Output); err != nil {
+		return ImportResult{}, err
 	}
 	output, err := newAtomicDir(opts.Output)
 	if err != nil {
@@ -81,12 +66,7 @@ func Import(ctx context.Context, opts ImportOptions) (result ImportResult, retEr
 		return ImportResult{}, fmt.Errorf("open target Pebble database: %w", err)
 	}
 	disk := rawdb.NewDatabase(diskKV)
-	reporter.Info("Target database opened",
-		"phase", "prepare_target",
-		"status", "completed",
-		"path", dbPath,
-		"scheme", opts.Scheme,
-	)
+	reporter.Info("Target database opened", "phase", "prepare_target", "status", "completed", "path", dbPath, "scheme", opts.Scheme)
 	diskClosed := false
 	defer func() {
 		if !diskClosed {
@@ -96,21 +76,20 @@ func Import(ctx context.Context, opts ImportOptions) (result ImportResult, retEr
 		}
 	}()
 
-	sink := newFlatStateWriter(disk)
-	bundleResult, err := scanBundle(ctx, opts.Bundle, sink, reporter)
+	sink := newDirectStateWriter(disk, opts.Scheme)
+	bundleResult, err := scanBundle(ctx, opts.Bundle, bundleScanOptions{Visitor: sink, TrieNodes: sink, BorrowRecords: true}, reporter)
 	if err != nil {
-		if closeErr := sink.Close(); closeErr != nil {
-			err = errors.Join(err, fmt.Errorf("close flat-state writer: %w", closeErr))
-		}
+		sink.Abort()
 		return ImportResult{}, err
 	}
-	flushPhase := reporter.StartPhase("flush_flat_state", nil)
-	if err := sink.Close(); err != nil {
+	flushPhase := reporter.StartPhase("flush_generated_state", nil, "scheme", opts.Scheme)
+	if err := sink.CloseContext(ctx); err != nil {
 		flushPhase.Finish(err)
 		return ImportResult{}, err
 	}
 	flushPhase.Finish(nil)
-	dbState, closed, err := buildAndVerifyTarget(ctx, disk, dbPath, opts.Scheme, bundleResult.Manifest.Source, bundleResult.State, opts.CacheMB, opts.Handles, reporter)
+
+	dbState, closed, err := finalizeAndVerifyTarget(ctx, disk, dbPath, opts.Scheme, bundleResult.Manifest.Source, bundleResult.State, opts.CacheMB, opts.Handles, reporter)
 	diskClosed = closed
 	if err != nil {
 		return ImportResult{}, err
@@ -119,65 +98,55 @@ func Import(ctx context.Context, opts ImportOptions) (result ImportResult, retEr
 		return ImportResult{}, fmt.Errorf("target state result mismatch: database %+v bundle %+v", dbState, bundleResult.State)
 	}
 	report := newVerificationReport(bundleResult, opts.Scheme)
-	publishPhase := reporter.StartPhase("publish_artifact", nil, "output", opts.Output)
-	if _, err := writeVerificationReport(output.Path(), report); err != nil {
-		publishPhase.Finish(err)
+	if err := publishImportedArtifact(ctx, output, report, opts.Output, reporter); err != nil {
 		return ImportResult{}, err
 	}
-	if err := output.Commit(); err != nil {
-		publishPhase.Finish(err)
-		return ImportResult{}, err
-	}
-	publishPhase.Finish(nil)
 	return ImportResult{ArtifactPath: opts.Output, Report: report}, nil
 }
 
-func buildAndVerifyTarget(
-	ctx context.Context,
-	disk ethdb.Database,
-	dbPath, scheme string,
-	source bundle.SourceEvidence,
-	expected StateResult,
-	cacheMB, handles int,
-	reporter *progressReporter,
-) (StateResult, bool, error) {
-	var triePercent atomic.Uint64
-	triePhase := reporter.StartPhase("generate_trie", percentageProgressSnapshot(&triePercent, true),
-		"scheme", scheme,
-		"root", expected.Root,
-	)
-	var (
-		stats triedb.GenerateStats
-		err   error
-	)
-	if reporter.Enabled() {
-		stats, err = triedb.GenerateTrieWithProgress(disk, scheme, expected.Root, ctx.Done(), &triePercent)
-	} else {
-		stats, err = triedb.GenerateTrie(disk, scheme, expected.Root, ctx.Done())
+func validateImportOptions(opts ImportOptions) error {
+	if opts.Bundle == "" {
+		return errors.New("bundle path is required")
 	}
+	if opts.Output == "" {
+		return errors.New("artifact output path is required")
+	}
+	if opts.Scheme != rawdb.HashScheme && opts.Scheme != rawdb.PathScheme {
+		return fmt.Errorf("scheme must be %q or %q", rawdb.HashScheme, rawdb.PathScheme)
+	}
+	return nil
+}
+
+func publishImportedArtifact(ctx context.Context, output *atomicDir, report VerificationReport, final string, reporter *progressReporter) error {
+	phase := reporter.StartPhase("publish_artifact", nil, "output", final)
+	if err := ctx.Err(); err != nil {
+		phase.Finish(err)
+		return err
+	}
+	if _, err := writeVerificationReport(output.Path(), report); err != nil {
+		phase.Finish(err)
+		return err
+	}
+	stored, err := loadVerificationReport(output.Path())
 	if err != nil {
-		generateErr := fmt.Errorf("generate %s state trie: %w", scheme, err)
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			generateErr = errors.Join(generateErr, ctxErr)
-		}
-		triePhase.Finish(generateErr)
-		return StateResult{}, false, generateErr
+		phase.Finish(err)
+		return fmt.Errorf("re-open generated verification report: %w", err)
 	}
-	if stats.Scanned != int64(expected.Counts.Accounts) || stats.Updated != 0 || stats.Deleted != 0 {
-		reconcileErr := fmt.Errorf("unexpected trie generation reconciliation: scanned=%d updated=%d deleted=%d expected-accounts=%d", stats.Scanned, stats.Updated, stats.Deleted, expected.Counts.Accounts)
-		triePhase.Finish(reconcileErr,
-			"accounts", stats.Scanned,
-			"updated_accounts", stats.Updated,
-			"deleted_storage_slots", stats.Deleted,
-		)
-		return StateResult{}, false, reconcileErr
+	if stored != report {
+		err := errors.New("re-opened verification report does not match generated report")
+		phase.Finish(err)
+		return err
 	}
-	triePhase.Finish(nil,
-		"accounts", stats.Scanned,
-		"updated_accounts", stats.Updated,
-		"deleted_storage_slots", stats.Deleted,
-	)
-	return finalizeAndVerifyTarget(ctx, disk, dbPath, scheme, source, expected, cacheMB, handles, reporter, true)
+	if err := ctx.Err(); err != nil {
+		phase.Finish(err)
+		return err
+	}
+	if err := output.Commit(); err != nil {
+		phase.Finish(err)
+		return err
+	}
+	phase.Finish(nil)
+	return nil
 }
 
 func finalizeAndVerifyTarget(
@@ -188,303 +157,88 @@ func finalizeAndVerifyTarget(
 	expected StateResult,
 	cacheMB, handles int,
 	reporter *progressReporter,
-	removeTemporaryFlatState bool,
 ) (StateResult, bool, error) {
-	schemePhaseName := "adopt_path_state"
-	if scheme == rawdb.HashScheme && removeTemporaryFlatState {
-		schemePhaseName = "remove_flat_state"
+	if err := adoptPathState(ctx, disk, scheme, expected.Root, reporter); err != nil {
+		return StateResult{}, false, err
 	}
-	var schemePhase *phaseProgress
-	if scheme == rawdb.PathScheme || removeTemporaryFlatState {
-		schemePhase = reporter.StartPhase(schemePhaseName, nil, "scheme", scheme)
+	if err := persistHeadMetadata(ctx, disk, source, reporter); err != nil {
+		return StateResult{}, false, err
 	}
-	schemeErr := func() error {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if scheme == rawdb.HashScheme {
-			if !removeTemporaryFlatState {
-				return nil
-			}
-			return removeFlatState(ctx, disk)
-		}
-		config := *pathdb.Defaults
-		config.SnapshotNoBuild = true
-		config.EnableStateIndexing = false
-		config.TrienodeHistory = -1
-		trieDB := triedb.NewDatabase(disk, &triedb.Config{PathDB: &config})
-		if err := trieDB.AdoptSyncedState(expected.Root); err != nil {
-			adoptErr := fmt.Errorf("adopt generated path state: %w", err)
-			if closeErr := trieDB.Close(); closeErr != nil {
-				adoptErr = errors.Join(adoptErr, fmt.Errorf("close path trie database: %w", closeErr))
-			}
-			return adoptErr
-		}
-		if !trieDB.SnapshotCompleted() {
-			snapshotErr := errors.New("path snapshot is not marked complete after adoption")
-			if closeErr := trieDB.Close(); closeErr != nil {
-				snapshotErr = errors.Join(snapshotErr, fmt.Errorf("close path trie database: %w", closeErr))
-			}
-			return snapshotErr
-		}
-		if err := trieDB.Close(); err != nil {
-			return fmt.Errorf("close adopted path trie database: %w", err)
-		}
-		return nil
-	}()
-	if schemePhase != nil {
-		schemePhase.Finish(schemeErr)
-	}
-	if schemeErr != nil {
-		return StateResult{}, false, schemeErr
-	}
-	headPhase := reporter.StartPhase("write_head_metadata", nil,
-		"block", source.HeadBefore.BlockNumber,
-		"hash", source.HeadBefore.BlockHash,
-	)
-	headErr := func() error {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		return writeHeadMetadata(disk, source)
-	}()
-	headPhase.Finish(headErr)
-	if headErr != nil {
-		return StateResult{}, false, headErr
-	}
-	diskClosed := false
-	finalizePhase := reporter.StartPhase("finalize_database", nil)
-	finalizeErr := func() error {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if err := disk.SyncKeyValue(); err != nil {
-			return fmt.Errorf("sync target database: %w", err)
-		}
-		if err := disk.Close(); err != nil {
-			return fmt.Errorf("close target database: %w", err)
-		}
-		diskClosed = true
-		var ranges [][2][]byte
-		if scheme == rawdb.HashScheme && removeTemporaryFlatState {
-			ranges = [][2][]byte{
-				{rawdb.SnapshotAccountPrefix, prefixLimit(rawdb.SnapshotAccountPrefix)},
-				{rawdb.SnapshotStoragePrefix, prefixLimit(rawdb.SnapshotStoragePrefix)},
-			}
-		}
-		if len(ranges) != 0 {
-			if err := compactPebbleRanges(ctx, dbPath, cacheMB, handles, ranges); err != nil {
-				return err
-			}
-		}
-		return syncDirectory(dbPath)
-	}()
-	finalizePhase.Finish(finalizeErr)
-	if finalizeErr != nil {
-		return StateResult{}, diskClosed, finalizeErr
-	}
-	dbState, err := verifyDatabase(ctx, dbPath, scheme, source, expected, cacheMB, handles, reporter, filepath.Dir(dbPath))
+	diskClosed, err := finalizeTargetDatabase(ctx, disk, dbPath, reporter)
 	if err != nil {
 		return StateResult{}, diskClosed, err
 	}
-	return dbState, diskClosed, nil
+	state, err := verifyDatabase(ctx, dbPath, scheme, source, expected, cacheMB, handles, reporter, filepath.Dir(dbPath))
+	if err != nil {
+		return StateResult{}, diskClosed, err
+	}
+	return state, diskClosed, nil
 }
 
-type flatStateWriter struct {
-	batch  ethdb.Batch
-	closed bool
+func adoptPathState(ctx context.Context, disk ethdb.Database, scheme string, root common.Hash, reporter *progressReporter) error {
+	if scheme == rawdb.HashScheme {
+		return ctx.Err()
+	}
+	phase := reporter.StartPhase("adopt_path_state", nil, "scheme", scheme)
+	err := adoptPathStateDatabase(ctx, disk, root)
+	phase.Finish(err)
+	return err
 }
 
-func newFlatStateWriter(db ethdb.Database) *flatStateWriter {
-	return &flatStateWriter{batch: db.NewBatch()}
-}
-
-func (w *flatStateWriter) Account(hash common.Hash, account *types.StateAccount, _ []byte) error {
-	key := prefixedKey(rawdb.SnapshotAccountPrefix, hash[:])
-	if err := w.batch.Put(key, types.SlimAccountRLP(*account)); err != nil {
-		return fmt.Errorf("write flat account %s: %w", hash, err)
-	}
-	return w.flushIfNeeded()
-}
-
-func (w *flatStateWriter) Storage(accountHash, slotHash common.Hash, valueRLP []byte) error {
-	key := make([]byte, 0, len(rawdb.SnapshotStoragePrefix)+2*common.HashLength)
-	key = append(key, rawdb.SnapshotStoragePrefix...)
-	key = append(key, accountHash[:]...)
-	key = append(key, slotHash[:]...)
-	if err := w.batch.Put(key, valueRLP); err != nil {
-		return fmt.Errorf("write flat account %s slot %s: %w", accountHash, slotHash, err)
-	}
-	return w.flushIfNeeded()
-}
-
-func (w *flatStateWriter) Code(_ common.Hash, codeHash common.Hash, code []byte) error {
-	key := prefixedKey(rawdb.CodePrefix, codeHash[:])
-	if err := w.batch.Put(key, code); err != nil {
-		return fmt.Errorf("write code %s: %w", codeHash, err)
-	}
-	if err := w.flushIfNeeded(); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (w *flatStateWriter) flushIfNeeded() error {
-	if w.batch.ValueSize() < ethdb.IdealBatchSize {
-		return nil
-	}
-	if err := w.batch.Write(); err != nil {
-		return fmt.Errorf("flush imported flat state: %w", err)
-	}
-	w.batch.Reset()
-	return nil
-}
-
-func (w *flatStateWriter) Close() error {
-	if w.closed {
-		return nil
-	}
-	w.closed = true
-	defer w.batch.Close()
-	if err := w.batch.Write(); err != nil {
-		return fmt.Errorf("flush final imported flat state: %w", err)
-	}
-	return nil
-}
-
-func removeFlatState(ctx context.Context, db ethdb.Database) error {
-	for _, target := range []struct {
-		prefix    []byte
-		keyLength int
-	}{
-		{prefix: rawdb.SnapshotAccountPrefix, keyLength: len(rawdb.SnapshotAccountPrefix) + common.HashLength},
-		{prefix: rawdb.SnapshotStoragePrefix, keyLength: len(rawdb.SnapshotStoragePrefix) + 2*common.HashLength},
-	} {
-		if err := deleteKeysWithExactLength(ctx, db, target.prefix, target.keyLength); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func deleteKeysWithExactLength(ctx context.Context, db ethdb.Database, prefix []byte, keyLength int) (retErr error) {
-	it := db.NewIterator(prefix, nil)
-	defer it.Release()
-	batch := db.NewBatchWithSize(ethdb.IdealBatchSize)
-	defer batch.Close()
-	for it.Next() {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if len(it.Key()) != keyLength {
-			continue
-		}
-		if err := batch.Delete(append([]byte(nil), it.Key()...)); err != nil {
-			return fmt.Errorf("delete temporary flat state key %x: %w", it.Key(), err)
-		}
-		if batch.ValueSize() >= ethdb.IdealBatchSize {
-			if err := batch.Write(); err != nil {
-				return fmt.Errorf("flush temporary flat state deletion: %w", err)
-			}
-			batch.Reset()
-		}
-	}
-	if err := it.Error(); err != nil {
-		return fmt.Errorf("iterate temporary flat state prefix %x: %w", prefix, err)
-	}
-	if err := batch.Write(); err != nil {
-		return fmt.Errorf("flush final temporary flat state deletion: %w", err)
-	}
-	return nil
-}
-
-func compactPebbleRanges(ctx context.Context, path string, cacheMB, handles int, ranges [][2][]byte) (retErr error) {
+func adoptPathStateDatabase(ctx context.Context, disk ethdb.Database, root common.Hash) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	cacheMB = max(cacheMB, 16)
-	handles = max(handles, 16)
-	cache := cpebble.NewCache(int64(cacheMB) * 1024 * 1024)
-	defer cache.Unref()
-	memTableSize := cacheMB * 1024 * 1024 / 8
-	maxMemTableSize := (1<<31)<<(^uint(0)>>63) - 1
-	if memTableSize >= maxMemTableSize {
-		memTableSize = maxMemTableSize - 1
+	config := *pathdb.Defaults
+	config.SnapshotNoBuild = true
+	config.EnableStateIndexing = false
+	config.TrienodeHistory = -1
+	trieDB := triedb.NewDatabase(disk, &triedb.Config{PathDB: &config})
+	if err := trieDB.AdoptSyncedState(root); err != nil {
+		return closeTrieDBWithError(trieDB, fmt.Errorf("adopt generated path state: %w", err))
 	}
-	options := &cpebble.Options{
-		Cache:                       cache,
-		MaxOpenFiles:                handles,
-		MemTableSize:                uint64(memTableSize),
-		MemTableStopWritesThreshold: 8,
-		CompactionConcurrencyRange:  func() (int, int) { return 1, runtime.NumCPU() },
-		Levels: [7]cpebble.LevelOptions{
-			{FilterPolicy: bloom.FilterPolicy(10)},
-			{FilterPolicy: bloom.FilterPolicy(10)},
-			{FilterPolicy: bloom.FilterPolicy(10)},
-			{FilterPolicy: bloom.FilterPolicy(10)},
-			{FilterPolicy: bloom.FilterPolicy(10)},
-			{FilterPolicy: bloom.FilterPolicy(10)},
-			{},
-		},
-		TargetFileSizes: [7]int64{
-			2 * 1024 * 1024,
-			4 * 1024 * 1024,
-			8 * 1024 * 1024,
-			16 * 1024 * 1024,
-			32 * 1024 * 1024,
-			64 * 1024 * 1024,
-			128 * 1024 * 1024,
-		},
-		Logger:                compactLogger{},
-		WALBytesPerSync:       5 * ethdb.IdealBatchSize,
-		L0CompactionThreshold: 2,
-		FormatMajorVersion:    cpebble.FormatFlushableIngest,
+	if !trieDB.SnapshotCompleted() {
+		return closeTrieDBWithError(trieDB, errors.New("path snapshot is not marked complete after adoption"))
 	}
-	options.Experimental.ReadSamplingMultiplier = -1
-	options.Experimental.L0CompactionConcurrency = 1
-	options.Experimental.CompactionDebtConcurrency = 1 << 28
-	db, err := cpebble.Open(path, options)
-	if err != nil {
-		return fmt.Errorf("open target Pebble database for cancellable compaction: %w", err)
-	}
-	defer func() {
-		if err := db.Close(); err != nil {
-			retErr = errors.Join(retErr, fmt.Errorf("close compacted Pebble database: %w", err))
-		}
-	}()
-	for _, bounds := range ranges {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if err := db.Compact(ctx, bounds[0], bounds[1], true); err != nil {
-			return fmt.Errorf("compact target database range %x: %w", bounds[0], err)
-		}
+	if err := trieDB.Close(); err != nil {
+		return fmt.Errorf("close adopted path trie database: %w", err)
 	}
 	return nil
 }
 
-type compactLogger struct{}
-
-func (compactLogger) Infof(string, ...any)  {}
-func (compactLogger) Errorf(string, ...any) {}
-func (compactLogger) Fatalf(format string, args ...any) {
-	panic(fmt.Errorf("fatal: "+format, args...))
-}
-
-func prefixLimit(prefix []byte) []byte {
-	limit := append([]byte(nil), prefix...)
-	for i := len(limit) - 1; i >= 0; i-- {
-		if limit[i] != 0xff {
-			limit[i]++
-			return limit[:i+1]
-		}
+func closeTrieDBWithError(trieDB *triedb.Database, original error) error {
+	if err := trieDB.Close(); err != nil {
+		return errors.Join(original, fmt.Errorf("close path trie database: %w", err))
 	}
-	return nil
+	return original
 }
 
-func prefixedKey(prefix, suffix []byte) []byte {
-	key := make([]byte, 0, len(prefix)+len(suffix))
-	key = append(key, prefix...)
-	key = append(key, suffix...)
-	return key
+func persistHeadMetadata(ctx context.Context, disk ethdb.Database, source bundle.SourceEvidence, reporter *progressReporter) error {
+	phase := reporter.StartPhase("write_head_metadata", nil, "block", source.HeadBefore.BlockNumber, "hash", source.HeadBefore.BlockHash)
+	if err := ctx.Err(); err != nil {
+		phase.Finish(err)
+		return err
+	}
+	err := writeHeadMetadata(disk, source)
+	phase.Finish(err)
+	return err
+}
+
+func finalizeTargetDatabase(ctx context.Context, disk ethdb.Database, dbPath string, reporter *progressReporter) (closed bool, retErr error) {
+	phase := reporter.StartPhase("finalize_database", nil)
+	defer func() { phase.Finish(retErr) }()
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	if err := disk.SyncKeyValue(); err != nil {
+		return false, fmt.Errorf("sync target database: %w", err)
+	}
+	if err := disk.Close(); err != nil {
+		return false, fmt.Errorf("close target database: %w", err)
+	}
+	closed = true
+	if err := syncDirectory(dbPath); err != nil {
+		return true, err
+	}
+	return true, nil
 }

@@ -2,7 +2,6 @@ package bundle
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
@@ -29,9 +28,10 @@ const (
 	// RecordCode identifies a contract-code record.
 	RecordCode byte = 3
 
-	maxAccountPayload = 1 << 20
-	maxStoragePayload = 64
+	maxAccountPayload = 110
+	maxStoragePayload = 33
 	maxCodePayload    = 128 << 20
+	ioChunkSize       = 256 << 10
 )
 
 const recordChainDomain = "metis-l2state-record-chain/v3"
@@ -57,11 +57,13 @@ type WriterResult struct {
 
 // Writer emits a deterministic, integrity-protected state record stream.
 type Writer struct {
+	ctx         context.Context
 	file        *os.File
 	encoder     *zstd.Encoder
 	buffer      *bufio.Writer
 	fileHash    hash.Hash
 	chain       common.Hash
+	chainHasher recordChainHasher
 	counts      Counts
 	recordBytes uint64
 	fileName    string
@@ -71,7 +73,10 @@ type Writer struct {
 }
 
 // NewWriter creates a record stream in dir using the requested compression.
-func NewWriter(dir, compression string, head Head, headerRLP []byte) (*Writer, error) {
+func NewWriter(ctx context.Context, dir, compression string, head Head, headerRLP []byte) (*Writer, error) {
+	if ctx == nil {
+		return nil, errors.New("state record writer context is nil")
+	}
 	var fileName string
 	switch compression {
 	case CompressionZstd:
@@ -89,6 +94,7 @@ func NewWriter(dir, compression string, head Head, headerRLP []byte) (*Writer, e
 	fileHash := sha256.New()
 	destination := io.MultiWriter(file, fileHash)
 	writer := &Writer{
+		ctx:         ctx,
 		file:        file,
 		fileHash:    fileHash,
 		chain:       initialChainHash(head, headerRLP),
@@ -152,6 +158,9 @@ func (w *Writer) writeRecord(typ byte, key, subkey, payload []byte, consensusPay
 	if w.closed {
 		return errors.New("state record writer is closed")
 	}
+	if err := w.ctx.Err(); err != nil {
+		return err
+	}
 	if err := validatePayloadLength(typ, uint64(len(payload))); err != nil {
 		return err
 	}
@@ -171,10 +180,20 @@ func (w *Writer) writeRecord(typ byte, key, subkey, payload []byte, consensusPay
 	if _, err := w.buffer.Write(header); err != nil {
 		return fmt.Errorf("write record header: %w", err)
 	}
-	if _, err := w.buffer.Write(payload); err != nil {
-		return fmt.Errorf("write record payload: %w", err)
+	w.chainHasher.Start(&w.chain, header)
+	for offset := 0; offset < len(payload); {
+		if err := w.ctx.Err(); err != nil {
+			return err
+		}
+		end := min(offset+ioChunkSize, len(payload))
+		chunk := payload[offset:end]
+		if _, err := w.buffer.Write(chunk); err != nil {
+			return fmt.Errorf("write record payload: %w", err)
+		}
+		w.chainHasher.Write(chunk)
+		offset = end
 	}
-	w.chain = nextChainHash(w.chain, header, payload)
+	w.chainHasher.SumInto(&w.chain)
 	w.counts.Records++
 	w.counts.PayloadBytes += consensusPayloadBytes
 	w.recordBytes += uint64(len(payload))
@@ -249,189 +268,6 @@ func (w *Writer) Abort() error {
 		abortErr = errors.Join(abortErr, fmt.Errorf("close state stream: %w", err))
 	}
 	return abortErr
-}
-
-// ScanResult summarizes a verified record-stream scan.
-type ScanResult struct {
-	Counts             Counts
-	RecordPayloadBytes uint64
-	FileSHA256         common.Hash
-	RecordChainHash    common.Hash
-}
-
-// ScanRecords verifies and decodes the manifest's record stream in order.
-func ScanRecords(ctx context.Context, dir string, manifest Manifest, consume func(Record) error) (scanResult ScanResult, retErr error) {
-	path := filepath.Join(dir, manifest.StateFile.Name)
-	info, err := os.Stat(path)
-	if err != nil {
-		return ScanResult{}, fmt.Errorf("stat state records: %w", err)
-	}
-	if !info.Mode().IsRegular() {
-		return ScanResult{}, errors.New("state records is not a regular file")
-	}
-	if info.Size() != manifest.StateFile.Size {
-		return ScanResult{}, fmt.Errorf("state records size mismatch: have %d want %d", info.Size(), manifest.StateFile.Size)
-	}
-	file, err := os.Open(path)
-	if err != nil {
-		return ScanResult{}, fmt.Errorf("open state records: %w", err)
-	}
-	defer func() {
-		if err := file.Close(); err != nil {
-			retErr = errors.Join(retErr, fmt.Errorf("close state records: %w", err))
-		}
-	}()
-	fileHash := sha256.New()
-	tee := io.TeeReader(file, fileHash)
-	var (
-		stream  = tee
-		decoder *zstd.Decoder
-	)
-	if manifest.StateFile.Compression == CompressionZstd {
-		decoder, err = zstd.NewReader(tee, zstd.WithDecoderConcurrency(1))
-		if err != nil {
-			return ScanResult{}, fmt.Errorf("open zstd stream: %w", err)
-		}
-		defer decoder.Close()
-		stream = decoder
-	}
-	reader := bufio.NewReaderSize(stream, 256*1024)
-	var canonical *canonicalZstdWriter
-	if manifest.StateFile.Compression == CompressionZstd {
-		canonical, err = newCanonicalZstdWriter()
-		if err != nil {
-			return ScanResult{}, err
-		}
-		defer canonical.Abort()
-	}
-	magic := make([]byte, len(streamMagic))
-	if _, err := io.ReadFull(reader, magic); err != nil {
-		return ScanResult{}, fmt.Errorf("read state stream header: %w", err)
-	}
-	if !bytes.Equal(magic, streamMagic[:]) {
-		return ScanResult{}, errors.New("invalid state stream magic")
-	}
-	if canonical != nil {
-		if _, err := canonical.Write(magic); err != nil {
-			return ScanResult{}, err
-		}
-	}
-	chain := initialChainHash(manifest.Source.HeadBefore, manifest.Source.HeaderRLP)
-	var (
-		counts      Counts
-		recordBytes uint64
-		headerSpace [1 + 2*common.HashLength + 8]byte
-	)
-	for {
-		if err := ctx.Err(); err != nil {
-			return ScanResult{}, err
-		}
-		typ, err := reader.ReadByte()
-		if err != nil {
-			return ScanResult{}, fmt.Errorf("read record type: %w", err)
-		}
-		if typ == recordEnd {
-			if canonical != nil {
-				if err := canonical.WriteByte(recordEnd); err != nil {
-					return ScanResult{}, err
-				}
-			}
-			_, err := reader.ReadByte()
-			if err == nil {
-				return ScanResult{}, errors.New("trailing data after state stream terminator")
-			}
-			if !errors.Is(err, io.EOF) {
-				return ScanResult{}, fmt.Errorf("finish state stream: %w", err)
-			}
-			break
-		}
-		keyLen, err := recordKeyLength(typ)
-		if err != nil {
-			return ScanResult{}, err
-		}
-		header := headerSpace[:1+keyLen+8]
-		header[0] = typ
-		if _, err := io.ReadFull(reader, header[1:]); err != nil {
-			return ScanResult{}, fmt.Errorf("read record header: %w", err)
-		}
-		length := binary.BigEndian.Uint64(header[len(header)-8:])
-		if err := validatePayloadLength(typ, length); err != nil {
-			return ScanResult{}, err
-		}
-		payload := make([]byte, int(length))
-		if _, err := io.ReadFull(reader, payload); err != nil {
-			return ScanResult{}, fmt.Errorf("read record payload: %w", err)
-		}
-		if canonical != nil {
-			if _, err := canonical.Write(header); err != nil {
-				return ScanResult{}, err
-			}
-			if _, err := canonical.Write(payload); err != nil {
-				return ScanResult{}, err
-			}
-		}
-		key := header[1 : len(header)-8]
-		record := Record{Type: typ, AccountHash: common.BytesToHash(key[:common.HashLength]), Payload: payload}
-		switch typ {
-		case RecordStorage:
-			record.SubHash = common.BytesToHash(key[common.HashLength:])
-		case RecordCode:
-			record.SubHash = record.AccountHash
-			record.AccountHash = common.Hash{}
-		}
-		chain = nextChainHash(chain, header, payload)
-		counts.Records++
-		recordBytes += length
-		switch typ {
-		case RecordAccount:
-			counts.Accounts++
-		case RecordStorage:
-			counts.StorageSlots++
-		case RecordCode:
-			counts.CodeRecords++
-		}
-		if consume != nil {
-			if err := consume(record); err != nil {
-				return ScanResult{}, err
-			}
-		}
-	}
-	if _, err := io.Copy(io.Discard, tee); err != nil {
-		return ScanResult{}, fmt.Errorf("finish hashing state records: %w", err)
-	}
-	if canonical != nil {
-		canonicalSize, canonicalHash, err := canonical.Close()
-		if err != nil {
-			return ScanResult{}, err
-		}
-		if canonicalSize != info.Size() || canonicalHash != common.BytesToHash(fileHash.Sum(nil)) {
-			return ScanResult{}, errors.New("zstd state records do not use the canonical single-frame encoding")
-		}
-	}
-	if counts.Accounts != manifest.Counts.Accounts ||
-		counts.StorageSlots != manifest.Counts.StorageSlots ||
-		counts.CodeRecords != manifest.Counts.CodeRecords ||
-		counts.Records != manifest.Counts.Records {
-		return ScanResult{}, fmt.Errorf("record counts mismatch: have %+v want %+v", counts, manifest.Counts)
-	}
-	if recordBytes != manifest.StateFile.RecordPayloadBytes {
-		return ScanResult{}, fmt.Errorf("record payload bytes mismatch: have %d want %d", recordBytes, manifest.StateFile.RecordPayloadBytes)
-	}
-	counts.CodeReferences = manifest.Counts.CodeReferences
-	counts.PayloadBytes = manifest.Counts.PayloadBytes
-	result := ScanResult{
-		Counts:             counts,
-		RecordPayloadBytes: recordBytes,
-		FileSHA256:         common.BytesToHash(fileHash.Sum(nil)),
-		RecordChainHash:    chain,
-	}
-	if result.FileSHA256 != manifest.StateFile.SHA256 {
-		return ScanResult{}, fmt.Errorf("state records SHA-256 mismatch: have %s want %s", result.FileSHA256, manifest.StateFile.SHA256)
-	}
-	if result.RecordChainHash != manifest.StateFile.RecordChainHash {
-		return ScanResult{}, fmt.Errorf("record chain hash mismatch: have %s want %s", result.RecordChainHash, manifest.StateFile.RecordChainHash)
-	}
-	return result, nil
 }
 
 func newZstdEncoder(destination io.Writer) (*zstd.Encoder, error) {
@@ -509,12 +345,15 @@ func (w *canonicalZstdWriter) Close() (int64, common.Hash, error) {
 	return w.count.size, common.BytesToHash(w.hash.Sum(nil)), nil
 }
 
-func (w *canonicalZstdWriter) Abort() {
+func (w *canonicalZstdWriter) Abort() error {
 	if w == nil || w.closed {
-		return
+		return nil
 	}
 	w.closed = true
-	_ = w.encoder.Close()
+	if err := w.encoder.Close(); err != nil {
+		return fmt.Errorf("abort canonical zstd writer: %w", err)
+	}
+	return nil
 }
 
 func initialChainHash(head Head, headerRLP []byte) common.Hash {
@@ -530,8 +369,27 @@ func initialChainHash(head Head, headerRLP []byte) common.Hash {
 	)
 }
 
-func nextChainHash(previous common.Hash, header, payload []byte) common.Hash {
-	return crypto.Keccak256Hash(previous[:], header, payload)
+type recordChainHasher struct {
+	state  crypto.KeccakState
+	prefix [common.HashLength + 1 + 2*common.HashLength + 8]byte
+}
+
+func (h *recordChainHasher) Start(previous *common.Hash, header []byte) {
+	if h.state == nil {
+		h.state = crypto.NewKeccakState()
+	}
+	copy(h.prefix[:common.HashLength], previous[:])
+	n := copy(h.prefix[common.HashLength:], header)
+	h.state.Reset()
+	_, _ = h.state.Write(h.prefix[:common.HashLength+n])
+}
+
+func (h *recordChainHasher) Write(payload []byte) {
+	_, _ = h.state.Write(payload)
+}
+
+func (h *recordChainHasher) SumInto(result *common.Hash) {
+	_, _ = h.state.Read(result[:])
 }
 
 func recordKeyLength(typ byte) (int, error) {
@@ -557,7 +415,7 @@ func validatePayloadLength(typ byte, length uint64) error {
 	default:
 		return fmt.Errorf("unknown record type %d", typ)
 	}
-	if length == 0 && typ != RecordCode {
+	if length == 0 {
 		return fmt.Errorf("record type %d has empty payload", typ)
 	}
 	if length > max {

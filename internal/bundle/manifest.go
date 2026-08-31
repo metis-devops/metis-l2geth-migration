@@ -1,12 +1,10 @@
 package bundle
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"math"
 	"os"
 	"path/filepath"
@@ -17,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/metis-devops/metis-l2geth-migration/internal/strictio"
 	"github.com/metis-devops/metis-l2geth-migration/internal/version"
 )
 
@@ -120,6 +119,18 @@ func (c Counts) Validate() error {
 	if c.Records != expected {
 		return errors.New("record count does not match record type counts")
 	}
+	if c.Records == 0 {
+		if c.PayloadBytes != 0 {
+			return errors.New("empty state has non-zero payload bytes")
+		}
+		return nil
+	}
+	if c.Accounts == 0 {
+		return errors.New("non-empty state has no account records")
+	}
+	if c.PayloadBytes == 0 {
+		return errors.New("non-empty state has zero payload bytes")
+	}
 	return nil
 }
 
@@ -164,27 +175,32 @@ func NewManifest(source SourceEvidence, counts Counts, stateFile StateFile) Mani
 }
 
 // LoadManifest reads and strictly validates the manifest in dir.
-func LoadManifest(dir string) (Manifest, []byte, error) {
-	path := filepath.Join(dir, ManifestFileName)
-	data, err := os.ReadFile(path)
+func LoadManifest(dir string) (manifest Manifest, data []byte, retErr error) {
+	root, err := strictio.OpenRoot(dir)
+	if err != nil {
+		return Manifest{}, nil, fmt.Errorf("open bundle: %w", err)
+	}
+	defer func() {
+		if err := root.Close(); err != nil {
+			retErr = errors.Join(retErr, err)
+		}
+	}()
+	data, err = root.ReadRegular(ManifestFileName, strictio.MaxMetadataSize)
 	if err != nil {
 		return Manifest{}, nil, fmt.Errorf("read manifest: %w", err)
 	}
-	var manifest Manifest
-	dec := json.NewDecoder(bytes.NewReader(data))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&manifest); err != nil {
-		return Manifest{}, nil, fmt.Errorf("decode manifest: %w", err)
-	}
-	var trailing any
-	if err := dec.Decode(&trailing); !errors.Is(err, io.EOF) {
-		if err == nil {
-			return Manifest{}, nil, errors.New("decode manifest: trailing JSON value")
-		}
-		return Manifest{}, nil, fmt.Errorf("decode manifest trailing data: %w", err)
+	manifest, err = strictio.DecodeJSON[Manifest](data, "manifest")
+	if err != nil {
+		return Manifest{}, nil, err
 	}
 	if err := manifest.Validate(); err != nil {
 		return Manifest{}, nil, err
+	}
+	if err := root.RequireExactLayout(map[string]strictio.EntryKind{
+		ManifestFileName:        strictio.RegularFile,
+		manifest.StateFile.Name: strictio.RegularFile,
+	}); err != nil {
+		return Manifest{}, nil, fmt.Errorf("validate bundle layout: %w", err)
 	}
 	return manifest, data, nil
 }

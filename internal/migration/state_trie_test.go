@@ -2,14 +2,37 @@ package migration
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 )
+
+func TestProcessCodePreservesReadErrorsAndMissingSemantics(t *testing.T) {
+	accountHash := common.HexToHash("0x01")
+	codeHash := common.HexToHash("0x02")
+	injected := errors.New("injected code read failure")
+	traverser := &stateTraverser{
+		codeHashes: newHashSet(),
+		readCode: func(ethdb.KeyValueReader, common.Hash) ([]byte, error) {
+			return nil, injected
+		},
+	}
+	if err := traverser.processCode(accountHash, codeHash); !errors.Is(err, injected) || !strings.Contains(err.Error(), "read account") {
+		t.Fatalf("code read error is %v", err)
+	}
+
+	traverser.codeHashes = newHashSet()
+	traverser.readCode = func(ethdb.KeyValueReader, common.Hash) ([]byte, error) { return nil, nil }
+	if err := traverser.processCode(accountHash, codeHash); err == nil || !strings.Contains(err.Error(), "is missing") {
+		t.Fatalf("missing code error is %v", err)
+	}
+}
 
 func TestDecodeFullAccountRejectsNonCanonicalRLP(t *testing.T) {
 	t.Parallel()

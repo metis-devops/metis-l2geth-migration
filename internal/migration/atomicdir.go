@@ -14,11 +14,45 @@ type atomicDir struct {
 	temp       string
 	tempPrefix string
 	committed  bool
+	ops        atomicDirOps
+}
+
+// PublicationDurabilityError means the output was renamed into its final path,
+// but syncing the parent directory failed. The output is deliberately retained
+// because removing or renaming it again cannot restore a known durability state.
+type PublicationDurabilityError struct {
+	Path string
+	Err  error
+}
+
+func (e *PublicationDurabilityError) Error() string {
+	return fmt.Sprintf("output %s was published, but parent-directory durability is unknown; verify it before retaining it and do not rerun with the same path: %v", e.Path, e.Err)
+}
+
+func (e *PublicationDurabilityError) Unwrap() error {
+	return e.Err
+}
+
+type atomicDirOps struct {
+	rename  func(string, string) error
+	syncDir func(string) error
+}
+
+var defaultAtomicDirOps = atomicDirOps{
+	rename:  renameNoReplace,
+	syncDir: syncDirectory,
 }
 
 func newAtomicDir(final string) (*atomicDir, error) {
+	return newAtomicDirWithOps(final, defaultAtomicDirOps)
+}
+
+func newAtomicDirWithOps(final string, ops atomicDirOps) (*atomicDir, error) {
 	if final == "" {
 		return nil, errors.New("output path is empty")
+	}
+	if ops.rename == nil || ops.syncDir == nil {
+		return nil, errors.New("atomic directory operations are incomplete")
 	}
 	abs, err := resolvePathWithMissing(final)
 	if err != nil {
@@ -47,7 +81,10 @@ func newAtomicDir(final string) (*atomicDir, error) {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("inspect resolved output path: %w", err)
 	}
-	if err := verifyRenameNoReplace(parent); err != nil {
+	if err := ops.syncDir(parent); err != nil {
+		return nil, fmt.Errorf("preflight output-parent directory sync: %w", err)
+	}
+	if err := verifyRenameNoReplace(parent, ops.rename); err != nil {
 		return nil, err
 	}
 	prefix := "." + filepath.Base(abs) + ".partial-"
@@ -55,10 +92,10 @@ func newAtomicDir(final string) (*atomicDir, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create temporary output: %w", err)
 	}
-	return &atomicDir{final: abs, parent: parent, temp: temp, tempPrefix: prefix}, nil
+	return &atomicDir{final: abs, parent: parent, temp: temp, tempPrefix: prefix, ops: ops}, nil
 }
 
-func verifyRenameNoReplace(parent string) (retErr error) {
+func verifyRenameNoReplace(parent string, rename func(string, string) error) (retErr error) {
 	source, err := os.MkdirTemp(parent, ".l2state-rename-source-")
 	if err != nil {
 		return fmt.Errorf("create no-replace source probe: %w", err)
@@ -77,7 +114,7 @@ func verifyRenameNoReplace(parent string) (retErr error) {
 			retErr = errors.Join(retErr, fmt.Errorf("remove no-replace destination probe: %w", err))
 		}
 	}()
-	err = renameNoReplace(source, destination)
+	err = rename(source, destination)
 	if err == nil {
 		return errors.New("platform rename primitive replaced an existing directory")
 	}
@@ -100,14 +137,17 @@ func (d *atomicDir) Commit() error {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("inspect output before publish: %w", err)
 	}
-	if err := syncDirectory(d.temp); err != nil {
+	if err := d.ops.syncDir(d.temp); err != nil {
 		return err
 	}
-	if err := renameNoReplace(d.temp, d.final); err != nil {
+	if err := d.ops.rename(d.temp, d.final); err != nil {
 		return fmt.Errorf("publish output: %w", err)
 	}
 	d.committed = true
-	return syncDirectory(d.parent)
+	if err := d.ops.syncDir(d.parent); err != nil {
+		return &PublicationDurabilityError{Path: d.final, Err: fmt.Errorf("sync output parent after publish: %w", err)}
+	}
+	return nil
 }
 
 func resolvePathWithMissing(path string) (string, error) {

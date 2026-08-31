@@ -1,4 +1,4 @@
-.PHONY: build test test-race lint fmt-check ci
+.PHONY: build test test-race lint fmt-check fixture-check ci
 
 build:
 	go build -o bin/l2state ./cmd/l2state
@@ -16,4 +16,11 @@ fmt-check:
 	test -z "$$(gofmt -l cmd internal)"
 	go mod tidy -diff
 
-ci: fmt-check lint test build
+fixture-check:
+	cd testdata/legacyfixturegen && test -z "$$(gofmt -l .)"
+	cd testdata/legacyfixturegen && go mod tidy -diff
+	cd testdata/legacyfixturegen && go mod verify
+	cd testdata/legacyfixturegen && go test ./...
+	cd testdata/legacyfixturegen && go vet ./...
+
+ci: fmt-check lint test fixture-check build

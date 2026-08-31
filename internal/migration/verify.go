@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sync/atomic"
 
+	cpebble "github.com/cockroachdb/pebble/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -48,7 +49,7 @@ func Verify(ctx context.Context, opts VerifyOptions) (result VerificationReport,
 	if opts.Bundle == "" {
 		return VerificationReport{}, errors.New("bundle path is required")
 	}
-	bundleResult, err := scanBundle(ctx, opts.Bundle, nil, reporter)
+	bundleResult, err := scanBundle(ctx, opts.Bundle, bundleScanOptions{BorrowRecords: true}, reporter)
 	if err != nil {
 		return VerificationReport{}, err
 	}
@@ -71,6 +72,16 @@ func Verify(ctx context.Context, opts VerifyOptions) (result VerificationReport,
 	}
 	if state != bundleResult.State {
 		return VerificationReport{}, fmt.Errorf("artifact state result mismatch: database %+v bundle %+v", state, bundleResult.State)
+	}
+	if err := validateArtifactLayout(opts.Artifact); err != nil {
+		return VerificationReport{}, err
+	}
+	storedAfter, err := loadVerificationReport(opts.Artifact)
+	if err != nil {
+		return VerificationReport{}, fmt.Errorf("re-read artifact verification report: %w", err)
+	}
+	if storedAfter != stored {
+		return VerificationReport{}, errors.New("artifact verification report changed during verification")
 	}
 	return newVerificationReport(bundleResult, stored.Scheme), nil
 }
@@ -167,7 +178,13 @@ func verifyDatabase(ctx context.Context, dbPath, scheme string, source bundle.So
 	statePhase := progress.StartPhase("verify_state", progressView, phaseAttrs...)
 	state, inventory, err := traverseState(ctx, disk, trieDB, expected.Root, visitor, true, stateTraversalOptions{
 		NodeIndex: trieNodeIndexOptions{Parent: scratchParent, CacheMB: cacheMB, Handles: handles},
-		ReadCode:  func(db ethdb.KeyValueReader, hash common.Hash) []byte { return rawdb.ReadCodeWithPrefix(db, hash) },
+		ReadCode: func(db ethdb.KeyValueReader, hash common.Hash) ([]byte, error) {
+			code, err := db.Get(prefixedKey(rawdb.CodePrefix, hash[:]))
+			if errors.Is(err, cpebble.ErrNotFound) {
+				return nil, nil
+			}
+			return code, err
+		},
 	})
 	if err != nil {
 		verifyErr := fmt.Errorf("verify artifact state: %w", err)
@@ -315,39 +332,19 @@ func verifyDatabaseInventory(ctx context.Context, db ethdb.Database, scheme stri
 			headEntries++
 			continue
 		}
-		if scheme == rawdb.HashScheme {
-			value := it.Value()
-			switch {
-			case rawdb.IsLegacyTrieNode(key, value):
-				trieNodes++
-				continue
-			case isNonEmptyCodeEntry(key, value):
-				codeEntries++
-				continue
-			default:
-				return fmt.Errorf("hash artifact contains non-state key %x", key)
-			}
+		kind, err := classifyArtifactEntry(scheme, key, it.Value())
+		if err != nil {
+			return err
 		}
-		switch {
-		case isCanonicalPathAccountTrieNodeKey(key):
+		switch kind {
+		case inventoryTrieNode:
 			trieNodes++
-			continue
-		case isCanonicalPathStorageTrieNodeKey(key):
-			trieNodes++
-			continue
-		case isNonEmptyCodeEntry(key, it.Value()):
+		case inventoryCode:
 			codeEntries++
-			continue
-		case bytes.HasPrefix(key, rawdb.SnapshotAccountPrefix) && len(key) == len(rawdb.SnapshotAccountPrefix)+common.HashLength:
+		case inventoryFlatAccount:
 			flatAccounts++
-			continue
-		case bytes.HasPrefix(key, rawdb.SnapshotStoragePrefix) && len(key) == len(rawdb.SnapshotStoragePrefix)+2*common.HashLength:
+		case inventoryFlatStorage:
 			flatSlots++
-			continue
-		case allowedPathMetadataKey(key):
-			continue
-		default:
-			return fmt.Errorf("path artifact contains non-state key %x", key)
 		}
 	}
 	if err := ctx.Err(); err != nil {
@@ -378,6 +375,43 @@ func verifyDatabaseInventory(ctx context.Context, db ethdb.Database, scheme stri
 		"head_metadata_entries", headEntries,
 	}
 	return nil
+}
+
+type inventoryEntryKind uint8
+
+const (
+	inventoryMetadata inventoryEntryKind = iota
+	inventoryTrieNode
+	inventoryCode
+	inventoryFlatAccount
+	inventoryFlatStorage
+)
+
+func classifyArtifactEntry(scheme string, key, value []byte) (inventoryEntryKind, error) {
+	if scheme == rawdb.HashScheme {
+		switch {
+		case rawdb.IsLegacyTrieNode(key, value):
+			return inventoryTrieNode, nil
+		case isNonEmptyCodeEntry(key, value):
+			return inventoryCode, nil
+		default:
+			return inventoryMetadata, fmt.Errorf("hash artifact contains non-state key %x", key)
+		}
+	}
+	switch {
+	case isCanonicalPathAccountTrieNodeKey(key), isCanonicalPathStorageTrieNodeKey(key):
+		return inventoryTrieNode, nil
+	case isNonEmptyCodeEntry(key, value):
+		return inventoryCode, nil
+	case bytes.HasPrefix(key, rawdb.SnapshotAccountPrefix) && len(key) == len(rawdb.SnapshotAccountPrefix)+common.HashLength:
+		return inventoryFlatAccount, nil
+	case bytes.HasPrefix(key, rawdb.SnapshotStoragePrefix) && len(key) == len(rawdb.SnapshotStoragePrefix)+2*common.HashLength:
+		return inventoryFlatStorage, nil
+	case allowedPathMetadataKey(key):
+		return inventoryMetadata, nil
+	default:
+		return inventoryMetadata, fmt.Errorf("path artifact contains non-state key %x", key)
+	}
 }
 
 type snapshotGeneratorMarker struct {

@@ -1,11 +1,9 @@
 package migration
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -81,7 +79,11 @@ func (r VerificationReport) Validate() error {
 	if r.Scheme != "bundle" && r.Scheme != "hash" && r.Scheme != "path" {
 		return fmt.Errorf("invalid verification scheme %q", r.Scheme)
 	}
-	if (r.Scheme == "hash" || r.Scheme == "path") && r.DBEngine != "pebble-v2" {
+	if r.Scheme == "bundle" {
+		if r.DBEngine != "" {
+			return fmt.Errorf("bundle verification report has database engine %q", r.DBEngine)
+		}
+	} else if r.DBEngine != "pebble-v2" {
 		return fmt.Errorf("invalid database engine %q", r.DBEngine)
 	}
 	if r.ToolVersion == "" || r.GethVersion != version.GethVersion || r.GethCommit != version.GethCommit {
@@ -89,6 +91,15 @@ func (r VerificationReport) Validate() error {
 	}
 	if r.ManifestSHA256 == (common.Hash{}) || r.StateFileSHA256 == (common.Hash{}) || r.RecordChainHash == (common.Hash{}) {
 		return errors.New("verification report digest is empty")
+	}
+	if r.Head.BlockHash == (common.Hash{}) || r.Head.StateRoot == (common.Hash{}) {
+		return errors.New("verification report head hash or state root is empty")
+	}
+	if err := r.Counts.Validate(); err != nil {
+		return fmt.Errorf("validate verification report counts: %w", err)
+	}
+	if r.RecomputedRoot == (common.Hash{}) {
+		return errors.New("verification report recomputed root is empty")
 	}
 	if r.RecomputedRoot != r.Head.StateRoot {
 		return errors.New("verification report root does not match head state root")
@@ -116,25 +127,7 @@ func writeVerificationReport(dir string, report VerificationReport) ([]byte, err
 }
 
 func loadVerificationReport(dir string) (VerificationReport, error) {
-	data, err := os.ReadFile(filepath.Join(dir, VerificationFileName))
-	if err != nil {
-		return VerificationReport{}, fmt.Errorf("read verification report: %w", err)
-	}
-	var report VerificationReport
-	dec := json.NewDecoder(bytes.NewReader(data))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&report); err != nil {
-		return VerificationReport{}, fmt.Errorf("decode verification report: %w", err)
-	}
-	var trailing any
-	if err := dec.Decode(&trailing); !errors.Is(err, io.EOF) {
-		if err == nil {
-			return VerificationReport{}, errors.New("decode verification report: trailing JSON value")
-		}
-		return VerificationReport{}, fmt.Errorf("decode verification report trailing data: %w", err)
-	}
-	if err := report.Validate(); err != nil {
-		return VerificationReport{}, err
-	}
-	return report, nil
+	return loadArtifactJSON(dir, "verification report", func(report VerificationReport) error {
+		return report.Validate()
+	})
 }

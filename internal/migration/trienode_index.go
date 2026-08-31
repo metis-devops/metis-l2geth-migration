@@ -63,7 +63,7 @@ func newTemporaryTrieNodeIndex(opts trieNodeIndexOptions) (*temporaryTrieNodeInd
 			{},
 		},
 		FormatMajorVersion: cpebble.FormatFlushableIngest,
-		Logger:             compactLogger{},
+		Logger:             temporaryPebbleLogger{},
 	}
 	options.Experimental.ReadSamplingMultiplier = -1
 	db, err := cpebble.Open(path, options)
@@ -173,4 +173,12 @@ func removeTemporaryTrieNodeIndex(path string) error {
 		return fmt.Errorf("refusing to remove unexpected temporary trie-node index path %s", clean)
 	}
 	return os.RemoveAll(clean)
+}
+
+type temporaryPebbleLogger struct{}
+
+func (temporaryPebbleLogger) Infof(string, ...any)  {}
+func (temporaryPebbleLogger) Errorf(string, ...any) {}
+func (temporaryPebbleLogger) Fatalf(format string, args ...any) {
+	panic(fmt.Errorf("fatal: "+format, args...))
 }

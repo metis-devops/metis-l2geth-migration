@@ -26,6 +26,9 @@ func TestDirectVerificationReportJSONRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := os.Mkdir(filepath.Join(dir, "db"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	var wire struct {
 		Format string `json:"format"`
 		Source struct {
@@ -103,6 +106,9 @@ func TestLoadDirectVerificationReportRejectsInvalidEvidence(t *testing.T) {
 				t.Fatal(err)
 			}
 			dir := t.TempDir()
+			if err := os.Mkdir(filepath.Join(dir, "db"), 0o755); err != nil {
+				t.Fatal(err)
+			}
 			if err := os.WriteFile(filepath.Join(dir, VerificationFileName), data, 0o644); err != nil {
 				t.Fatal(err)
 			}
@@ -116,6 +122,9 @@ func TestLoadDirectVerificationReportRejectsInvalidEvidence(t *testing.T) {
 func TestDirectAndBundleReportFormatsAreDistinct(t *testing.T) {
 	dir := t.TempDir()
 	if _, err := writeVerificationReport(dir, validTestVerificationReport()); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(dir, "db"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := loadDirectVerificationReport(dir); err == nil {

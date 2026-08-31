@@ -1,11 +1,9 @@
 package migration
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -111,25 +109,16 @@ func writeDirectVerificationReport(dir string, report DirectVerificationReport) 
 }
 
 func loadDirectVerificationReport(dir string) (DirectVerificationReport, error) {
-	data, err := os.ReadFile(filepath.Join(dir, VerificationFileName))
-	if err != nil {
-		return DirectVerificationReport{}, fmt.Errorf("read direct verification report: %w", err)
-	}
-	var report DirectVerificationReport
-	dec := json.NewDecoder(bytes.NewReader(data))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&report); err != nil {
-		return DirectVerificationReport{}, fmt.Errorf("decode direct verification report: %w", err)
-	}
-	var trailing any
-	if err := dec.Decode(&trailing); !errors.Is(err, io.EOF) {
-		if err == nil {
-			return DirectVerificationReport{}, errors.New("decode direct verification report: trailing JSON value")
-		}
-		return DirectVerificationReport{}, fmt.Errorf("decode direct verification report trailing data: %w", err)
-	}
-	if err := report.Validate(); err != nil {
-		return DirectVerificationReport{}, err
-	}
-	return report, nil
+	return loadArtifactJSON(dir, "direct verification report", func(report DirectVerificationReport) error {
+		return report.Validate()
+	})
+}
+
+func sameDirectVerificationReport(left, right DirectVerificationReport) bool {
+	return left.Format == right.Format && left.Version == right.Version &&
+		left.VerifiedAt.Equal(right.VerifiedAt) && left.Verified == right.Verified &&
+		left.Scheme == right.Scheme && left.DBEngine == right.DBEngine &&
+		left.ToolVersion == right.ToolVersion && left.GethVersion == right.GethVersion &&
+		left.GethCommit == right.GethCommit && sameSourceEvidence(left.Source, right.Source) &&
+		left.Counts == right.Counts && left.RecomputedRoot == right.RecomputedRoot
 }

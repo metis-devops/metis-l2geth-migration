@@ -335,10 +335,9 @@ func TestTraverseStateReadsSharedCodeOnce(t *testing.T) {
 	}()
 	var reads uint64
 	result, _, err := traverseState(context.Background(), disk, trieDB, fixture.root, nil, false, stateTraversalOptions{
-		ReadCode: func(db ethdb.KeyValueReader, hash common.Hash) []byte {
+		ReadCode: func(db ethdb.KeyValueReader, hash common.Hash) ([]byte, error) {
 			reads++
-			code, _ := db.Get(hash[:])
-			return code
+			return db.Get(hash[:])
 		},
 	})
 	if err != nil {
@@ -430,7 +429,7 @@ func writeSharedCodeSemanticBundle(t *testing.T, codeRecords []bool) string {
 	}
 	head := bundle.Head{BlockNumber: 1, BlockHash: header.Hash(), StateRoot: root}
 	dir := t.TempDir()
-	writer, err := bundle.NewWriter(dir, bundle.CompressionNone, head, headerRLP)
+	writer, err := bundle.NewWriter(context.Background(), dir, bundle.CompressionNone, head, headerRLP)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -632,7 +631,7 @@ func TestScanBundleRejectsStorageBeforeAccount(t *testing.T) {
 		t.Fatal(err)
 	}
 	head := bundle.Head{BlockNumber: 1, BlockHash: header.Hash(), StateRoot: header.Root}
-	writer, err := bundle.NewWriter(dir, bundle.CompressionNone, head, headerRLP)
+	writer, err := bundle.NewWriter(context.Background(), dir, bundle.CompressionNone, head, headerRLP)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -644,9 +643,13 @@ func TestScanBundleRejectsStorageBeforeAccount(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	semanticCounts := result.Counts
+	semanticCounts.Accounts = 1
+	semanticCounts.Records++
+	semanticCounts.PayloadBytes += 70
 	manifest := bundle.NewManifest(bundle.SourceEvidence{
 		HeadBefore: head, HeadAfter: head, HeaderRLP: hexutil.Bytes(headerRLP),
-	}, result.Counts, bundle.StateFile{
+	}, semanticCounts, bundle.StateFile{
 		Name: result.FileName, Compression: result.Compression, Size: result.Size,
 		RecordPayloadBytes: result.RecordPayloadBytes,
 		SHA256:             result.SHA256, RecordChainHash: result.RecordChainHash,
@@ -690,7 +693,7 @@ func TestBundleSemanticScanLargeStream(t *testing.T) {
 	}
 	head := bundle.Head{BlockNumber: 9, BlockHash: header.Hash(), StateRoot: root}
 	dir := t.TempDir()
-	writer, err := bundle.NewWriter(dir, bundle.CompressionZstd, head, headerRLP)
+	writer, err := bundle.NewWriter(context.Background(), dir, bundle.CompressionZstd, head, headerRLP)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -779,77 +782,6 @@ func TestExportRejectsSymlinkedOutputInsideSource(t *testing.T) {
 	}
 	if _, statErr := os.Lstat(output); !errors.Is(statErr, os.ErrNotExist) {
 		t.Fatalf("rejected output unexpectedly exists: %v", statErr)
-	}
-}
-
-func TestHashFlatCleanupPreservesOverlappingTrieHashes(t *testing.T) {
-	db := rawdb.NewMemoryDatabase()
-	defer func() {
-		if err := db.Close(); err != nil {
-			t.Errorf("close memory database: %v", err)
-		}
-	}()
-	accountHash := common.HexToHash("0x01")
-	slotHash := common.HexToHash("0x02")
-	rawdb.WriteAccountSnapshot(db, accountHash, []byte{0x01})
-	rawdb.WriteStorageSnapshot(db, accountHash, slotHash, []byte{0x02})
-	var trieHashes []common.Hash
-	for _, prefix := range []byte{rawdb.SnapshotAccountPrefix[0], rawdb.SnapshotStoragePrefix[0]} {
-		hash, blob := findBlobWithHashPrefix(t, prefix)
-		if err := db.Put(hash[:], blob); err != nil {
-			t.Fatal(err)
-		}
-		trieHashes = append(trieHashes, hash)
-	}
-	if err := removeFlatState(context.Background(), db); err != nil {
-		t.Fatal(err)
-	}
-	for _, key := range [][]byte{
-		prefixedKey(rawdb.SnapshotAccountPrefix, accountHash[:]),
-		prefixedKey(rawdb.SnapshotStoragePrefix, append(accountHash[:], slotHash[:]...)),
-	} {
-		has, err := db.Has(key)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if has {
-			t.Fatalf("flat key %x survived cleanup", key)
-		}
-	}
-	for _, hash := range trieHashes {
-		has, err := db.Has(hash[:])
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !has {
-			t.Fatalf("overlapping trie hash %s was deleted", hash)
-		}
-	}
-}
-
-func TestFlatCleanupAndCompactionHonorCanceledContext(t *testing.T) {
-	db := rawdb.NewMemoryDatabase()
-	defer func() {
-		if err := db.Close(); err != nil {
-			t.Errorf("close memory database: %v", err)
-		}
-	}()
-	accountHash := common.HexToHash("0x01")
-	rawdb.WriteAccountSnapshot(db, accountHash, []byte{0x01})
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	if err := removeFlatState(ctx, db); !errors.Is(err, context.Canceled) {
-		t.Fatalf("flat cleanup returned %v, want context cancellation", err)
-	}
-	has, err := db.Has(prefixedKey(rawdb.SnapshotAccountPrefix, accountHash[:]))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !has {
-		t.Fatal("canceled flat cleanup deleted state before observing cancellation")
-	}
-	if err := compactPebbleRanges(ctx, filepath.Join(t.TempDir(), "missing"), 16, 16, nil); !errors.Is(err, context.Canceled) {
-		t.Fatalf("compaction returned %v, want context cancellation", err)
 	}
 }
 
@@ -1131,18 +1063,6 @@ func TestVerifyRejectsTamperedArtifactHeadMetadata(t *testing.T) {
 					t.Fatalf("expected %q error, got %v", tt.wantError, err)
 				}
 			})
-		}
-	}
-}
-
-func findBlobWithHashPrefix(t *testing.T, prefix byte) (common.Hash, []byte) {
-	t.Helper()
-	for i := uint64(0); ; i++ {
-		blob := make([]byte, 8)
-		binary.BigEndian.PutUint64(blob, i)
-		hash := crypto.Keccak256Hash(blob)
-		if hash[0] == prefix {
-			return hash, blob
 		}
 	}
 }
