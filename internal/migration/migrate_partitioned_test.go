@@ -81,7 +81,7 @@ func TestMigratePartitionRangesCoverHashSpace(t *testing.T) {
 
 func TestPartitionIteratorsIncludeExactRangeBoundaries(t *testing.T) {
 	source := rawdb.NewDatabase(memorydb.New())
-	writer := &capturingKeyValueWriter{target: source}
+	writer := &testErrorCapturingKeyValueWriter{target: source}
 	stack := trie.NewStackTrie(func(path []byte, hash common.Hash, blob []byte) {
 		rawdb.WriteTrieNode(writer, common.Hash{}, path, hash, blob, rawdb.HashScheme)
 	})
@@ -573,7 +573,7 @@ func buildStorageProbeSource(t *testing.T, slots int) (ethdb.Database, common.Ha
 	t.Helper()
 	source := rawdb.NewDatabase(memorydb.New())
 	accountHash := common.HexToHash("0xa1")
-	writer := &capturingKeyValueWriter{target: source}
+	writer := &testErrorCapturingKeyValueWriter{target: source}
 	stack := trie.NewStackTrie(func(path []byte, hash common.Hash, blob []byte) {
 		rawdb.WriteTrieNode(writer, accountHash, path, hash, blob, rawdb.HashScheme)
 	})
@@ -664,6 +664,29 @@ func assertMemoryDatabaseEqual(t *testing.T, left, right ethdb.Database) {
 				rightEntries[index].key, rightEntries[index].value)
 		}
 	}
+}
+
+type testErrorCapturingKeyValueWriter struct {
+	target ethdb.KeyValueWriter
+	err    error
+}
+
+func (w *testErrorCapturingKeyValueWriter) Put(key, value []byte) error {
+	if w.err == nil {
+		w.err = w.target.Put(key, value)
+	}
+	return nil
+}
+
+func (w *testErrorCapturingKeyValueWriter) Delete(key []byte) error {
+	if w.err == nil {
+		w.err = w.target.Delete(key)
+	}
+	return nil
+}
+
+func (w *testErrorCapturingKeyValueWriter) Err() error {
+	return w.err
 }
 
 func collectMemoryEntries(t *testing.T, db ethdb.Database) []logicalEntry {

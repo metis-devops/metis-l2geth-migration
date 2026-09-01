@@ -252,22 +252,6 @@ func TestDirectMigrateRejectsInvalidSourceAndCleansOutput(t *testing.T) {
 	})
 }
 
-func TestCapturingKeyValueWriterPreservesTrieWriteError(t *testing.T) {
-	want := errors.New("injected trie write failure")
-	writer := &capturingKeyValueWriter{target: failingKeyValueWriter{err: want}}
-	rawdb.WriteTrieNode(writer, common.Hash{}, nil, common.HexToHash("0x01"), []byte{0x80}, rawdb.HashScheme)
-	if !errors.Is(writer.Err(), want) {
-		t.Fatalf("captured error is %v, want %v", writer.Err(), want)
-	}
-}
-
-type failingKeyValueWriter struct {
-	err error
-}
-
-func (w failingKeyValueWriter) Put([]byte, []byte) error { return w.err }
-func (w failingKeyValueWriter) Delete([]byte) error      { return w.err }
-
 func TestLegacySourceStableHeadFenceRejectsChange(t *testing.T) {
 	fixture := buildLegacyFixture(t)
 	kv, err := gethleveldb.New(fixture.chaindata, 16, 16, "stable-head", false)

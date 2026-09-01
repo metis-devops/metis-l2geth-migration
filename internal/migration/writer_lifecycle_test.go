@@ -13,7 +13,7 @@ import (
 func TestDirectStateWriterAbortDiscardsPendingBatch(t *testing.T) {
 	batch := newTrackingBatch()
 	writer := &directStateWriter{
-		batch: batch, recorder: &capturingKeyValueWriter{target: batch}, scheme: rawdb.PathScheme,
+		batch: batch, scheme: rawdb.PathScheme,
 	}
 	if err := writer.Storage(common.HexToHash("0x01"), common.HexToHash("0x02"), []byte{0x01}); err != nil {
 		t.Fatal(err)
@@ -34,7 +34,7 @@ func TestDirectStateWriterAbortDiscardsPendingBatch(t *testing.T) {
 func TestDirectStateWriterCloseFlushesOnce(t *testing.T) {
 	batch := newTrackingBatch()
 	writer := &directStateWriter{
-		batch: batch, recorder: &capturingKeyValueWriter{target: batch}, scheme: rawdb.HashScheme,
+		batch: batch, scheme: rawdb.HashScheme,
 	}
 	if err := writer.Code(common.Hash{}, common.HexToHash("0x01"), []byte{0x60}); err != nil {
 		t.Fatal(err)
@@ -53,7 +53,7 @@ func TestDirectStateWriterCloseFlushesOnce(t *testing.T) {
 func TestDirectStateWriterCloseContextAbortsCanceledFlush(t *testing.T) {
 	batch := newTrackingBatch()
 	writer := &directStateWriter{
-		batch: batch, recorder: &capturingKeyValueWriter{target: batch}, scheme: rawdb.HashScheme,
+		batch: batch, scheme: rawdb.HashScheme,
 	}
 	if err := writer.Code(common.Hash{}, common.HexToHash("0x01"), []byte{0x60}); err != nil {
 		t.Fatal(err)
@@ -68,23 +68,60 @@ func TestDirectStateWriterCloseContextAbortsCanceledFlush(t *testing.T) {
 	}
 }
 
+func TestDirectStateWriterPreservesTrieWriteError(t *testing.T) {
+	want := errors.New("injected trie write failure")
+	for _, test := range []struct {
+		name string
+		run  func(*directStateWriter) error
+	}{
+		{
+			name: "put",
+			run: func(writer *directStateWriter) error {
+				return writer.TrieNode(common.Hash{}, nil, common.HexToHash("0x01"), []byte{0x80})
+			},
+		},
+		{
+			name: "delete",
+			run: func(writer *directStateWriter) error {
+				return writer.DeleteTrieNode(common.Hash{}, nil, common.HexToHash("0x01"))
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			batch := newTrackingBatch()
+			batch.err = want
+			writer := &directStateWriter{batch: batch, scheme: rawdb.HashScheme}
+			if err := test.run(writer); !errors.Is(err, want) {
+				t.Fatalf("trie %s error is %v, want %v", test.name, err, want)
+			}
+		})
+	}
+}
+
 type trackingBatch struct {
 	puts   int
 	writes int
 	closes int
 	size   int
 	closed bool
+	err    error
 }
 
 func newTrackingBatch() *trackingBatch { return new(trackingBatch) }
 
 func (b *trackingBatch) Put(key, value []byte) error {
+	if b.err != nil {
+		return b.err
+	}
 	b.puts++
 	b.size += len(key) + len(value)
 	return nil
 }
 
 func (b *trackingBatch) Delete(key []byte) error {
+	if b.err != nil {
+		return b.err
+	}
 	b.size += len(key)
 	return nil
 }

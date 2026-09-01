@@ -10,15 +10,31 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
+// directKeyScratchSize covers the pinned one-byte rawdb prefix, one owner
+// hash, and the maximum 64-byte trie-path capacity. Canonical paths emitted by
+// StackTrie are shorter than 64 bytes.
+const directKeyScratchSize = 1 + 3*common.HashLength
+
 // directStateWriter persists the trie nodes produced while the legacy source
 // is independently rebuilt. Path artifacts also retain the flat state needed
 // by geth's path database; hash artifacts never create temporary flat state.
 type directStateWriter struct {
-	batch    ethdb.Batch
-	recorder *capturingKeyValueWriter
-	scheme   string
-	flushAt  int
-	closed   bool
+	batch      ethdb.Batch
+	scheme     string
+	flushAt    int
+	closed     bool
+	keyScratch [directKeyScratchSize]byte
+}
+
+// keyBytes assembles a key in writer-owned storage. Target batches copy keys
+// before Put or Delete returns, so the next operation can reuse the scratch
+// even when the batch is retained for a later flush.
+func (w *directStateWriter) keyBytes(prefix, middle, suffix []byte) []byte {
+	key := w.keyScratch[:0]
+	key = append(key, prefix...)
+	key = append(key, middle...)
+	key = append(key, suffix...)
+	return key
 }
 
 func newDirectStateWriter(db ethdb.Database, scheme string) *directStateWriter {
@@ -35,10 +51,9 @@ func newDeferredDirectStateWriter(db ethdb.Database, scheme string) *directState
 func newDirectStateWriterWithFlushLimit(db ethdb.Database, scheme string, flushAt int) *directStateWriter {
 	batch := db.NewBatchWithSize(ethdb.IdealBatchSize)
 	return &directStateWriter{
-		batch:    batch,
-		recorder: &capturingKeyValueWriter{target: batch},
-		scheme:   scheme,
-		flushAt:  flushAt,
+		batch:   batch,
+		scheme:  scheme,
+		flushAt: flushAt,
 	}
 }
 
@@ -54,7 +69,7 @@ func (w *directStateWriter) writeFlatAccount(hash common.Hash, slimRLP []byte) e
 	if w.scheme == rawdb.HashScheme {
 		return nil
 	}
-	key := prefixedKey(rawdb.SnapshotAccountPrefix, hash[:])
+	key := w.keyBytes(rawdb.SnapshotAccountPrefix, hash[:], nil)
 	if err := w.batch.Put(key, slimRLP); err != nil {
 		return fmt.Errorf("write flat account %s: %w", hash, err)
 	}
@@ -65,10 +80,7 @@ func (w *directStateWriter) Storage(accountHash, slotHash common.Hash, valueRLP 
 	if w.scheme == rawdb.HashScheme {
 		return nil
 	}
-	key := make([]byte, 0, len(rawdb.SnapshotStoragePrefix)+2*common.HashLength)
-	key = append(key, rawdb.SnapshotStoragePrefix...)
-	key = append(key, accountHash[:]...)
-	key = append(key, slotHash[:]...)
+	key := w.keyBytes(rawdb.SnapshotStoragePrefix, accountHash[:], slotHash[:])
 	if err := w.batch.Put(key, valueRLP); err != nil {
 		return fmt.Errorf("write flat account %s slot %s: %w", accountHash, slotHash, err)
 	}
@@ -76,7 +88,7 @@ func (w *directStateWriter) Storage(accountHash, slotHash common.Hash, valueRLP 
 }
 
 func (w *directStateWriter) Code(_ common.Hash, codeHash common.Hash, code []byte) error {
-	key := prefixedKey(rawdb.CodePrefix, codeHash[:])
+	key := w.keyBytes(rawdb.CodePrefix, codeHash[:], nil)
 	if err := w.batch.Put(key, code); err != nil {
 		return fmt.Errorf("write code %s: %w", codeHash, err)
 	}
@@ -84,25 +96,42 @@ func (w *directStateWriter) Code(_ common.Hash, codeHash common.Hash, code []byt
 }
 
 func (w *directStateWriter) TrieNode(owner common.Hash, path []byte, hash common.Hash, blob []byte) error {
-	rawdb.WriteTrieNode(w.recorder, owner, path, hash, blob, w.scheme)
-	if err := w.recorder.Err(); err != nil {
+	key, err := w.trieNodeKey(owner, path, hash)
+	if err != nil {
+		return err
+	}
+	if err := w.batch.Put(key, blob); err != nil {
 		return fmt.Errorf("write %s trie node owner=%s path=%x hash=%s: %w", w.scheme, owner, path, hash, err)
 	}
 	return w.flushIfNeeded()
 }
 
 func (w *directStateWriter) DeleteTrieNode(owner common.Hash, path []byte, hash common.Hash) error {
-	rawdb.DeleteTrieNode(w.recorder, owner, path, hash, w.scheme)
-	if err := w.recorder.Err(); err != nil {
+	key, err := w.trieNodeKey(owner, path, hash)
+	if err != nil {
+		return err
+	}
+	if err := w.batch.Delete(key); err != nil {
 		return fmt.Errorf("delete %s trie node owner=%s path=%x hash=%s: %w", w.scheme, owner, path, hash, err)
 	}
 	return w.flushIfNeeded()
 }
 
-func (w *directStateWriter) flushIfNeeded() error {
-	if err := w.recorder.Err(); err != nil {
-		return err
+func (w *directStateWriter) trieNodeKey(owner common.Hash, path []byte, hash common.Hash) ([]byte, error) {
+	switch w.scheme {
+	case rawdb.HashScheme:
+		return w.keyBytes(nil, hash[:], nil), nil
+	case rawdb.PathScheme:
+		if owner == (common.Hash{}) {
+			return w.keyBytes(rawdb.TrieNodeAccountPrefix, path, nil), nil
+		}
+		return w.keyBytes(rawdb.TrieNodeStoragePrefix, owner[:], path), nil
+	default:
+		return nil, fmt.Errorf("unknown state scheme %q", w.scheme)
 	}
+}
+
+func (w *directStateWriter) flushIfNeeded() error {
 	if w.flushAt <= 0 || w.batch.ValueSize() < w.flushAt {
 		return nil
 	}
@@ -119,9 +148,6 @@ func (w *directStateWriter) Close() error {
 	}
 	w.closed = true
 	defer w.batch.Close()
-	if err := w.recorder.Err(); err != nil {
-		return err
-	}
 	if err := w.batch.Write(); err != nil {
 		return fmt.Errorf("flush final directly generated state: %w", err)
 	}
@@ -148,33 +174,6 @@ func (w *directStateWriter) Abort() {
 	w.batch.Close()
 }
 
-// capturingKeyValueWriter lets rawdb's pinned trie-layout helper remain the
-// single source of truth without allowing its log.Crit error path to terminate
-// the process. The original error is returned by the enclosing operation.
-type capturingKeyValueWriter struct {
-	target ethdb.KeyValueWriter
-	err    error
-}
-
-func (w *capturingKeyValueWriter) Put(key, value []byte) error {
-	if w.err == nil {
-		w.err = w.target.Put(key, value)
-	}
-	return nil
-}
-
-func (w *capturingKeyValueWriter) Delete(key []byte) error {
-	if w.err == nil {
-		w.err = w.target.Delete(key)
-	}
-	return nil
-}
-
-func (w *capturingKeyValueWriter) Err() error {
-	return w.err
-}
-
 var _ StateVisitor = (*directStateWriter)(nil)
 var _ bundleAccountVisitor = (*directStateWriter)(nil)
 var _ trieNodeSink = (*directStateWriter)(nil)
-var _ ethdb.KeyValueWriter = (*capturingKeyValueWriter)(nil)
