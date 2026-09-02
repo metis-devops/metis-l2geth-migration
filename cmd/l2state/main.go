@@ -61,6 +61,9 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		return err
 	case "help", "-h", "--help":
 		return printUsage(stdout)
+	case "sleep": // do nothing, useful for debugging
+		<-ctx.Done()
+		return nil
 	default:
 		if err := printUsage(stderr); err != nil {
 			return fmt.Errorf("write usage: %w", err)
@@ -244,6 +247,7 @@ func printUsage(w io.Writer) error {
   l2state verify --bundle BUNDLE [--artifact ARTIFACT] [--quiet]
   l2state verify --source-chaindata PATH --artifact ARTIFACT [--quiet]
   l2state version
+  l2state sleep
 
 The source must be a stopped l2geth LevelDB or a consistent filesystem copy.
 Outputs must not already exist. Artifacts contain state only and are not bootable geth chaindata.

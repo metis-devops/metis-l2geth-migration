@@ -18,9 +18,9 @@ compacts, or writes to the source LevelDB.
 
 ## Choose a workflow
 
-| Workflow | Use it when | Evidence and storage tradeoff |
-| --- | --- | --- |
-| `migrate` | The source snapshot and destination are available together. | Avoids creating a bundle, but later full verification requires the same source snapshot. |
+| Workflow               | Use it when                                                                                            | Evidence and storage tradeoff                                                                      |
+| ---------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| `migrate`              | The source snapshot and destination are available together.                                            | Avoids creating a bundle, but later full verification requires the same source snapshot.           |
 | `export` then `import` | The environments are separate, the state must be portable, or both schemes may be built from one scan. | Stores a portable record stream with file and ordered-record digests; needs additional disk space. |
 
 Both workflows rebuild the same state root, support `hash` and `path`, reopen
