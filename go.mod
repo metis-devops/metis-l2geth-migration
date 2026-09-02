@@ -3,7 +3,7 @@ module github.com/metis-devops/metis-l2geth-migration
 go 1.27.0
 
 require (
-	github.com/cockroachdb/pebble/v2 v2.1.4
+	github.com/cockroachdb/pebble/v2 v2.1.7
 	github.com/ethereum/go-ethereum v1.17.5
 	github.com/holiman/uint256 v1.3.2
 	github.com/klauspost/compress v1.19.2
