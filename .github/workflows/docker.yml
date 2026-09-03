@@ -51,8 +51,6 @@ jobs:
           sbom: true
           annotations: ${{ steps.meta.outputs.annotations }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            TOOL_VERSION=git-${{ github.sha }}
           cache-from: type=gha,scope=buildkit-${{ runner.os }}-${{ runner.arch }}
           cache-to: type=gha,mode=max,scope=buildkit-${{ runner.os }}-${{ runner.arch }}
           outputs: type=image,"name=${{ env.GHCR_REPO }}",push-by-digest=true,name-canonical=true,push=true

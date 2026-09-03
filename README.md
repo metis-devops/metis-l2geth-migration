@@ -38,16 +38,10 @@ make build
 
 The version command reports the main-module and go-ethereum module versions
 embedded by the Go toolchain. Local development builds may report a generated
-pseudo-version or `(devel)` when VCS metadata is unavailable.
-Official images exclude `.git` from their build context and inject
-`git-<full GitHub SHA>` explicitly, so manifests and verification reports retain
-exact production-image provenance. Ad hoc Docker builds default to
-`container-devel` unless `TOOL_VERSION` is supplied.
-
-The module pins go-ethereum to v1.17.5 at commit
-`9621c6ad10934a01b5514886fb6fbd87640b6c05`. It also pins a newer compatible
-`cockroachdb/swiss` revision because the version selected by geth does not
-build with Go 1.27; this does not change the pinned geth storage APIs.
+pseudo-version or `(devel)` when VCS metadata is unavailable. Container builds
+without VCS metadata report `(devel)` for the main module. The linked
+go-ethereum version and commit remain fixed and are recorded in manifests and
+verification reports.
 
 ## Direct migration
 

@@ -1,6 +1,5 @@
 # syntax=docker/dockerfile:1
 FROM golang:1.27.0-alpine AS build
-ARG TOOL_VERSION=container-devel
 WORKDIR /app
 RUN apk add --no-cache ca-certificates git
 COPY go.mod go.sum ./
@@ -11,7 +10,7 @@ COPY internal ./internal
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     go build -trimpath \
-    -ldflags="-s -w -X=github.com/metis-devops/metis-l2geth-migration/internal/version.buildToolVersion=${TOOL_VERSION}" \
+    -ldflags="-s -w" \
     -o ./bin/ ./cmd/...
 
 FROM alpine:latest

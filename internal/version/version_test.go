@@ -85,12 +85,3 @@ func TestRuntimeVersions(t *testing.T) {
 		t.Fatalf("GethVersion = %q, want v1.17.5", GethVersion)
 	}
 }
-
-func TestOverrideToolVersion(t *testing.T) {
-	if got := overrideToolVersion("v0.4.0", ""); got != "v0.4.0" {
-		t.Fatalf("empty override returned %q", got)
-	}
-	if got := overrideToolVersion(developmentToolVersion, "git-abcdef"); got != "git-abcdef" {
-		t.Fatalf("injected override returned %q", got)
-	}
-}
