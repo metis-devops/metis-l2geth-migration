@@ -25,15 +25,19 @@ const (
 )
 
 type partitionedStateMigrator struct {
-	ctx        context.Context
-	source     ethdb.Database
-	trieDB     *triedb.Database
-	target     ethdb.Database
-	scheme     string
-	root       common.Hash
-	limiter    *migrateWorkLimiter
-	codeHashes *concurrentHashSet
-	progress   *progressCounts
+	ctx              context.Context
+	source           ethdb.Database
+	trieDB           *triedb.Database
+	target           ethdb.Database
+	scheme           string
+	root             common.Hash
+	limiter          *migrateWorkLimiter
+	accounts         *migrateAccountWindow
+	accountProcessor migrateAccountProcessor
+	cancelRun        context.CancelFunc
+	runFailure       migrateRunFailure
+	codeHashes       *concurrentHashSet
+	progress         *progressCounts
 }
 
 type migratePartitionResult struct {
@@ -68,6 +72,7 @@ func (s *legacySource) migratePartitionedState(
 		scheme:     scheme,
 		root:       s.head.StateRoot,
 		limiter:    newMigrateWorkLimiter(workers),
+		accounts:   newMigrateAccountWindow(workers),
 		codeHashes: newConcurrentHashSet(),
 		progress:   progress,
 	}
@@ -75,20 +80,23 @@ func (s *legacySource) migratePartitionedState(
 }
 
 func (m *partitionedStateMigrator) run() (StateResult, *directStateWriter, error) {
+	runCtx, cancelRun := context.WithCancel(m.ctx)
+	defer cancelRun()
+	m.cancelRun = cancelRun
 	var partitions [migrateTriePartitions]migratePartitionResult
-	err := runMigratePartitionTasks(m.ctx, func(ctx context.Context, index int) error {
-		lease := newMigrateWorkLease(m.limiter)
-		if err := lease.acquire(ctx); err != nil {
-			return err
-		}
-		defer lease.release()
-		result, err := m.migrateAccountPartition(ctx, byte(index), lease)
+	err := runMigratePartitionTasks(runCtx, func(ctx context.Context, index int) error {
+		result, err := m.migrateAccountPartition(ctx, byte(index))
 		if err != nil {
-			return fmt.Errorf("migrate account partition %x: %w", index, err)
+			wrapped := fmt.Errorf("migrate account partition %x: %w", index, err)
+			m.recordRunFailure(wrapped)
+			return wrapped
 		}
 		partitions[index] = result
 		return nil
 	})
+	if runErr := m.runFailure.load(); runErr != nil {
+		return StateResult{}, nil, runErr
+	}
 	if err != nil {
 		return StateResult{}, nil, err
 	}
@@ -105,15 +113,124 @@ func (m *partitionedStateMigrator) run() (StateResult, *directStateWriter, error
 	return StateResult{Root: root, Counts: counts}, finalWriter, nil
 }
 
+type migrateAccountJob struct {
+	sequence  uint64
+	hash      common.Hash
+	rlp       []byte
+	account   *types.StateAccount
+	codeHash  common.Hash
+	writeCode bool
+	counts    bundle.Counts
+}
+
+type migrateAccountResult struct {
+	job     migrateAccountJob
+	account *types.StateAccount
+	code    []byte
+	counts  bundle.Counts
+	err     error
+}
+
+type migratePreparedAccount struct {
+	hash          common.Hash
+	account       *types.StateAccount
+	codeHash      common.Hash
+	writeCode     bool
+	codeReference bool
+}
+
+func (p migratePreparedAccount) result(sequence uint64, accountRLP []byte) migrateAccountResult {
+	var counts bundle.Counts
+	if p.codeReference {
+		counts.CodeReferences = 1
+	}
+	job := migrateAccountJob{
+		sequence:  sequence,
+		hash:      p.hash,
+		rlp:       accountRLP,
+		account:   p.account,
+		codeHash:  p.codeHash,
+		writeCode: p.writeCode,
+		counts:    counts,
+	}
+	return migrateAccountResult{job: job, account: p.account, counts: counts}
+}
+
+type migrateAccountProcessor func(context.Context, migrateAccountJob) migrateAccountResult
+
+type migratePipelineFailure struct {
+	mu      sync.Mutex
+	err     error
+	cancel  context.CancelFunc
+	onFirst func(error)
+}
+
+func (f *migratePipelineFailure) record(err error) {
+	if err == nil {
+		return
+	}
+	f.mu.Lock()
+	first := f.err == nil
+	if f.err == nil {
+		f.err = err
+	}
+	f.mu.Unlock()
+	if first {
+		f.cancel()
+		if f.onFirst != nil {
+			f.onFirst(err)
+		}
+	}
+}
+
+type migrateRunFailure struct {
+	mu  sync.Mutex
+	err error
+}
+
+func (f *migrateRunFailure) record(err error) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.err != nil {
+		return false
+	}
+	f.err = err
+	return true
+}
+
+func (f *migrateRunFailure) load() error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.err
+}
+
+func (m *partitionedStateMigrator) recordRunFailure(err error) {
+	if m.runFailure.record(err) {
+		if m.cancelRun != nil {
+			m.cancelRun()
+		}
+	}
+}
+
+func (f *migratePipelineFailure) load() error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.err
+}
+
 func (m *partitionedStateMigrator) migrateAccountPartition(
 	ctx context.Context,
 	partition byte,
-	lease *migrateWorkLease,
 ) (migratePartitionResult, error) {
 	if err := ctx.Err(); err != nil {
 		return migratePartitionResult{}, err
 	}
+	iteratorLease := newMigrateWorkLease(m.limiter)
+	if err := iteratorLease.acquire(ctx); err != nil {
+		return migratePartitionResult{}, err
+	}
 	accounts, err := m.openPartitionIterator(trie.StateTrieID(m.root), partition)
+	iteratorLease.release()
 	if err != nil {
 		return migratePartitionResult{}, fmt.Errorf("open account iterator: %w", err)
 	}
@@ -132,55 +249,347 @@ func (m *partitionedStateMigrator) migrateAccountPartition(
 		}
 		nodeErr = writer.TrieNode(common.Hash{}, path, hash, blob)
 	})
-	for accounts.Next() {
-		if err := ctx.Err(); err != nil {
+	accountLease := newMigrateWorkLease(m.limiter)
+	defer accountLease.release()
+	var sequence uint64
+	for {
+		if err := accountLease.acquire(ctx); err != nil {
 			return migratePartitionResult{}, err
 		}
-		if len(accounts.Key) != common.HashLength {
-			return migratePartitionResult{}, fmt.Errorf("account trie key has length %d", len(accounts.Key))
+		next := accounts.Next()
+		if !next {
+			iteratorErr := accounts.Err
+			accountLease.release()
+			if iteratorErr != nil {
+				return migratePartitionResult{}, fmt.Errorf("iterate account partition %x: %w", partition, iteratorErr)
+			}
+			break
 		}
-		accountHash := common.Hash(accounts.Key)
-		account, err := decodeFullAccount(accountHash, accounts.Value)
+		prepared, async, err := m.prepareMigrateAccount(partition, sequence, accounts.Key, accounts.Value)
 		if err != nil {
 			return migratePartitionResult{}, err
 		}
-		if err := writer.Account(accountHash, account, accounts.Value); err != nil {
+		if !async {
+			var counts bundle.Counts
+			if prepared.codeReference {
+				counts.CodeReferences = 1
+			}
+			err := m.mergeMigrateAccountDataHeld(
+				partition, writer, accountStack, &nodeErr,
+				prepared.hash, prepared.account, accounts.Value, prepared.codeHash, nil, counts, &result,
+			)
+			if err != nil {
+				return migratePartitionResult{}, err
+			}
+			sequence++
+			m.yieldAccountLeaseForPendingBurst(accountLease)
+			continue
+		}
+		first := prepared.result(sequence, bytes.Clone(accounts.Value))
+		accountLease.release()
+		var eof bool
+		sequence, eof, err = m.runMigrateAccountBurst(
+			ctx, partition, accounts, first, writer, accountStack, &nodeErr, &result,
+		)
+		if err != nil {
 			return migratePartitionResult{}, err
 		}
-		accountCounts := bundle.Counts{Accounts: 1, Records: 1, PayloadBytes: uint64(len(accounts.Value))}
-		addBundleCounts(&result.counts, accountCounts)
-		m.addProgress(accountCounts)
+		if eof {
+			break
+		}
+	}
 
-		storageCounts, err := m.migrateStorage(ctx, accountHash, account.Root, lease)
-		if err != nil {
-			return migratePartitionResult{}, err
-		}
-		addBundleCounts(&result.counts, storageCounts)
-		if err := m.migrateCode(ctx, writer, accountHash, common.BytesToHash(account.CodeHash), &result.counts); err != nil {
-			return migratePartitionResult{}, err
-		}
-		if err := accountStack.Update(accountHash[:], accounts.Value); err != nil {
-			return migratePartitionResult{}, fmt.Errorf("rebuild account partition %x: %w", partition, err)
-		}
-		if nodeErr != nil {
-			return migratePartitionResult{}, fmt.Errorf("write account partition %x trie nodes: %w", partition, nodeErr)
-		}
-		result.populated = true
+	return m.finishMigrateAccountPartition(ctx, partition, writer, accountStack, nodeErr, &result)
+}
+
+func (m *partitionedStateMigrator) yieldAccountLeaseForPendingBurst(lease *migrateWorkLease) {
+	if m.accounts.pending() {
+		lease.release()
 	}
-	if accounts.Err != nil {
-		return migratePartitionResult{}, fmt.Errorf("iterate account partition %x: %w", partition, accounts.Err)
+}
+
+func (m *partitionedStateMigrator) finishMigrateAccountPartition(
+	ctx context.Context,
+	partition byte,
+	writer *directStateWriter,
+	accountStack *trie.PartialStackTrie,
+	nodeErr error,
+	result *migratePartitionResult,
+) (migratePartitionResult, error) {
+	lease := newMigrateWorkLease(m.limiter)
+	if err := lease.acquire(ctx); err != nil {
+		return migratePartitionResult{}, err
 	}
+	defer lease.release()
 	result.root = accountStack.Hash()
 	if nodeErr != nil {
 		return migratePartitionResult{}, fmt.Errorf("write final account partition %x trie nodes: %w", partition, nodeErr)
 	}
-	if err := validateMigratePartitionResult(partition, result); err != nil {
+	if err := validateMigratePartitionResult(partition, *result); err != nil {
 		return migratePartitionResult{}, err
 	}
 	if err := writer.CloseContext(ctx); err != nil {
 		return migratePartitionResult{}, fmt.Errorf("flush account partition %x: %w", partition, err)
 	}
-	return result, nil
+	return *result, nil
+}
+
+func (m *partitionedStateMigrator) prepareMigrateAccount(
+	partition byte,
+	sequence uint64,
+	key, accountRLP []byte,
+) (migratePreparedAccount, bool, error) {
+	if len(key) != common.HashLength {
+		return migratePreparedAccount{}, false, fmt.Errorf(
+			"account partition %x sequence %d: account trie key has length %d", partition, sequence, len(key),
+		)
+	}
+	accountHash := common.Hash(key)
+	account, err := decodeFullAccount(accountHash, accountRLP)
+	if err != nil {
+		return migratePreparedAccount{}, false, err
+	}
+	codeHash := common.BytesToHash(account.CodeHash)
+	prepared := migratePreparedAccount{
+		hash: accountHash, account: account, codeHash: codeHash,
+	}
+	if codeHash != types.EmptyCodeHash {
+		prepared.codeReference = true
+		m.addProgress(bundle.Counts{CodeReferences: 1})
+		prepared.writeCode = m.codeHashes.Add(codeHash)
+	}
+	async := account.Root != types.EmptyRootHash || prepared.writeCode
+	return prepared, async, nil
+}
+
+func (m *partitionedStateMigrator) runMigrateAccountBurst(
+	ctx context.Context,
+	partition byte,
+	accounts *trie.Iterator,
+	first migrateAccountResult,
+	writer *directStateWriter,
+	accountStack migrateTrieUpdater,
+	nodeErr *error,
+	partitionResult *migratePartitionResult,
+) (nextSequence uint64, eof bool, retErr error) {
+	burstCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	failure := &migratePipelineFailure{cancel: cancel, onFirst: m.recordRunFailure}
+	results := make(chan migrateAccountResult, m.accounts.capacity())
+	var jobs sync.WaitGroup
+	if err := m.accounts.acquire(burstCtx); err != nil {
+		return first.job.sequence, false, err
+	}
+	m.submitMigrateAccountTask(burstCtx, partition, first, results, failure, &jobs)
+	nextSequence = first.job.sequence + 1
+	for m.accounts.tryAcquire() {
+		lease := newMigrateWorkLease(m.limiter)
+		if err := lease.acquire(burstCtx); err != nil {
+			m.accounts.release()
+			failure.record(err)
+			break
+		}
+		next := accounts.Next()
+		if !next {
+			iteratorErr := accounts.Err
+			lease.release()
+			m.accounts.release()
+			if iteratorErr != nil {
+				failure.record(fmt.Errorf("iterate account partition %x: %w", partition, iteratorErr))
+			}
+			eof = true
+			break
+		}
+		prepared, async, err := m.prepareMigrateAccount(partition, nextSequence, accounts.Key, accounts.Value)
+		if err != nil {
+			lease.release()
+			m.accounts.release()
+			failure.record(err)
+			break
+		}
+		ready := prepared.result(nextSequence, bytes.Clone(accounts.Value))
+		lease.release()
+		if async {
+			m.submitMigrateAccountTask(burstCtx, partition, ready, results, failure, &jobs)
+		} else {
+			results <- ready
+		}
+		nextSequence++
+	}
+	go func() {
+		jobs.Wait()
+		close(results)
+	}()
+	if err := m.mergeMigrateAccounts(
+		burstCtx, partition, first.job.sequence, writer, accountStack, nodeErr, results, partitionResult, failure,
+	); err != nil {
+		return nextSequence, eof, err
+	}
+	return nextSequence, eof, nil
+}
+
+func (m *partitionedStateMigrator) submitMigrateAccountTask(
+	ctx context.Context,
+	partition byte,
+	prepared migrateAccountResult,
+	results chan<- migrateAccountResult,
+	failure *migratePipelineFailure,
+	jobs *sync.WaitGroup,
+) {
+	process := m.accountProcessor
+	if process == nil {
+		process = m.processMigrateAccount
+	}
+	jobs.Go(func() {
+		result := process(ctx, prepared.job)
+		if result.err != nil {
+			failure.record(fmt.Errorf(
+				"account partition %x sequence %d account %s: %w",
+				partition, prepared.job.sequence, prepared.job.hash, result.err,
+			))
+		}
+		results <- result
+	})
+}
+
+func (m *partitionedStateMigrator) processMigrateAccount(ctx context.Context, job migrateAccountJob) migrateAccountResult {
+	result := migrateAccountResult{job: job, counts: job.counts}
+	lease := newMigrateWorkLease(m.limiter)
+	if err := lease.acquire(ctx); err != nil {
+		result.err = err
+		return result
+	}
+	defer lease.release()
+	result.account = job.account
+	storageCounts, err := m.migrateStorage(ctx, job.hash, job.account.Root, lease)
+	if err != nil {
+		result.err = err
+		return result
+	}
+	addBundleCounts(&result.counts, storageCounts)
+	if job.writeCode {
+		code, err := m.readMigrateCode(ctx, job.hash, job.codeHash)
+		if err != nil {
+			result.err = err
+			return result
+		}
+		result.code = code
+	}
+	return result
+}
+
+func (m *partitionedStateMigrator) mergeMigrateAccounts(
+	ctx context.Context,
+	partition byte,
+	next uint64,
+	writer *directStateWriter,
+	accountStack migrateTrieUpdater,
+	nodeErr *error,
+	results <-chan migrateAccountResult,
+	partitionResult *migratePartitionResult,
+	failure *migratePipelineFailure,
+) error {
+	pending := make(map[uint64]migrateAccountResult, m.accounts.capacity())
+	for result := range results {
+		if failure.load() != nil {
+			m.accounts.release()
+			for range pending {
+				m.accounts.release()
+			}
+			clear(pending)
+			continue
+		}
+		pending[result.job.sequence] = result
+		for {
+			ordered, ok := pending[next]
+			if !ok {
+				break
+			}
+			delete(pending, next)
+			err := m.mergeMigrateAccount(ctx, partition, writer, accountStack, nodeErr, ordered, partitionResult)
+			m.accounts.release()
+			if err != nil {
+				failure.record(fmt.Errorf(
+					"merge account partition %x sequence %d account %s: %w",
+					partition, ordered.job.sequence, ordered.job.hash, err,
+				))
+				for range pending {
+					m.accounts.release()
+				}
+				clear(pending)
+				break
+			}
+			next++
+		}
+	}
+	if err := failure.load(); err != nil {
+		return err
+	}
+	if len(pending) != 0 {
+		return fmt.Errorf("account partition %x pipeline ended with %d unmerged results", partition, len(pending))
+	}
+	return ctx.Err()
+}
+
+func (m *partitionedStateMigrator) mergeMigrateAccount(
+	ctx context.Context,
+	partition byte,
+	writer *directStateWriter,
+	accountStack migrateTrieUpdater,
+	nodeErr *error,
+	result migrateAccountResult,
+	partitionResult *migratePartitionResult,
+) error {
+	if result.err != nil {
+		return result.err
+	}
+	lease := newMigrateWorkLease(m.limiter)
+	if err := lease.acquire(ctx); err != nil {
+		return err
+	}
+	defer lease.release()
+	return m.mergeMigrateAccountDataHeld(
+		partition, writer, accountStack, nodeErr,
+		result.job.hash, result.account, result.job.rlp, result.job.codeHash, result.code, result.counts, partitionResult,
+	)
+}
+
+func (m *partitionedStateMigrator) mergeMigrateAccountDataHeld(
+	partition byte,
+	writer *directStateWriter,
+	accountStack migrateTrieUpdater,
+	nodeErr *error,
+	accountHash common.Hash,
+	account *types.StateAccount,
+	accountRLP []byte,
+	codeHash common.Hash,
+	code []byte,
+	counts bundle.Counts,
+	partitionResult *migratePartitionResult,
+) error {
+	if err := writer.Account(accountHash, account, accountRLP); err != nil {
+		return err
+	}
+	if len(code) != 0 {
+		if err := writer.Code(accountHash, codeHash, code); err != nil {
+			return err
+		}
+		record := bundle.Counts{CodeRecords: 1, Records: 1, PayloadBytes: uint64(len(code))}
+		addBundleCounts(&counts, record)
+		m.addProgress(record)
+	}
+	if err := accountStack.Update(accountHash[:], accountRLP); err != nil {
+		return fmt.Errorf("rebuild account partition %x: %w", partition, err)
+	}
+	if *nodeErr != nil {
+		return fmt.Errorf("write account partition %x trie nodes: %w", partition, *nodeErr)
+	}
+	accountCounts := bundle.Counts{Accounts: 1, Records: 1, PayloadBytes: uint64(len(accountRLP))}
+	addBundleCounts(&partitionResult.counts, accountCounts)
+	addBundleCounts(&partitionResult.counts, counts)
+	m.addProgress(accountCounts)
+	partitionResult.populated = true
+	return nil
 }
 
 func (m *partitionedStateMigrator) migrateStorage(
@@ -359,23 +768,15 @@ func (m *partitionedStateMigrator) migrateStoragePartition(
 	return result, nil
 }
 
-func (m *partitionedStateMigrator) migrateCode(
+func (m *partitionedStateMigrator) readMigrateCode(
 	ctx context.Context,
-	writer *directStateWriter,
 	accountHash, codeHash common.Hash,
-	counts *bundle.Counts,
-) error {
+) ([]byte, error) {
 	if codeHash == types.EmptyCodeHash {
-		return nil
-	}
-	reference := bundle.Counts{CodeReferences: 1}
-	addBundleCounts(counts, reference)
-	m.addProgress(reference)
-	if !m.codeHashes.Add(codeHash) {
-		return nil
+		return nil, nil
 	}
 	if err := ctx.Err(); err != nil {
-		return err
+		return nil, err
 	}
 	code, err := m.source.Get(codeHash[:])
 	if errors.Is(err, leveldb.ErrNotFound) {
@@ -383,21 +784,15 @@ func (m *partitionedStateMigrator) migrateCode(
 		err = nil
 	}
 	if err != nil {
-		return fmt.Errorf("read account %s code %s: %w", accountHash, codeHash, err)
+		return nil, fmt.Errorf("read account %s code %s: %w", accountHash, codeHash, err)
 	}
 	if len(code) == 0 {
-		return fmt.Errorf("account %s code %s is missing", accountHash, codeHash)
+		return nil, fmt.Errorf("account %s code %s is missing", accountHash, codeHash)
 	}
 	if computed := crypto.Keccak256Hash(code); computed != codeHash {
-		return fmt.Errorf("account %s code hash mismatch: computed %s account %s", accountHash, computed, codeHash)
+		return nil, fmt.Errorf("account %s code hash mismatch: computed %s account %s", accountHash, computed, codeHash)
 	}
-	if err := writer.Code(accountHash, codeHash, code); err != nil {
-		return err
-	}
-	record := bundle.Counts{CodeRecords: 1, Records: 1, PayloadBytes: uint64(len(code))}
-	addBundleCounts(counts, record)
-	m.addProgress(record)
-	return nil
+	return code, nil
 }
 
 func (m *partitionedStateMigrator) openIterator(id *trie.ID) (*trie.Iterator, error) {
@@ -563,6 +958,44 @@ func (m *partitionedStateMigrator) addProgress(counts bundle.Counts) {
 	m.progress.payloadBytes.Add(counts.PayloadBytes)
 }
 
+type migrateAccountWindow struct {
+	slots chan struct{}
+}
+
+func newMigrateAccountWindow(workers int) *migrateAccountWindow {
+	return &migrateAccountWindow{slots: make(chan struct{}, 2*normalizeMigrateWorkers(workers))}
+}
+
+func (w *migrateAccountWindow) acquire(ctx context.Context) error {
+	select {
+	case w.slots <- struct{}{}:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (w *migrateAccountWindow) tryAcquire() bool {
+	select {
+	case w.slots <- struct{}{}:
+		return true
+	default:
+		return false
+	}
+}
+
+func (w *migrateAccountWindow) pending() bool {
+	return len(w.slots) != 0
+}
+
+func (w *migrateAccountWindow) release() {
+	<-w.slots
+}
+
+func (w *migrateAccountWindow) capacity() int {
+	return cap(w.slots)
+}
+
 type migrateWorkLimiter struct {
 	tokens chan struct{}
 }
@@ -594,6 +1027,9 @@ func newMigrateWorkLease(limiter *migrateWorkLimiter) *migrateWorkLease {
 }
 
 func (l *migrateWorkLease) acquire(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if l.held {
 		return nil
 	}

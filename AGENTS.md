@@ -137,10 +137,20 @@ trie preimages.
   to report a percentage or ETA.
 - Direct migrate always uses the partitioned builder. Normalize workers below
   2 to 2, reject values above 16, and share one limiter across account and
-  nested storage partitions. Release an account lease before waiting for a
-  large storage partition and join every task before closing either database.
-  Keep the 1024-slot storage probe uncommitted so crossing the threshold can
-  discard it without leaking target keys or duplicate counts.
+  nested storage partitions. Bound accounts read but not yet merged globally
+  to twice the normalized worker count. Keep each account-partition iterator
+  serial and retain a zero-copy serial fast path for accounts without storage
+  or newly claimed code. Storage or a first code-hash claim starts a bounded,
+  non-blocking burst; read and validate code in its worker, but write the
+  returned bounded code bytes through the ordered partition writer. Merge
+  account/code writes and `PartialStackTrie.Update` calls in sequence order.
+  Iterator advancement, account work, and trie merging borrow the shared
+  limiter only while active. A light-account scan may retain its lease while
+  the global account window is empty, but must yield after each account while
+  a burst is pending. Release an account lease before waiting for a large
+  storage partition and join every account and nested task before closing
+  either database. Keep the 1024-slot storage probe uncommitted so crossing the
+  threshold can discard it without leaking target keys or duplicate counts.
 - Add regression coverage for behavior changes. Exercise both `hash` and
   `path`, both `zstd` and `none`, and both direct and bundle-backed paths
   when the changed behavior applies to them.
@@ -178,8 +188,9 @@ Use the following change-sensitive checks:
 - Partitioned direct-migration changes: compare hash and path node inventories
   with the serial and test-only `GenerateTrie` references; cover exact range
   boundaries, empty/single/multiple partitions, 1024/1025 storage slots,
-  shared code across partitions, global worker bounds, cancellation, and
-  nested-worker race behavior.
+  shared code across partitions, out-of-order account completion, the global
+  account window, global worker bounds, cancellation, and nested-worker race
+  behavior.
 
 Do not regenerate the golden fixture during ordinary test maintenance. If
 regeneration is intentional, use the pinned module in

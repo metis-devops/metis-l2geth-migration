@@ -79,6 +79,336 @@ func TestMigratePartitionRangesCoverHashSpace(t *testing.T) {
 	}
 }
 
+func TestMigrateAccountBurstStopsAtGlobalWindow(t *testing.T) {
+	const accountCount = 6
+	ctx := t.Context()
+	migrator := &partitionedStateMigrator{
+		target: rawdb.NewDatabase(memorydb.New()), scheme: rawdb.HashScheme,
+		limiter: newMigrateWorkLimiter(2), accounts: newMigrateAccountWindow(2),
+		codeHashes: newConcurrentHashSet(),
+	}
+	accounts := buildAccountPipelineIterator(t, accountCount)
+	if !accounts.Next() {
+		t.Fatalf("read first account: %v", accounts.Err)
+	}
+	prepared, _, err := migrator.prepareMigrateAccount(0, 0, accounts.Key, accounts.Value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := prepared.result(0, bytes.Clone(accounts.Value))
+	first.job.writeCode = true
+	started := make(chan struct{}, 1)
+	releaseFirst := make(chan struct{})
+	process := func(ctx context.Context, job migrateAccountJob) migrateAccountResult {
+		lease := newMigrateWorkLease(migrator.limiter)
+		if err := lease.acquire(ctx); err != nil {
+			return migrateAccountResult{job: job, err: err}
+		}
+		defer lease.release()
+		started <- struct{}{}
+		if job.sequence == 0 {
+			select {
+			case <-releaseFirst:
+			case <-ctx.Done():
+				return migrateAccountResult{job: job, err: ctx.Err()}
+			}
+		}
+		return migrateAccountResult{job: job, account: job.account, counts: job.counts}
+	}
+	migrator.accountProcessor = process
+	writer := newDirectStateWriter(migrator.target, migrator.scheme)
+	defer writer.Abort()
+	var result migratePartitionResult
+	var nodeErr error
+	done := make(chan struct {
+		next uint64
+		eof  bool
+		err  error
+	}, 1)
+	go func() {
+		next, eof, err := migrator.runMigrateAccountBurst(
+			ctx, 0, accounts, first, writer, trie.NewPartialStackTrie(0, nil), &nodeErr, &result,
+		)
+		done <- struct {
+			next uint64
+			eof  bool
+			err  error
+		}{next: next, eof: eof, err: err}
+	}()
+	select {
+	case <-started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for the first burst job")
+	}
+	deadline := time.NewTimer(5 * time.Second)
+	defer deadline.Stop()
+	for len(migrator.accounts.slots) != migrator.accounts.capacity() {
+		select {
+		case outcome := <-done:
+			t.Fatalf("burst completed before filling its window: %+v", outcome)
+		case <-deadline.C:
+			t.Fatal("timed out waiting for the account window to fill")
+		default:
+			time.Sleep(time.Millisecond)
+		}
+	}
+	if len(migrator.accounts.slots) != migrator.accounts.capacity() {
+		t.Fatalf("inflight accounts=%d, want window capacity %d", len(migrator.accounts.slots), migrator.accounts.capacity())
+	}
+	close(releaseFirst)
+	select {
+	case outcome := <-done:
+		if outcome.err != nil {
+			t.Fatal(outcome.err)
+		}
+		if outcome.next != uint64(migrator.accounts.capacity()) || outcome.eof {
+			t.Fatalf("burst outcome next=%d eof=%t", outcome.next, outcome.eof)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for burst completion")
+	}
+	if result.counts.Accounts != uint64(migrator.accounts.capacity()) {
+		t.Fatalf("merged %d accounts, want %d", result.counts.Accounts, migrator.accounts.capacity())
+	}
+	if len(migrator.accounts.slots) != 0 {
+		t.Fatalf("%d account window slots remain held", len(migrator.accounts.slots))
+	}
+	if !accounts.Next() {
+		t.Fatalf("burst consumed accounts beyond its window: %v", accounts.Err)
+	}
+}
+
+func TestPrepareMigrateAccountSelectsAdaptiveBurst(t *testing.T) {
+	migrator := &partitionedStateMigrator{codeHashes: newConcurrentHashSet(), progress: new(progressCounts)}
+	key := partitionTestHash(0x20, 0x01)
+	encode := func(account *types.StateAccount) []byte {
+		t.Helper()
+		encoded, err := rlp.EncodeToBytes(account)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return encoded
+	}
+	empty := types.NewEmptyStateAccount()
+	prepared, async, err := migrator.prepareMigrateAccount(2, 0, key[:], encode(empty))
+	if err != nil || async || prepared.codeReference || prepared.writeCode {
+		t.Fatalf("empty account preparation=%+v async=%t err=%v", prepared, async, err)
+	}
+	codeHash := crypto.Keccak256Hash([]byte{0x60, 0x00})
+	withCode := types.NewEmptyStateAccount()
+	withCode.CodeHash = codeHash.Bytes()
+	prepared, async, err = migrator.prepareMigrateAccount(2, 1, key[:], encode(withCode))
+	if err != nil || !async || !prepared.codeReference || !prepared.writeCode {
+		t.Fatalf("first code preparation=%+v async=%t err=%v", prepared, async, err)
+	}
+	prepared, async, err = migrator.prepareMigrateAccount(2, 2, key[:], encode(withCode))
+	if err != nil || async || !prepared.codeReference || prepared.writeCode {
+		t.Fatalf("shared code preparation=%+v async=%t err=%v", prepared, async, err)
+	}
+	withStorage := types.NewEmptyStateAccount()
+	withStorage.Root = common.HexToHash("0x01")
+	prepared, async, err = migrator.prepareMigrateAccount(2, 3, key[:], encode(withStorage))
+	if err != nil || !async || prepared.codeReference || prepared.writeCode {
+		t.Fatalf("storage preparation=%+v async=%t err=%v", prepared, async, err)
+	}
+	if got := migrator.progress.snapshot().CodeReferences; got != 2 {
+		t.Fatalf("code reference progress=%d, want 2", got)
+	}
+}
+
+func TestMigrateLightFastPathYieldsOnlyForPendingBurst(t *testing.T) {
+	for _, pending := range []bool{false, true} {
+		t.Run(fmt.Sprintf("pending=%t", pending), func(t *testing.T) {
+			migrator := &partitionedStateMigrator{
+				limiter: newMigrateWorkLimiter(2), accounts: newMigrateAccountWindow(2),
+			}
+			lease := newMigrateWorkLease(migrator.limiter)
+			if err := lease.acquire(t.Context()); err != nil {
+				t.Fatal(err)
+			}
+			defer lease.release()
+			if pending {
+				if err := migrator.accounts.acquire(t.Context()); err != nil {
+					t.Fatal(err)
+				}
+				defer migrator.accounts.release()
+			}
+			migrator.yieldAccountLeaseForPendingBurst(lease)
+			if lease.held == pending {
+				t.Fatalf("lease held=%t with pending burst=%t", lease.held, pending)
+			}
+		})
+	}
+}
+
+func TestMigrateAccountMergerOrdersOutOfOrderResults(t *testing.T) {
+	const partition = byte(2)
+	ctx := t.Context()
+	target := rawdb.NewDatabase(memorydb.New())
+	progress := new(progressCounts)
+	migrator := &partitionedStateMigrator{
+		target: target, scheme: rawdb.HashScheme, limiter: newMigrateWorkLimiter(2),
+		accounts: newMigrateAccountWindow(2), progress: progress,
+	}
+	keys := []common.Hash{
+		partitionTestHash(0x20, 0x01),
+		partitionTestHash(0x21, 0x01),
+		partitionTestHash(0x22, 0x01),
+	}
+	values := make([][]byte, len(keys))
+	results := make(chan migrateAccountResult, migrator.accounts.capacity())
+	for sequence := range keys {
+		account := types.NewEmptyStateAccount()
+		account.Nonce = uint64(sequence + 1)
+		encoded, err := rlp.EncodeToBytes(account)
+		if err != nil {
+			t.Fatal(err)
+		}
+		values[sequence] = encoded
+		if err := migrator.accounts.acquire(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, sequence := range []int{2, 0, 1} {
+		account, err := decodeFullAccount(keys[sequence], values[sequence])
+		if err != nil {
+			t.Fatal(err)
+		}
+		results <- migrateAccountResult{
+			job:     migrateAccountJob{sequence: uint64(sequence), hash: keys[sequence], rlp: values[sequence]},
+			account: account,
+		}
+	}
+	close(results)
+
+	writer := newDirectStateWriter(target, rawdb.HashScheme)
+	defer writer.Abort()
+	var result migratePartitionResult
+	var nodeErr error
+	stack := trie.NewPartialStackTrie(partition, func(path []byte, hash common.Hash, blob []byte) {
+		if nodeErr != nil {
+			return
+		}
+		if len(path) == 1 {
+			result.rootBlob = bytes.Clone(blob)
+		}
+		nodeErr = writer.TrieNode(common.Hash{}, path, hash, blob)
+	})
+	failure := &migratePipelineFailure{cancel: func() {}}
+	if err := migrator.mergeMigrateAccounts(ctx, partition, 0, writer, stack, &nodeErr, results, &result, failure); err != nil {
+		t.Fatal(err)
+	}
+	result.root = stack.Hash()
+	if nodeErr != nil {
+		t.Fatal(nodeErr)
+	}
+	if err := validateMigratePartitionResult(partition, result); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.CloseContext(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	reference := rawdb.NewDatabase(memorydb.New())
+	expectedRoot := buildSerialTestTrie(t, reference, rawdb.HashScheme, keys, values)
+	finalWriter := newDirectStateWriter(target, rawdb.HashScheme)
+	if _, err := assembleMigratedTrie(finalWriter, common.Hash{}, expectedRoot, [migrateTriePartitions]migratePartitionResult{
+		partition: result,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := finalWriter.CloseContext(ctx); err != nil {
+		t.Fatal(err)
+	}
+	assertMemoryDatabaseEqual(t, target, reference)
+	wantCounts := bundle.Counts{Accounts: uint64(len(keys)), Records: uint64(len(keys))}
+	for _, value := range values {
+		wantCounts.PayloadBytes += uint64(len(value))
+	}
+	if result.counts != wantCounts || progress.snapshot() != wantCounts {
+		t.Fatalf("ordered merge counts result=%+v progress=%+v want=%+v", result.counts, progress.snapshot(), wantCounts)
+	}
+}
+
+func TestMigrateAccountBurstFailureCancelsAndJoins(t *testing.T) {
+	ctx := t.Context()
+	migrator := &partitionedStateMigrator{
+		target: rawdb.NewDatabase(memorydb.New()), scheme: rawdb.HashScheme,
+		limiter: newMigrateWorkLimiter(2), accounts: newMigrateAccountWindow(2),
+		codeHashes: newConcurrentHashSet(),
+	}
+	accounts := buildAccountPipelineIterator(t, 6)
+	if !accounts.Next() {
+		t.Fatalf("read first account: %v", accounts.Err)
+	}
+	prepared, _, err := migrator.prepareMigrateAccount(0, 0, accounts.Key, accounts.Value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := prepared.result(0, bytes.Clone(accounts.Value))
+	first.job.writeCode = true
+	injected := errors.New("injected account failure")
+	process := func(ctx context.Context, job migrateAccountJob) migrateAccountResult {
+		lease := newMigrateWorkLease(migrator.limiter)
+		if err := lease.acquire(ctx); err != nil {
+			return migrateAccountResult{job: job, err: err}
+		}
+		defer lease.release()
+		return migrateAccountResult{job: job, err: injected}
+	}
+	migrator.accountProcessor = process
+	writer := newDirectStateWriter(migrator.target, migrator.scheme)
+	defer writer.Abort()
+	var result migratePartitionResult
+	var nodeErr error
+	_, _, err = migrator.runMigrateAccountBurst(
+		ctx, 0, accounts, first, writer, trie.NewPartialStackTrie(0, nil), &nodeErr, &result,
+	)
+	if !errors.Is(err, injected) {
+		t.Fatalf("pipeline failure=%v, want %v", err, injected)
+	}
+	if len(migrator.accounts.slots) != 0 {
+		t.Fatalf("%d account window slots remain held after failure", len(migrator.accounts.slots))
+	}
+}
+
+func buildAccountPipelineIterator(t *testing.T, count int) *trie.Iterator {
+	t.Helper()
+	source := rawdb.NewDatabase(memorydb.New())
+	writer := &testErrorCapturingKeyValueWriter{target: source}
+	stack := trie.NewStackTrie(func(path []byte, hash common.Hash, blob []byte) {
+		rawdb.WriteTrieNode(writer, common.Hash{}, path, hash, blob, rawdb.HashScheme)
+	})
+	for index := range count {
+		key := partitionTestHash(0x00, byte(index+1))
+		account := types.NewEmptyStateAccount()
+		account.Nonce = uint64(index + 1)
+		encoded, err := rlp.EncodeToBytes(account)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := stack.Update(key[:], encoded); err != nil {
+			t.Fatal(err)
+		}
+	}
+	root := stack.Hash()
+	if err := writer.Err(); err != nil {
+		t.Fatal(err)
+	}
+	trieDB := triedb.NewDatabase(source, triedb.HashDefaults)
+	t.Cleanup(func() {
+		if err := trieDB.Close(); err != nil {
+			t.Errorf("close account pipeline trie database: %v", err)
+		}
+	})
+	migrator := &partitionedStateMigrator{trieDB: trieDB}
+	accounts, err := migrator.openPartitionIterator(trie.StateTrieID(root), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return accounts
+}
+
 func TestPartitionIteratorsIncludeExactRangeBoundaries(t *testing.T) {
 	source := rawdb.NewDatabase(memorydb.New())
 	writer := &testErrorCapturingKeyValueWriter{target: source}
@@ -276,39 +606,59 @@ func TestPartitionedLargeStorageMatchesSerialNodes(t *testing.T) {
 }
 
 func TestDirectMigrateLargeStorageEndToEndBothSchemes(t *testing.T) {
-	chaindata := filepath.Join(t.TempDir(), "chaindata")
-	root, counts := buildTraversalBenchmarkState(t, chaindata, traversalBenchmarkWorkload{
-		accounts: 1, storageEvery: 1, slotsPerAccount: migrateStoragePartitionThreshold + 1,
-		codeSize: traversalBenchmarkCodeSize,
-	})
-	writeTraversalBenchmarkHead(t, chaindata, root)
-	before := directoryContentDigest(t, chaindata)
-	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme} {
-		t.Run(scheme, func(t *testing.T) {
-			artifact := filepath.Join(t.TempDir(), "artifact")
-			migrated, err := Migrate(context.Background(), MigrateOptions{
-				SourceChaindata: chaindata, Output: artifact, Scheme: scheme,
-				CacheMB: 16, Handles: 16, Workers: 2,
-			})
-			if err != nil {
-				t.Fatal(err)
+	workloads := []struct {
+		name     string
+		workload traversalBenchmarkWorkload
+	}{
+		{
+			name: "single-account",
+			workload: traversalBenchmarkWorkload{
+				accounts: 1, storageEvery: 1, slotsPerAccount: migrateStoragePartitionThreshold + 1,
+				codeSize: traversalBenchmarkCodeSize,
+			},
+		},
+		{
+			name: "two-accounts-same-partition",
+			workload: traversalBenchmarkWorkload{
+				accounts: 2, storageEvery: 1, slotsPerAccount: migrateStoragePartitionThreshold + 1,
+				codeSize: traversalBenchmarkCodeSize, singleAccountPartition: true,
+			},
+		},
+	}
+	for _, workload := range workloads {
+		t.Run(workload.name, func(t *testing.T) {
+			chaindata := filepath.Join(t.TempDir(), "chaindata")
+			root, counts := buildTraversalBenchmarkState(t, chaindata, workload.workload)
+			writeTraversalBenchmarkHead(t, chaindata, root)
+			before := directoryContentDigest(t, chaindata)
+			for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme} {
+				t.Run(scheme, func(t *testing.T) {
+					artifact := filepath.Join(t.TempDir(), "artifact")
+					migrated, err := Migrate(context.Background(), MigrateOptions{
+						SourceChaindata: chaindata, Output: artifact, Scheme: scheme,
+						CacheMB: 16, Handles: 16, Workers: 2,
+					})
+					if err != nil {
+						t.Fatal(err)
+					}
+					if migrated.Report.RecomputedRoot != root || migrated.Report.Counts != counts {
+						t.Fatalf("unexpected large-storage migration report: %+v", migrated.Report)
+					}
+					verified, err := VerifyDirect(context.Background(), DirectVerifyOptions{
+						SourceChaindata: chaindata, Artifact: artifact, CacheMB: 16, Handles: 16,
+					})
+					if err != nil {
+						t.Fatal(err)
+					}
+					if verified.RecomputedRoot != root || verified.Counts != counts {
+						t.Fatalf("unexpected large-storage verification report: %+v", verified)
+					}
+				})
 			}
-			if migrated.Report.RecomputedRoot != root || migrated.Report.Counts != counts {
-				t.Fatalf("unexpected large-storage migration report: %+v", migrated.Report)
-			}
-			verified, err := VerifyDirect(context.Background(), DirectVerifyOptions{
-				SourceChaindata: chaindata, Artifact: artifact, CacheMB: 16, Handles: 16,
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
-			if verified.RecomputedRoot != root || verified.Counts != counts {
-				t.Fatalf("unexpected large-storage verification report: %+v", verified)
+			if after := directoryContentDigest(t, chaindata); after != before {
+				t.Fatalf("large-storage source changed: before %s after %s", before, after)
 			}
 		})
-	}
-	if after := directoryContentDigest(t, chaindata); after != before {
-		t.Fatalf("large-storage source changed: before %s after %s", before, after)
 	}
 }
 
@@ -442,13 +792,29 @@ func TestPartitionedMigrateReadsSharedCodeOnce(t *testing.T) {
 	}
 	var counts [migrateTriePartitions]bundle.Counts
 	if err := runMigratePartitionTasks(context.Background(), func(ctx context.Context, index int) error {
-		writer := newDirectStateWriter(target, rawdb.HashScheme)
-		defer writer.Abort()
 		accountHash := partitionTestHash(byte(index)<<4, byte(index))
-		if err := migrator.migrateCode(ctx, writer, accountHash, codeHash, &counts[index]); err != nil {
+		reference := bundle.Counts{CodeReferences: 1}
+		addBundleCounts(&counts[index], reference)
+		migrator.addProgress(reference)
+		if !migrator.codeHashes.Add(codeHash) {
+			return nil
+		}
+		loaded, err := migrator.readMigrateCode(ctx, accountHash, codeHash)
+		if err != nil {
 			return err
 		}
-		return writer.CloseContext(ctx)
+		writer := newDirectStateWriter(target, rawdb.HashScheme)
+		defer writer.Abort()
+		if err := writer.Code(accountHash, codeHash, loaded); err != nil {
+			return err
+		}
+		if err := writer.CloseContext(ctx); err != nil {
+			return err
+		}
+		record := bundle.Counts{CodeRecords: 1, Records: 1, PayloadBytes: uint64(len(loaded))}
+		addBundleCounts(&counts[index], record)
+		migrator.addProgress(record)
+		return nil
 	}); err != nil {
 		t.Fatal(err)
 	}

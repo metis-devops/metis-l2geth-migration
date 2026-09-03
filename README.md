@@ -76,9 +76,19 @@ path nodes before adoption.
 `--workers` is a global account/storage work limit. Values below 2 are raised
 to 2, values above 16 are rejected, and the default is the smaller of 4 and
 `GOMAXPROCS`, with a minimum of 2. Increase it only when the source and target
-storage can sustain the additional concurrent reads and writes. The generated
-database is still reopened and verified by the independent serial verifier
-before publication; `--workers` affects construction only.
+storage can sustain the additional concurrent reads and writes. Within each
+account partition, accounts without storage and without new code stay on a
+serial zero-copy fast path. Encountering storage or the first reference to a
+code hash starts a bounded burst: storage and code reads are processed in
+parallel, then account and code writes are merged into the partition writer
+and `PartialStackTrie` in strict hash order. A global window of twice
+`--workers` bounds accounts and code bytes that have been read but not yet
+merged. Light-account scans reuse their worker slot while no burst is pending,
+then yield it so queued storage or code work cannot wait behind a complete
+light-only partition. Waiting coordinators and accounts waiting for
+large-storage subtasks do not hold worker capacity. The generated database is
+still reopened and verified by the independent serial verifier before
+publication; `--workers` affects construction only.
 
 To repeat the full source-to-target proof later, retain the original snapshot
 or a content-identical copy:

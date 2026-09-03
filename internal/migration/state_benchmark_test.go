@@ -41,10 +41,12 @@ type traversalBenchmarkAccount struct {
 }
 
 type traversalBenchmarkWorkload struct {
-	accounts        int
-	storageEvery    int
-	slotsPerAccount int
-	codeSize        int
+	accounts               int
+	storageEvery           int
+	slotsPerAccount        int
+	codeSize               int
+	singleAccountPartition bool
+	firstAccountSlots      int
 }
 
 func BenchmarkTraverseState(b *testing.B) {
@@ -197,6 +199,13 @@ func migrateBenchmarkWorkloads() []namedMigrateBenchmarkWorkload {
 			name: "shared-large-code",
 			workload: traversalBenchmarkWorkload{
 				accounts: 5_000, storageEvery: 5_001, slotsPerAccount: 0, codeSize: traversalBenchmarkCodeSize,
+			},
+		},
+		{
+			name: "single-partition-head-heavy",
+			workload: traversalBenchmarkWorkload{
+				accounts: 64, storageEvery: 1, slotsPerAccount: 16, codeSize: traversalBenchmarkCodeSize,
+				singleAccountPartition: true, firstAccountSlots: migrateStoragePartitionThreshold,
 			},
 		},
 	}
@@ -357,15 +366,19 @@ func buildTraversalBenchmarkState(t testing.TB, chaindata string, workload trave
 	for i := 1; i <= workload.accounts; i++ {
 		var seed [8]byte
 		binary.BigEndian.PutUint64(seed[:], uint64(i))
-		accountHash := crypto.Keccak256Hash([]byte("account"), seed[:])
+		accountHash := benchmarkAccountHash(workload, seed)
 		storageRoot := types.EmptyRootHash
 		if i%workload.storageEvery == 0 {
 			type benchmarkSlot struct {
 				hash  common.Hash
 				value []byte
 			}
-			slots := make([]benchmarkSlot, 0, workload.slotsPerAccount)
-			for j := range workload.slotsPerAccount {
+			slotCount := workload.slotsPerAccount
+			if i == 1 && workload.firstAccountSlots > 0 {
+				slotCount = workload.firstAccountSlots
+			}
+			slots := make([]benchmarkSlot, 0, slotCount)
+			for j := range slotCount {
 				var slotSeed [16]byte
 				binary.BigEndian.PutUint64(slotSeed[:8], uint64(i))
 				binary.BigEndian.PutUint64(slotSeed[8:], uint64(j+1))
@@ -441,4 +454,14 @@ func buildTraversalBenchmarkState(t testing.TB, chaindata string, workload trave
 	}
 	diskClosed = true
 	return root, counts
+}
+
+func benchmarkAccountHash(workload traversalBenchmarkWorkload, seed [8]byte) common.Hash {
+	if !workload.singleAccountPartition {
+		return crypto.Keccak256Hash([]byte("account"), seed[:])
+	}
+	var hash common.Hash
+	hash[0] = 0x80
+	copy(hash[common.HashLength-len(seed):], seed[:])
+	return hash
 }
