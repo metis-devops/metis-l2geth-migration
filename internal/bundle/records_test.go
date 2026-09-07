@@ -6,17 +6,67 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"math/big"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 )
+
+func TestRecordChainFormatDomain(t *testing.T) {
+	head, headerRLP := testHead(t)
+	var number [8]byte
+	binary.BigEndian.PutUint64(number[:], head.BlockNumber)
+	headerHash := crypto.Keccak256Hash(headerRLP)
+	// Derive the expected seed independently of the production domain constant
+	// and seed helper, so a writer/scanner change cannot silently redefine v1.
+	seed := func(domain string) common.Hash {
+		return crypto.Keccak256Hash([]byte(domain), number[:], head.BlockHash[:], head.StateRoot[:], headerHash[:])
+	}
+	want := seed(fmt.Sprintf("metis-l2state-record-chain/v%d", FormatVersion))
+	for _, compression := range []string{CompressionNone, CompressionZstd} {
+		t.Run(compression, func(t *testing.T) {
+			dir := t.TempDir()
+			writer, err := NewWriter(context.Background(), dir, compression, head, headerRLP)
+			if err != nil {
+				t.Fatal(err)
+			}
+			result, err := writer.Close()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result.RecordChainHash != want {
+				t.Fatalf("chain seed %s, want current format %s", result.RecordChainHash, want)
+			}
+			manifest := NewManifest(SourceEvidence{HeadBefore: head, HeadAfter: head, HeaderRLP: headerRLP}, result.Counts, StateFile{
+				Name: result.FileName, Compression: result.Compression, Size: result.Size,
+				SHA256: result.SHA256, RecordChainHash: want,
+			})
+			if _, err := WriteManifest(dir, manifest); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := ScanRecords(context.Background(), dir, manifest, nil); err != nil {
+				t.Fatal(err)
+			}
+			// Relabeling a bundle must not accept a different record-chain domain.
+			manifest.StateFile.RecordChainHash = seed(fmt.Sprintf("metis-l2state-record-chain/v%d", FormatVersion+1))
+			if _, err := WriteManifest(dir, manifest); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := ScanRecords(context.Background(), dir, manifest, nil); err == nil || !strings.Contains(err.Error(), "record chain") {
+				t.Fatalf("foreign chain accepted or wrong error: %v", err)
+			}
+		})
+	}
+}
 
 func TestRecordPayloadLengthBounds(t *testing.T) {
 	for _, test := range []struct {

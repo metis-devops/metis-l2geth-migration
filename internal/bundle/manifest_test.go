@@ -90,7 +90,7 @@ func TestSourceEvidenceValidatedHeader(t *testing.T) {
 	}
 }
 
-func TestManifestRejectsV2AndInvalidRecordPayloadBytes(t *testing.T) {
+func TestManifestRejectsInvalidRecordPayloadBytes(t *testing.T) {
 	t.Parallel()
 
 	valid, _ := validTestManifest(t)
@@ -101,7 +101,6 @@ func TestManifestRejectsV2AndInvalidRecordPayloadBytes(t *testing.T) {
 		mutate  func(*Manifest)
 		wantErr string
 	}{
-		{name: "v2", mutate: func(m *Manifest) { m.Version = 2 }, wantErr: "unsupported bundle format"},
 		{name: "missing record payload bytes", mutate: func(m *Manifest) { m.StateFile.RecordPayloadBytes = 0 }, wantErr: "zero record payload bytes"},
 		{name: "record payload exceeds consensus payload", mutate: func(m *Manifest) { m.StateFile.RecordPayloadBytes = 71 }, wantErr: "exceed expanded consensus"},
 		{name: "empty stream with record payload bytes", mutate: func(m *Manifest) {

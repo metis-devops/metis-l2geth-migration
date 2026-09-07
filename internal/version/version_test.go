@@ -81,7 +81,21 @@ func TestRuntimeVersions(t *testing.T) {
 	if ToolVersion == "" {
 		t.Fatal("ToolVersion is empty")
 	}
-	if GethVersion != "v1.17.5" {
-		t.Fatalf("GethVersion = %q, want v1.17.5", GethVersion)
+	want := compiledGethVersion
+	if info, ok := debug.ReadBuildInfo(); ok {
+		for _, dep := range info.Deps {
+			if dep.Path != gethModulePath {
+				continue
+			}
+			for dep.Replace != nil {
+				dep = dep.Replace
+			}
+			if dep.Version != "" {
+				want = dep.Version
+			}
+		}
+	}
+	if GethVersion == "" || GethVersion != want {
+		t.Fatalf("GethVersion = %q, linked module reports %q", GethVersion, want)
 	}
 }

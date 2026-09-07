@@ -1,4 +1,4 @@
-.PHONY: build test test-race lint fmt-check fixture-check legacy-compat-check ci
+.PHONY: build test test-race lint fmt-check fixture-check legacy-compat-check geth-compat geth-compat-candidate ci
 
 build:
 	go build -o bin/l2state ./cmd/l2state
@@ -31,4 +31,14 @@ legacy-compat-check:
 	cd testdata/legacycompat && go test -count=1 ./...
 	cd testdata/legacycompat && go vet ./...
 
-ci: fmt-check lint test fixture-check legacy-compat-check build
+geth-compat:
+	go test -count=1 ./internal/migration -run '^TestGethCompatibility'
+
+# OUT must name a new directory outside the committed baseline corpus.
+# It is passed through the environment so shell metacharacters are not evaluated.
+export L2STATE_GETH_COMPAT_OUT = $(OUT)
+geth-compat-candidate:
+	@test -n "$$L2STATE_GETH_COMPAT_OUT" || (echo 'OUT must name a new candidate directory' >&2; exit 1)
+	go test -count=1 -v ./internal/migration -run '^TestWriteGethCompatibilityCandidate$$'
+
+ci: fmt-check lint geth-compat test fixture-check legacy-compat-check build

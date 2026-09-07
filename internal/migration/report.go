@@ -10,6 +10,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/metis-devops/metis-l2geth-migration/internal/bundle"
+	"github.com/metis-devops/metis-l2geth-migration/internal/formatversion"
 	"github.com/metis-devops/metis-l2geth-migration/internal/version"
 )
 
@@ -17,7 +18,7 @@ const (
 	// VerificationFormat identifies the verification report format.
 	VerificationFormat = "metis-l2state-verification"
 	// VerificationVersion is the supported verification report version.
-	VerificationVersion = 3
+	VerificationVersion = formatversion.Verification
 	// VerificationFileName is the fixed report name in a state artifact.
 	VerificationFileName = "verification.json"
 )
@@ -33,7 +34,6 @@ type VerificationReport struct {
 	StateLayout     StateLayout   `json:"state_layout,omitempty"`
 	ToolVersion     string        `json:"tool_version"`
 	GethVersion     string        `json:"geth_version"`
-	GethCommit      string        `json:"geth_commit"`
 	ManifestSHA256  common.Hash   `json:"manifest_sha256"`
 	StateFileSHA256 common.Hash   `json:"state_file_sha256"`
 	RecordChainHash common.Hash   `json:"record_chain_hash"`
@@ -59,7 +59,6 @@ func newVerificationReport(bundleResult BundleResult, scheme string) Verificatio
 		StateLayout:     layout,
 		ToolVersion:     version.ToolVersion,
 		GethVersion:     version.GethVersion,
-		GethCommit:      version.GethCommit,
 		ManifestSHA256:  bundleResult.ManifestSHA256,
 		StateFileSHA256: bundleResult.Records.FileSHA256,
 		RecordChainHash: bundleResult.Records.RecordChainHash,
@@ -93,8 +92,8 @@ func (r VerificationReport) Validate() error {
 	} else if _, err := reportTarget(r.DBEngine, r.StateLayout, r.Scheme); err != nil {
 		return err
 	}
-	if r.ToolVersion == "" || r.GethVersion != version.GethVersion || r.GethCommit != version.GethCommit {
-		return errors.New("verification report tool/geth version mismatch")
+	if r.ToolVersion == "" {
+		return errors.New("verification report tool_version is empty")
 	}
 	if r.ManifestSHA256 == (common.Hash{}) || r.StateFileSHA256 == (common.Hash{}) || r.RecordChainHash == (common.Hash{}) {
 		return errors.New("verification report digest is empty")

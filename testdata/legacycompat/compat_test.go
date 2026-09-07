@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"flag"
+	"fmt"
 	"io"
 	"math/big"
 	"os"
@@ -79,7 +81,7 @@ func openDB(t *testing.T, path string) ethdb.Database {
 	return rawdb.NewDatabase(kv)
 }
 
-func checkAndContinue(t *testing.T, path string) {
+func checkAndContinue(t *testing.T, path string) map[string]any {
 	t.Helper()
 	disk := openDB(t, path)
 	headHash := rawdb.ReadHeadBlockHash(disk)
@@ -158,6 +160,40 @@ func checkAndContinue(t *testing.T, path string) {
 	}
 	if err := sdb.Error(); err != nil {
 		t.Fatal(err)
+	}
+	return map[string]any{
+		"root": newRoot.Hex(), "nonce": sdb.GetNonce(contract),
+		"balance": sdb.GetBalance(contract).String(), "storage": sdb.GetState(contract, common.HexToHash("0x01")).Hex(),
+		"code": fmt.Sprintf("0x%x", sdb.GetCode(contract)), "shared_code": fmt.Sprintf("0x%x", sdb.GetCode(shared)),
+	}
+}
+
+var compatDB = flag.String("compat-db", "", "new database copy for frozen compatibility continuation")
+var compatResult = flag.String("compat-result", "", "new result JSON path")
+
+func TestFrozenGethArtifactContinuation(t *testing.T) {
+	if *compatDB == "" {
+		t.Skip("invoked by root compatibility gate with a disposable database copy")
+	}
+	if *compatResult == "" {
+		t.Fatal("compat-result is required")
+	}
+	result := checkAndContinue(t, *compatDB)
+	data, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	file, err := os.OpenFile(*compatResult, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, writeErr := file.Write(data)
+	closeErr := file.Close()
+	if writeErr != nil {
+		t.Fatal(writeErr)
+	}
+	if closeErr != nil {
+		t.Fatal(closeErr)
 	}
 }
 

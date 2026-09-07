@@ -78,7 +78,7 @@ func TestLoadDirectVerificationReportRejectsInvalidEvidence(t *testing.T) {
 		mutate func(map[string]any)
 	}{
 		{name: "unknown field", mutate: func(document map[string]any) { document["extra"] = true }},
-		{name: "wrong version", mutate: func(document map[string]any) { document["version"] = float64(2) }},
+		{name: "wrong version", mutate: func(document map[string]any) { document["version"] = float64(DirectVerificationVersion + 1) }},
 		{name: "missing header RLP", mutate: func(document map[string]any) {
 			delete(document["source"].(map[string]any), "header_rlp")
 		}},
@@ -158,7 +158,6 @@ func validDirectVerificationReport(t *testing.T) DirectVerificationReport {
 		DBEngine:    "pebble-v2",
 		ToolVersion: version.ToolVersion,
 		GethVersion: version.GethVersion,
-		GethCommit:  version.GethCommit,
 		Source: bundle.SourceEvidence{
 			HeadBefore: head,
 			HeadAfter:  head,

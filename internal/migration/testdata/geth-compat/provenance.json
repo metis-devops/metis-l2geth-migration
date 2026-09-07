@@ -1,0 +1,6 @@
+{
+  "geth_commit": "9621c6ad10934a01b5514886fb6fbd87640b6c05",
+  "geth_version": "v1.17.5",
+  "legacy_canary_sha256": "722780fe068fa59fe6bebf7809c9fbbdbd62feaf47c4d89b06fd9911dec08518",
+  "synthetic_inputs": "compatSources: fixed workload parameters, benchmarkAccountHash and writeTraversalBenchmarkHead"
+}

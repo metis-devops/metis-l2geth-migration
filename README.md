@@ -30,10 +30,10 @@ output.
 
 Both `migrate` and `import` accept independent target choices:
 
-| State layout | Database engine | State scheme |
-| --- | --- | --- |
+| State layout     | Database engine                 | State scheme              |
+| ---------------- | ------------------------------- | ------------------------- |
 | `geth` (default) | `pebble` (default) or `leveldb` | explicit `hash` or `path` |
-| `legacy-l2geth` | explicit `leveldb` | explicit `hash` |
+| `legacy-l2geth`  | explicit `leveldb`              | explicit `hash`           |
 
 For example, to retain the old l2geth state-key layout:
 
@@ -68,8 +68,8 @@ The version command reports the main-module and go-ethereum module versions
 embedded by the Go toolchain. Local development builds may report a generated
 pseudo-version or `(devel)` when VCS metadata is unavailable. Container builds
 without VCS metadata report `(devel)` for the main module. The linked
-go-ethereum version and commit remain fixed and are recorded in manifests and
-verification reports.
+go-ethereum module version is recorded in manifests and verification reports.
+There is no manually maintained runtime geth commit value.
 
 ## Direct migration
 
@@ -231,9 +231,9 @@ geth LevelDB adapter's `SyncKeyValue` does not sync data.
 Artifact reports record `db_engine` as `pebble-v2` or `leveldb` and explicitly
 record `state_layout` as `geth` or `legacy-l2geth`. Old reports omitting
 `state_layout` mean `geth`; explicit empty, null, unknown values and unsupported
-combinations fail validation. Direct reports remain v1 and bundle-backed
-reports remain v3. Pure bundle verification has neither target field, and
-the portable bundle encoding and manifest remain unchanged.
+combinations fail validation. Direct and bundle-backed reports use v1.
+Pure bundle verification has neither target field; target engine and layout
+choices do not alter the portable bundle format.
 
 `UsingOVM` changes legacy execution and RPC interpretation, not MPT encoding.
 The tool does not convert OVM balances into ordinary account balances or
@@ -243,21 +243,35 @@ portable bundle's account payload uses the reversible slim representation.
 
 ## Formats and compatibility
 
-- Bundles use `metis-l2state` format version 3.
+- Bundles use `metis-l2state` format version 1.
 - Bundle-backed verification reports use
-  `metis-l2state-verification` version 3.
+  `metis-l2state-verification` version 1.
 - Direct migrations use `metis-l2state-direct-verification` version 1.
 
-Version 3 validators reject version 2 bundles and bundle-backed reports; there
-is no legacy compatibility mode, so recreate older bundles with the current
-`export` command. Current validators also require the exact selected header RLP
+During active development, all current schemas remain v1. Validators reject
+versions 0, 2, and 3; there is no historical-format compatibility mode. Recreate
+older bundles with the current `export` command and artifacts with `import` or
+`migrate`. Changing a JSON version field is insufficient: the record-chain
+domain is now `metis-l2state-record-chain/v1`, while the current slim-account
+encoding and record framing are retained. A v1 label alone does not make an
+older development format compatible.
+
+`geth_version` is optional provenance, not an acceptance gate. Readers accept
+any string, omission, empty string, or null for that field; other JSON types are
+rejected. `geth_commit` has been removed from both inputs and outputs and is
+rejected as an unknown JSON field. Recreate older development artifacts that
+contain it. `tool_version` remains required and non-empty. These rules do not
+change the pinned geth dependency or imply support for other database layouts.
+Input-stability checks still compare provenance before and after verification.
+
+Current validators also require the exact selected header RLP
 and matching hash-to-number, canonical, `LastBlock`, and `LastHeader` metadata.
 Artifacts produced by older builds without that evidence are rejected even if
 they use the same report version; recreate them with the current `import` or
 `migrate` command.
 
-Version 3 inputs also have exact top-level layouts. Bundle and artifact roots,
-their required files, and the artifact `db` entry must not be symbolic links.
+Inputs also have exact top-level layouts. Bundle and artifact roots,
+their required files, and the artifact `chaindata` entry must not be symbolic links.
 Extra top-level entries, including `.DS_Store`, README, or checksum files, are
 rejected. Manifest and verification JSON files are limited to 1 MiB. An import
 output must be outside its input bundle.
@@ -329,6 +343,76 @@ To capture machine output and progress separately:
   >import-result.json \
   2>import-progress.log
 ```
+
+## Geth dependency upgrades
+
+Compatibility is determined by the tool's frozen contracts and validation gates,
+not by geth's major/minor version number. The current accepted baseline was
+captured with v1.17.5. This checks the migration tool's dependencies on geth,
+not every behavior in geth or production-snapshot acceptance.
+
+```bash
+make geth-compat
+make ci
+make test-race
+```
+
+`make geth-compat` compares current behavior against the committed corpus under
+`internal/migration/testdata/geth-compat`, then imports its frozen records and
+restores its frozen logical database entries for independent verification and
+continued state commits on disposable copies. The corpus covers both compression
+modes, all five target combinations, direct and portable workflows, empty and
+single/multiple-partition tries, and fixed 1024/1025-slot boundaries. Canary
+continuation updates nonce, balance, storage and code, closes, reopens, and checks
+the committed state. Legacy continuation uses the separately pinned old l2geth
+module. Existing GenerateTrie/rawdb comparisons remain additional checks.
+
+Database baselines contain sorted logical key/value bytes, not SST or WAL file
+layouts. JSON comparisons normalize only timestamps and build provenance;
+manifest-dependent report hashes are recomputed from normalized manifest bytes.
+The test normalizer removes historical `geth_commit` metadata in memory and
+recomputes dependent manifest hashes before comparison and replay. The frozen
+corpus stays unchanged; runtime readers have no old-field compatibility branch.
+Format version, encoding, records, counts, roots and database metadata are not
+normalized. Failures identify the contract, scenario, target and changed field or
+key, with bounded previews and hashes for long values. Comparison failures retain
+the complete candidate corpus in a printed temporary path for inspection.
+
+The three independent versions live in `internal/formatversion/version.go`.
+The existing bundle/report constants are aliases, and the record-chain domain is
+derived from the bundle version. Bundle-backed report baselines also identify
+the input bundle version: a changed input digest alone does not require bumping
+the report schema. Missing baselines fail; ordinary tests never generate them.
+
+For an intentional dependency upgrade:
+
+1. Update the geth dependency and sums. Module-version provenance is automatic;
+   there is no runtime commit constant to synchronize. Historical baseline
+   provenance retains its original commit as generation evidence.
+2. Run the commands above. Compilation failures identify changed APIs; adapt
+   those calls and keep format versions unchanged when the external contract is
+   preserved. Major version upgrades follow exactly the same process.
+3. Inspect any contract differences. Correctness failures such as changed
+   consensus bytes, wrong state roots or acceptance of malformed input must be
+   fixed, never approved by a format bump.
+4. If deliberately accepting an incompatible representation or layout, change
+   only the affected format versions and implementation. Bundle encoding changes
+   also change its chain domain; target layout changes affect both artifact report
+   formats. Export a candidate, review it, and add the corresponding new version
+   files alongside historical baselines. Do not overwrite an existing version's
+   contract to make a failing upgrade pass. No historical-format reader is added
+   implicitly.
+
+To export an unapproved candidate, supply a new **absolute** directory whose
+parent already exists, outside the committed baseline directory:
+
+```bash
+make geth-compat-candidate OUT=/tmp/l2state-geth-candidate
+```
+
+This runs capture probes and exports data; it does not compare against the
+accepted baseline and does not prove compatibility. Existing output directories
+and symlinks are rejected. The original legacy canary is never regenerated.
 
 ## Development and test evidence
 

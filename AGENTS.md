@@ -17,7 +17,7 @@ trie preimages.
 
 - `cmd/l2state` owns CLI validation, progress-log setup, and final JSON output.
 - `internal/readonlydb` is the strict read-only adapter for legacy LevelDB.
-- `internal/bundle` defines the v3 manifest, canonical slim-account codec, and
+- `internal/bundle` defines the v1 manifest, canonical slim-account codec, and
   deterministic account, storage, and code record stream.
 - `internal/migration/export.go`, `import.go`, `migrate.go`,
   `migrate_partitioned.go`, and `direct_writer.go` implement the portable and
@@ -50,7 +50,7 @@ trie preimages.
 - Validate `LastBlock`, its number mapping, canonical mapping, header RLP,
   header hash, block number, and state root before traversal. Confirm the same
   canonical head after traversal and fail if it changed.
-- Preserve source and target consensus bytes. Bundle v3 represents accounts
+- Preserve source and target consensus bytes. Bundle v1 represents accounts
   with canonical geth slim RLP, but must restore full canonical account RLP
   before trie reconstruction or target writes. Do not reinterpret OVM balances,
   synthesize preimages, or transform storage-value RLP or code. `UsingOVM`
@@ -64,10 +64,18 @@ trie preimages.
 - Keep account, storage, and unique-code records in deterministic semantic
   order. Preserve their framing, validation, and header-seeded Keccak record
   chain.
-- Bundle and bundle-backed verification formats are version 3. Direct
+- Bundle and bundle-backed verification formats are version 1. Direct
   verification is a separate version 1 format and must not acquire bundle-only
-  digests or manifest fields.
-- In v3 account payloads, only zero-length or 32-byte roots and code hashes are
+  digests or manifest fields. During active development, keep the current schemas
+  at v1; do not add historical-format compatibility. Reject v2/v3 artifacts and
+  recreate them instead of editing their version fields. The record-chain domain
+  is `metis-l2state-record-chain/v1`.
+- `geth_version` is optional provenance, not a compatibility gate: accept any
+  string, omission, empty string, or null, but reject other JSON types.
+  `geth_commit` is removed from input and output schemas; reject it as an unknown
+  field. Do not restore a hardcoded runtime commit or an old-field reader. Keep
+  `tool_version` non-empty and retain before/after input comparisons.
+- In v1 account payloads, only zero-length or 32-byte roots and code hashes are
   valid. Zero length expands to `EmptyRootHash` or `EmptyCodeHash`; explicitly
   encoding either empty constant is non-canonical and must fail. Keep
   `state_file.record_payload_bytes` as the compact wire total and
@@ -179,16 +187,45 @@ trie preimages.
 - Update operator documentation and agent guidance whenever a public command,
   report contract, artifact invariant, or validation gate changes.
 
+## Geth compatibility and format evolution
+
+- `internal/formatversion` owns the three independent current format versions;
+  existing bundle/report constants are aliases. The record-chain domain derives
+  from the bundle version. All currently remain v1.
+- Explicit dependency upgrades are governed by frozen compatibility evidence,
+  not major/minor geth version equality. Module versions are reported
+  automatically; no runtime geth commit needs manual synchronization. Preserve
+  historical commit evidence in frozen baselines. Only the test normalizer
+  removes their old commit field in memory and recomputes dependent manifest
+  hashes before comparison/replay; runtime readers stay strict.
+- `make geth-compat` compares the fixed corpus in
+  `internal/migration/testdata/geth-compat`, restores frozen logical databases,
+  imports frozen record streams, and checks continuation on disposable copies.
+  Existing current-geth reference comparisons and independent legacy checks are
+  still required. This gate covers tool contracts, not all geth functionality.
+- Treat accepted version files as immutable. Ordinary tests never regenerate
+  them. `make geth-compat-candidate OUT=/absolute/new/path` only exports an
+  unapproved candidate outside the corpus; review differences before adding a
+  new version. Never overwrite the legacy canary as part of this process.
+- Keep format versions for API-only adaptations with identical external behavior.
+  Deliberate incompatible bundle changes update its version/domain; report or
+  target-layout changes update affected report versions. Bundle-backed baselines
+  include the input bundle version to avoid conflating input digests with report
+  schema changes. Do not introduce historical readers without authorization.
+- Never use a version bump to accept consensus corruption, root mismatches,
+  malformed input acceptance, or relaxed source/publication invariants.
+
 ## Validation
 
 Run focused tests while iterating, then finish every change with:
 
 ```bash
+make geth-compat
 make ci
 git diff --check
 ```
 
-`make ci` runs formatting and module-tidiness checks, lint, all root-module
+`make ci` runs the geth compatibility gate, formatting and module-tidiness checks, lint, all root-module
 tests, fixture-module and legacy-compatibility-module tidy/verify/test/vet,
 and the build. Also run
 `make test-race` when changing concurrency, cancellation, progress reporting,

@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/klauspost/compress/zstd"
+	"github.com/metis-devops/metis-l2geth-migration/internal/formatversion"
 )
 
 var streamMagic = [8]byte{'L', '2', 'S', 'T', 'A', 'T', 'E', '1'}
@@ -34,7 +35,7 @@ const (
 	ioChunkSize       = 256 << 10
 )
 
-const recordChainDomain = "metis-l2state-record-chain/v3"
+var recordChainDomain = formatversion.RecordChainDomain()
 
 // Record is one decoded account, storage, or code entry from the record stream.
 type Record struct {

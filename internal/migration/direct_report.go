@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/metis-devops/metis-l2geth-migration/internal/bundle"
+	"github.com/metis-devops/metis-l2geth-migration/internal/formatversion"
 	"github.com/metis-devops/metis-l2geth-migration/internal/version"
 )
 
@@ -18,7 +19,7 @@ const (
 	// DirectVerificationFormat identifies reports produced without a bundle.
 	DirectVerificationFormat = "metis-l2state-direct-verification"
 	// DirectVerificationVersion is the supported direct verification report version.
-	DirectVerificationVersion = 1
+	DirectVerificationVersion = formatversion.DirectVerification
 )
 
 // DirectVerificationReport records independently recomputed source and artifact evidence.
@@ -32,7 +33,6 @@ type DirectVerificationReport struct {
 	StateLayout    StateLayout           `json:"state_layout,omitempty"`
 	ToolVersion    string                `json:"tool_version"`
 	GethVersion    string                `json:"geth_version"`
-	GethCommit     string                `json:"geth_commit"`
 	Source         bundle.SourceEvidence `json:"source"`
 	Counts         bundle.Counts         `json:"counts"`
 	RecomputedRoot common.Hash           `json:"recomputed_state_root"`
@@ -49,7 +49,6 @@ func newDirectVerificationReport(source bundle.SourceEvidence, state StateResult
 		StateLayout:    LayoutGeth,
 		ToolVersion:    version.ToolVersion,
 		GethVersion:    version.GethVersion,
-		GethCommit:     version.GethCommit,
 		Source:         source,
 		Counts:         state.Counts,
 		RecomputedRoot: state.Root,
@@ -73,8 +72,8 @@ func (r DirectVerificationReport) Validate() error {
 	if _, err := reportTarget(r.DBEngine, r.StateLayout, r.Scheme); err != nil {
 		return err
 	}
-	if r.ToolVersion == "" || r.GethVersion != version.GethVersion || r.GethCommit != version.GethCommit {
-		return errors.New("direct verification report tool/geth version mismatch")
+	if r.ToolVersion == "" {
+		return errors.New("direct verification report tool_version is empty")
 	}
 	if err := r.Source.Validate(); err != nil {
 		return fmt.Errorf("validate direct source evidence: %w", err)
@@ -121,6 +120,6 @@ func sameDirectVerificationReport(left, right DirectVerificationReport) bool {
 		left.VerifiedAt.Equal(right.VerifiedAt) && left.Verified == right.Verified &&
 		left.Scheme == right.Scheme && left.DBEngine == right.DBEngine && left.StateLayout == right.StateLayout &&
 		left.ToolVersion == right.ToolVersion && left.GethVersion == right.GethVersion &&
-		left.GethCommit == right.GethCommit && sameSourceEvidence(left.Source, right.Source) &&
+		sameSourceEvidence(left.Source, right.Source) &&
 		left.Counts == right.Counts && left.RecomputedRoot == right.RecomputedRoot
 }

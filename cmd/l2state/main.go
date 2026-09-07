@@ -59,7 +59,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	case "verify":
 		return normalizeHelp(runVerify(ctx, args[1:], stdout, stderr))
 	case "version":
-		_, err := fmt.Fprintf(stdout, "%s %s (go-ethereum %s %s)\n", version.ToolName, version.ToolVersion, version.GethVersion, version.GethCommit)
+		_, err := fmt.Fprintf(stdout, "%s %s (go-ethereum %s)\n", version.ToolName, version.ToolVersion, version.GethVersion)
 		return err
 	case "help", "-h", "--help":
 		return printUsage(stdout)

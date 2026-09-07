@@ -44,7 +44,7 @@ func EncodeAccount(account *types.StateAccount) ([]byte, error) {
 func DecodeAccount(data []byte) (*types.StateAccount, []byte, error) {
 	var slim types.SlimAccount
 	// DecodeBytes rejects non-canonical sizes and integers as well as trailing
-	// values. Field checks below enforce the additional v3 slim contract.
+	// values. Field checks below enforce the additional v1 slim contract.
 	if err := rlp.DecodeBytes(data, &slim); err != nil {
 		return nil, nil, fmt.Errorf("decode slim account RLP: %w", err)
 	}

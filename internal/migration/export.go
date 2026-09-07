@@ -166,7 +166,7 @@ func finalizeExportBundle(ctx context.Context, source *legacySource, writer *bun
 
 func sameManifest(left, right bundle.Manifest) bool {
 	return left.Format == right.Format && left.Version == right.Version && left.CreatedAt.Equal(right.CreatedAt) &&
-		left.ToolVersion == right.ToolVersion && left.GethVersion == right.GethVersion && left.GethCommit == right.GethCommit &&
+		left.ToolVersion == right.ToolVersion && left.GethVersion == right.GethVersion &&
 		sameSourceEvidence(left.Source, right.Source) && left.Counts == right.Counts && left.StateFile == right.StateFile &&
 		slices.Equal(left.SupportedSchemes, right.SupportedSchemes)
 }

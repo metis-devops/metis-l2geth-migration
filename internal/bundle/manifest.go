@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/metis-devops/metis-l2geth-migration/internal/formatversion"
 	"github.com/metis-devops/metis-l2geth-migration/internal/strictio"
 	"github.com/metis-devops/metis-l2geth-migration/internal/version"
 )
@@ -23,7 +24,7 @@ const (
 	// FormatName identifies the bundle format in a manifest.
 	FormatName = "metis-l2state"
 	// FormatVersion is the supported bundle format version.
-	FormatVersion = 3
+	FormatVersion = formatversion.Bundle
 	// ManifestFileName is the fixed name of the bundle manifest.
 	ManifestFileName = "manifest.json"
 	// CompressionZstd identifies the canonical zstd-compressed record stream.
@@ -151,7 +152,6 @@ type Manifest struct {
 	CreatedAt        time.Time      `json:"created_at"`
 	ToolVersion      string         `json:"tool_version"`
 	GethVersion      string         `json:"geth_version"`
-	GethCommit       string         `json:"geth_commit"`
 	Source           SourceEvidence `json:"source"`
 	Counts           Counts         `json:"counts"`
 	StateFile        StateFile      `json:"state_file"`
@@ -166,7 +166,6 @@ func NewManifest(source SourceEvidence, counts Counts, stateFile StateFile) Mani
 		CreatedAt:        time.Now().UTC(),
 		ToolVersion:      version.ToolVersion,
 		GethVersion:      version.GethVersion,
-		GethCommit:       version.GethCommit,
 		Source:           source,
 		Counts:           counts,
 		StateFile:        stateFile,
@@ -229,9 +228,6 @@ func (m Manifest) Validate() error {
 	}
 	if m.ToolVersion == "" {
 		return errors.New("manifest tool_version is empty")
-	}
-	if m.GethVersion != version.GethVersion || m.GethCommit != version.GethCommit {
-		return fmt.Errorf("bundle requires geth %s (%s), got %s (%s)", version.GethVersion, version.GethCommit, m.GethVersion, m.GethCommit)
 	}
 	if m.CreatedAt.IsZero() {
 		return errors.New("manifest created_at is empty")

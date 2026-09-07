@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	gethleveldb "github.com/ethereum/go-ethereum/ethdb/leveldb"
+	"github.com/metis-devops/metis-l2geth-migration/internal/version"
 )
 
 func TestCLIEndToEnd(t *testing.T) {
@@ -230,7 +231,7 @@ func TestVersionCommand(t *testing.T) {
 	if err := run(context.Background(), []string{"version"}, &stdout, io.Discard); err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Contains(stdout.Bytes(), []byte("go-ethereum v1.17.5")) {
+	if want := version.ToolName + " " + version.ToolVersion + " (go-ethereum " + version.GethVersion + ")\n"; stdout.String() != want {
 		t.Fatalf("unexpected version output %q", stdout.String())
 	}
 }

@@ -80,8 +80,8 @@ func TestLoadVerificationReportRejectsInvalidHashEvidence(t *testing.T) {
 		)
 	}
 	tests = append(tests,
-		testCase{name: "v2 report", mutate: func(document map[string]any) {
-			document["version"] = float64(2)
+		testCase{name: "unsupported report version", mutate: func(document map[string]any) {
+			document["version"] = float64(VerificationVersion + 1)
 		}},
 		testCase{name: "wrong hash length", mutate: func(document map[string]any) {
 			document["manifest_sha256"] = "0x01"
@@ -154,7 +154,6 @@ func validTestVerificationReport() VerificationReport {
 		Scheme:          "bundle",
 		ToolVersion:     version.ToolVersion,
 		GethVersion:     version.GethVersion,
-		GethCommit:      version.GethCommit,
 		ManifestSHA256:  common.HexToHash("0x01"),
 		StateFileSHA256: common.HexToHash("0x02"),
 		RecordChainHash: common.HexToHash("0x03"),
