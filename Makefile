@@ -41,4 +41,4 @@ geth-compat-candidate:
 	@test -n "$$L2STATE_GETH_COMPAT_OUT" || (echo 'OUT must name a new candidate directory' >&2; exit 1)
 	go test -count=1 -v ./internal/migration -run '^TestWriteGethCompatibilityCandidate$$'
 
-ci: fmt-check lint geth-compat test fixture-check legacy-compat-check build
+ci: fmt-check lint test fixture-check legacy-compat-check build

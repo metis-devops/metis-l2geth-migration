@@ -220,14 +220,15 @@ trie preimages.
 Run focused tests while iterating, then finish every change with:
 
 ```bash
-make geth-compat
 make ci
 git diff --check
 ```
 
-`make ci` runs the geth compatibility gate, formatting and module-tidiness checks, lint, all root-module
-tests, fixture-module and legacy-compatibility-module tidy/verify/test/vet,
-and the build. Also run
+`make ci` runs formatting and module-tidiness checks, lint, all root-module
+tests (including the geth compatibility gate), fixture-module and
+legacy-compatibility-module tidy/verify/test/vet, and the build.
+`make geth-compat` remains available for a focused, uncached compatibility run;
+it is not a separate CI prerequisite because `test` already covers it. Also run
 `make test-race` when changing concurrency, cancellation, progress reporting,
 database lifecycle, atomic publication, or shared state.
 

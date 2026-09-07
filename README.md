@@ -352,14 +352,15 @@ captured with v1.17.5. This checks the migration tool's dependencies on geth,
 not every behavior in geth or production-snapshot acceptance.
 
 ```bash
-make geth-compat
 make ci
 make test-race
 ```
 
-`make geth-compat` compares current behavior against the committed corpus under
-`internal/migration/testdata/geth-compat`, then imports its frozen records and
-restores its frozen logical database entries for independent verification and
+`make ci` includes the geth compatibility tests through its `test` target.
+For a focused, uncached run, use `make geth-compat`. These tests compare current
+behavior against the committed corpus under
+`internal/migration/testdata/geth-compat`, then import its frozen records and
+restore its frozen logical database entries for independent verification and
 continued state commits on disposable copies. The corpus covers both compression
 modes, all five target combinations, direct and portable workflows, empty and
 single/multiple-partition tries, and fixed 1024/1025-slot boundaries. Canary
