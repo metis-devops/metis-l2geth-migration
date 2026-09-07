@@ -29,6 +29,7 @@ type DirectVerificationReport struct {
 	Verified       bool                  `json:"verified"`
 	Scheme         string                `json:"scheme"`
 	DBEngine       string                `json:"db_engine"`
+	StateLayout    StateLayout           `json:"state_layout,omitempty"`
 	ToolVersion    string                `json:"tool_version"`
 	GethVersion    string                `json:"geth_version"`
 	GethCommit     string                `json:"geth_commit"`
@@ -45,6 +46,7 @@ func newDirectVerificationReport(source bundle.SourceEvidence, state StateResult
 		Verified:       true,
 		Scheme:         scheme,
 		DBEngine:       "pebble-v2",
+		StateLayout:    LayoutGeth,
 		ToolVersion:    version.ToolVersion,
 		GethVersion:    version.GethVersion,
 		GethCommit:     version.GethCommit,
@@ -68,8 +70,8 @@ func (r DirectVerificationReport) Validate() error {
 	if r.Scheme != rawdb.HashScheme && r.Scheme != rawdb.PathScheme {
 		return fmt.Errorf("invalid direct verification scheme %q", r.Scheme)
 	}
-	if r.DBEngine != "pebble-v2" {
-		return fmt.Errorf("invalid database engine %q", r.DBEngine)
+	if _, err := reportTarget(r.DBEngine, r.StateLayout, r.Scheme); err != nil {
+		return err
 	}
 	if r.ToolVersion == "" || r.GethVersion != version.GethVersion || r.GethCommit != version.GethCommit {
 		return errors.New("direct verification report tool/geth version mismatch")
@@ -117,7 +119,7 @@ func loadDirectVerificationReport(dir string) (DirectVerificationReport, error) 
 func sameDirectVerificationReport(left, right DirectVerificationReport) bool {
 	return left.Format == right.Format && left.Version == right.Version &&
 		left.VerifiedAt.Equal(right.VerifiedAt) && left.Verified == right.Verified &&
-		left.Scheme == right.Scheme && left.DBEngine == right.DBEngine &&
+		left.Scheme == right.Scheme && left.DBEngine == right.DBEngine && left.StateLayout == right.StateLayout &&
 		left.ToolVersion == right.ToolVersion && left.GethVersion == right.GethVersion &&
 		left.GethCommit == right.GethCommit && sameSourceEvidence(left.Source, right.Source) &&
 		left.Counts == right.Counts && left.RecomputedRoot == right.RecomputedRoot

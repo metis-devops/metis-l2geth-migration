@@ -9,12 +9,10 @@ import (
 	"path/filepath"
 	"sync/atomic"
 
-	cpebble "github.com/cockroachdb/pebble/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethdb/pebble"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
@@ -66,7 +64,11 @@ func Verify(ctx context.Context, opts VerifyOptions) (result VerificationReport,
 	if err := compareStoredReport(stored, bundleResult); err != nil {
 		return VerificationReport{}, err
 	}
-	state, err := verifyDatabase(ctx, filepath.Join(opts.Artifact, "db"), stored.Scheme, bundleResult.Manifest.Source, bundleResult.State, opts.CacheMB, opts.Handles, reporter, "")
+	target, err := reportTarget(stored.DBEngine, stored.StateLayout, stored.Scheme)
+	if err != nil {
+		return VerificationReport{}, err
+	}
+	state, err := verifyTargetDatabase(ctx, filepath.Join(opts.Artifact, artifactDatabaseDirName), stored.Scheme, target, bundleResult.Manifest.Source, bundleResult.State, opts.CacheMB, opts.Handles, reporter, "")
 	if err != nil {
 		return VerificationReport{}, err
 	}
@@ -83,7 +85,9 @@ func Verify(ctx context.Context, opts VerifyOptions) (result VerificationReport,
 	if storedAfter != stored {
 		return VerificationReport{}, errors.New("artifact verification report changed during verification")
 	}
-	return newVerificationReport(bundleResult, stored.Scheme), nil
+	report := newVerificationReport(bundleResult, stored.Scheme)
+	report.DBEngine, report.StateLayout = target.engine, target.layout
+	return report, nil
 }
 
 func compareStoredReport(stored VerificationReport, current BundleResult) error {
@@ -99,10 +103,10 @@ func compareStoredReport(stored VerificationReport, current BundleResult) error 
 	return nil
 }
 
-func verifyDatabase(ctx context.Context, dbPath, scheme string, source bundle.SourceEvidence, expected StateResult, cacheMB, handles int, progress *progressReporter, scratchParent string) (result StateResult, retErr error) {
-	diskKV, err := pebble.New(dbPath, cacheMB, handles, "l2state/verify", true)
+func verifyTargetDatabase(ctx context.Context, dbPath, scheme string, target targetConfig, source bundle.SourceEvidence, expected StateResult, cacheMB, handles int, progress *progressReporter, scratchParent string) (result StateResult, retErr error) {
+	diskKV, err := target.open(dbPath, cacheMB, handles, true)
 	if err != nil {
-		return StateResult{}, fmt.Errorf("open artifact Pebble database read-only: %w", err)
+		return StateResult{}, fmt.Errorf("open artifact database read-only: %w", err)
 	}
 	disk := rawdb.NewDatabase(diskKV)
 	defer func() {
@@ -176,16 +180,16 @@ func verifyDatabase(ctx context.Context, dbPath, scheme string, source bundle.So
 		"root", expected.Root,
 	}, totalCountAttrs(expected.Counts)...)
 	statePhase := progress.StartPhase("verify_state", progressView, phaseAttrs...)
-	state, inventory, err := traverseState(ctx, disk, trieDB, expected.Root, visitor, true, stateTraversalOptions{
+	traversal := stateTraversalOptions{
 		NodeIndex: trieNodeIndexOptions{Parent: scratchParent, CacheMB: cacheMB, Handles: handles},
-		ReadCode: func(db ethdb.KeyValueReader, hash common.Hash) ([]byte, error) {
-			code, err := db.Get(prefixedKey(rawdb.CodePrefix, hash[:]))
-			if errors.Is(err, cpebble.ErrNotFound) {
-				return nil, nil
-			}
-			return code, err
-		},
-	})
+		ReadCode:  target.readCode,
+	}
+	if target.layout == LayoutLegacyL2Geth {
+		traversal.CheckInventory = func(inventory stateInventory) error {
+			return verifyLegacyInventory(ctx, disk, source, inventory, progress)
+		}
+	}
+	state, inventory, err := traverseState(ctx, disk, trieDB, expected.Root, visitor, true, traversal)
 	if err != nil {
 		verifyErr := fmt.Errorf("verify artifact state: %w", err)
 		statePhase.Finish(verifyErr)
@@ -204,8 +208,10 @@ func verifyDatabase(ctx context.Context, dbPath, scheme string, source bundle.So
 		}
 	}
 	statePhase.Finish(nil, "recomputed_root", state.Root)
-	if err := verifyDatabaseInventory(ctx, disk, scheme, source, expected.Counts, inventory, progress); err != nil {
-		return StateResult{}, err
+	if target.layout != LayoutLegacyL2Geth {
+		if err := verifyDatabaseInventory(ctx, disk, scheme, source, expected.Counts, inventory, progress); err != nil {
+			return StateResult{}, err
+		}
 	}
 	return state, nil
 }

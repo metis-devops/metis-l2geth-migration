@@ -36,6 +36,9 @@ trie preimages.
   expected evidence.
 - `testdata/legacyfixturegen` is a separate, maintenance-only module for
   intentional canary regeneration.
+- `testdata/legacycompat` independently tests current CLI output with pinned
+  l2geth `e795a258d3f2` state APIs, including continuation on a copy. It never
+  regenerates the committed canary and is part of CI and race validation.
 
 ## Immutable contracts
 
@@ -80,8 +83,26 @@ trie preimages.
 
 ### Target artifacts
 
-- Support only `hash` and `path`, both backed by the pinned geth v1.17.5 APIs
-  and Pebble v2. Require callers and reports to select the scheme explicitly.
+- Support `--db-engine pebble|leveldb` (default Pebble) independently from
+  `--state-layout geth|legacy-l2geth` (default geth). Geth layout supports explicit
+  `hash` and `path` schemes using pinned geth v1.17.5. Legacy layout requires
+  explicit LevelDB/hash and preserves the state-only and uint256 boundaries.
+- Reports record `db_engine` as `pebble-v2|leveldb` and new artifact reports
+  explicitly record `state_layout`. An omitted layout in an old report means
+  geth; explicit empty/null/unknown values and illegal combinations fail.
+  Keep existing versions and bundle encoding. Pure bundle verification carries
+  neither target field. Verification uses the declared engine/layout without
+  fallback and opens LevelDB with the strict, recovery-disabled read-only adapter.
+- Geth-layout code keys use `c + codeHash`; legacy code uses bare hashes.
+  During construction legacy code is staged under prefixed keys, then relocated
+  in bounded batches after all partition tasks and folding are complete. Skip
+  32-byte trie keys sharing the staging prefix. No staged keys may be published.
+  Verify legacy key roles by reachable node and referenced code sets, counting
+  shared physical entries in both roles. Never classify code by RLP shape.
+- Close LevelDB writers, sync every regular database file and then the directory
+  before reopening and publishing. The pinned LevelDB SyncKeyValue is a no-op.
+  Check cancellation and propagate file-sync errors; never recover a target
+  during verification or reuse an existing writable target directory.
 - After state generation, store only the selected header and the four matching
   lookup/head entries. Reject additional headers, head markers, bodies,
   receipts, history, orphan trie nodes, unreferenced code, malformed path
@@ -102,9 +123,10 @@ trie preimages.
   the full state trie.
 - Independently reopen and verify every artifact before publication. Do not
   trust `verification.json` as the source of truth for bundle verification.
-- Artifact roots must contain exactly the real `db/` directory and real
+- Artifact roots must contain exactly the real `chaindata/` directory and real
   `verification.json` file. Reject root or entry symlinks and extra top-level
-  entries before and after standalone verification.
+  entries before and after standalone verification. Both migrate and import use
+  this name; verification does not fall back to the former `db/` name.
 
 ### Publication and compatibility
 
@@ -167,7 +189,8 @@ git diff --check
 ```
 
 `make ci` runs formatting and module-tidiness checks, lint, all root-module
-tests, fixture-module tidy/verify/test/vet, and the build. Also run
+tests, fixture-module and legacy-compatibility-module tidy/verify/test/vet,
+and the build. Also run
 `make test-race` when changing concurrency, cancellation, progress reporting,
 database lifecycle, atomic publication, or shared state.
 
@@ -182,6 +205,10 @@ Use the following change-sensitive checks:
   independent reopening, full logical comparison with the test-only
   `GenerateTrie` reference, and a subsequent state commit/read through geth
   v1.17.5 APIs.
+- Backend/layout changes: cover all five engine/layout/scheme combinations,
+  both compression modes, report field strictness, old omitted-layout reports,
+  physical-engine mismatch, legacy shared code/node keys, RLP-shaped code,
+  mixed layouts, corrupt LevelDB read-only behavior, and file-sync failure.
 - Source traversal or direct-migration changes: run the committed legacy
   canary through direct and portable workflows and confirm the source content
   remains unchanged.

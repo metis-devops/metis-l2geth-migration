@@ -1,7 +1,8 @@
 # l2state
 
 `l2state` migrates the latest executed state from a legacy Optimism/Metis
-l2geth LevelDB into a state database compatible with go-ethereum v1.17.5.
+l2geth LevelDB into a state database compatible with go-ethereum v1.17.5,
+or optionally the legacy l2geth state layout.
 
 > [!IMPORTANT]
 > The output is a state-only artifact, not bootable geth `chaindata`. It
@@ -26,6 +27,33 @@ compacts, or writes to the source LevelDB.
 Both workflows rebuild the same state root, support `hash` and `path`, reopen
 the target for independent verification, and refuse to overwrite an existing
 output.
+
+Both `migrate` and `import` accept independent target choices:
+
+| State layout | Database engine | State scheme |
+| --- | --- | --- |
+| `geth` (default) | `pebble` (default) or `leveldb` | explicit `hash` or `path` |
+| `legacy-l2geth` | explicit `leveldb` | explicit `hash` |
+
+For example, to retain the old l2geth state-key layout:
+
+```bash
+l2state migrate \
+  --source-chaindata /snapshots/l2geth/chaindata \
+  --out /states/metis-legacy \
+  --db-engine leveldb --scheme hash --state-layout legacy-l2geth
+```
+
+Use the same three target flags with `import --bundle BUNDLE --out ARTIFACT`.
+`verify` reads the engine and layout from the report, checks the physical engine,
+and independently validates the corresponding keys; it never tries a fallback
+layout or repairs a damaged LevelDB. Existing commands keep their Pebble/geth
+defaults. Selecting LevelDB alone does not select the legacy key layout.
+
+Legacy compatibility is tested against Metis l2geth commit `e795a258d3f2`:
+its state APIs can read accounts, storage, and code, and commit and reopen new
+state on a database copy. This does not produce a complete bootable old node
+database or widen the existing uint256 account-balance limit.
 
 ## Build
 
@@ -159,15 +187,21 @@ verification to fail.
 
 ## Artifact contract
 
-Both import paths publish the same top-level layout:
+Both `migrate` and `import` publish the same top-level layout:
 
 ```text
 metis-hash/
-├── db/                 # Pebble v2 state database
-└── verification.json  # Source, scheme, counts, and recomputed-root evidence
+├── chaindata/          # Pebble v2 or LevelDB state database
+└── verification.json  # Source, engine, layout, scheme, counts, root evidence
 ```
 
-The schemes differ inside `db/`:
+The database subdirectory is always `chaindata/`, matching geth naming.
+`--out` and `verify --artifact` still refer to the artifact root containing
+`chaindata/` and `verification.json`. Existing artifacts using `db/` need that
+subdirectory renamed to `chaindata/` while the database is closed before
+verification; there is no automatic fallback to `db/`.
+
+The schemes differ inside `chaindata/`:
 
 - `hash` contains the current hash-trie nodes and referenced contract code.
   Direct and portable migration write those nodes without temporary flat
@@ -179,6 +213,27 @@ Consumers must open the database with its explicit `hash` or `path` scheme;
 they must not rely on normal `chaindata` auto-detection. The artifact's root
 and selected scheme are recorded in `verification.json`; `manifest.json`
 records the bundle root and its supported schemes.
+
+The geth layout stores code at `c + codeHash`; `legacy-l2geth` stores code at
+the bare `codeHash`, sharing the hash-trie node key space. Both preserve the
+same consensus bytes. Legacy verification uses exact reachable-node and
+referenced-code sets, allowing one physical entry to serve both roles while
+rejecting unreferenced entries and mixed layouts. During construction only,
+code uses prefixed staging keys until partition folding finishes; bounded
+batches then move it to bare hashes before independent verification. No staged
+code keys remain in the published legacy database.
+
+LevelDB targets are closed, every regular database file is synced, and the
+database directory is synced before independent read-only verification and
+atomic publication. This explicitly supplies durability because the pinned
+geth LevelDB adapter's `SyncKeyValue` does not sync data.
+
+Artifact reports record `db_engine` as `pebble-v2` or `leveldb` and explicitly
+record `state_layout` as `geth` or `legacy-l2geth`. Old reports omitting
+`state_layout` mean `geth`; explicit empty, null, unknown values and unsupported
+combinations fail validation. Direct reports remain v1 and bundle-backed
+reports remain v3. Pure bundle verification has neither target field, and
+the portable bundle encoding and manifest remain unchanged.
 
 `UsingOVM` changes legacy execution and RPC interpretation, not MPT encoding.
 The tool does not convert OVM balances into ordinary account balances or
@@ -282,12 +337,20 @@ make ci
 make test-race
 ```
 
-The tests cover both schemes, zstd and uncompressed bundles, direct and
+The tests cover both engines and all supported layout/scheme combinations,
+zstd and uncompressed bundles, direct and
 portable migrations, independent verification, continued state access through
 geth v1.17.5 APIs, corruption and ordering failures, exact database inventory,
 strict top-level layouts, read-only source handling, cancellation, atomic
 publication fault injection, a GenerateTrie reference build, parser fuzzing,
 and supported cross-build targets.
+
+`make ci` also runs the independent `testdata/legacycompat` module, pinned to
+the old l2geth version. It builds the current CLI and checks direct and both
+portable compression workflows using old state APIs, including OVM balance
+reads, shared code, and account/storage/code updates followed by reopening a
+copy. It consumes the committed canary without regenerating it. `make test-race`
+includes this module as well as the root module.
 
 The committed canary was generated with legacy l2geth commit `e795a258d3f2`,
 default `UsingOVM=true`, and no trie preimages. It includes the complete

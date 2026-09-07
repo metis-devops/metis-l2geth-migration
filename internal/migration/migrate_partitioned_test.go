@@ -470,9 +470,10 @@ func TestPartitionedTrieAssemblyMatchesSerialNodes(t *testing.T) {
 			partitionTestHash(0x00, 0x01), partitionTestHash(0x30, 0x01), partitionTestHash(0x70, 0x01), partitionTestHash(0xf0, 0x01),
 		}},
 	}
-	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme} {
+	for _, tc := range targetTestCases() {
+		scheme := tc.scheme
 		for _, test := range tests {
-			t.Run(scheme+"/"+test.name, func(t *testing.T) {
+			t.Run(tc.name()+"/"+test.name, func(t *testing.T) {
 				sort.Slice(test.keys, func(i, j int) bool { return bytes.Compare(test.keys[i][:], test.keys[j][:]) < 0 })
 				values := make([][]byte, len(test.keys))
 				for index := range values {
@@ -480,7 +481,20 @@ func TestPartitionedTrieAssemblyMatchesSerialNodes(t *testing.T) {
 				}
 				referenceDB := rawdb.NewDatabase(memorydb.New())
 				expectedRoot := buildSerialTestTrie(t, referenceDB, scheme, test.keys, values)
-				partitionedDB := rawdb.NewDatabase(memorydb.New())
+				target, err := targetOptions(tc.engine, tc.layout, scheme)
+				if err != nil {
+					t.Fatal(err)
+				}
+				kv, err := target.open(t.TempDir(), 16, 16, false)
+				if err != nil {
+					t.Fatal(err)
+				}
+				partitionedDB := rawdb.NewDatabase(kv)
+				defer func() {
+					if err := partitionedDB.Close(); err != nil {
+						t.Error(err)
+					}
+				}()
 				partitions := buildPartialTestTries(t, partitionedDB, scheme, test.keys, values)
 				writer := newDirectStateWriter(partitionedDB, scheme)
 				gotRoot, err := assembleMigratedTrie(writer, common.Hash{}, expectedRoot, partitions)
@@ -611,6 +625,13 @@ func TestDirectMigrateLargeStorageEndToEndBothSchemes(t *testing.T) {
 		workload traversalBenchmarkWorkload
 	}{
 		{
+			name: "single-account-at-probe-limit",
+			workload: traversalBenchmarkWorkload{
+				accounts: 1, storageEvery: 1, slotsPerAccount: migrateStoragePartitionThreshold,
+				codeSize: traversalBenchmarkCodeSize,
+			},
+		},
+		{
 			name: "single-account",
 			workload: traversalBenchmarkWorkload{
 				accounts: 1, storageEvery: 1, slotsPerAccount: migrateStoragePartitionThreshold + 1,
@@ -631,11 +652,12 @@ func TestDirectMigrateLargeStorageEndToEndBothSchemes(t *testing.T) {
 			root, counts := buildTraversalBenchmarkState(t, chaindata, workload.workload)
 			writeTraversalBenchmarkHead(t, chaindata, root)
 			before := directoryContentDigest(t, chaindata)
-			for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme} {
-				t.Run(scheme, func(t *testing.T) {
+			for _, tc := range targetTestCases() {
+				scheme := tc.scheme
+				t.Run(tc.name(), func(t *testing.T) {
 					artifact := filepath.Join(t.TempDir(), "artifact")
 					migrated, err := Migrate(context.Background(), MigrateOptions{
-						SourceChaindata: chaindata, Output: artifact, Scheme: scheme,
+						SourceChaindata: chaindata, Output: artifact, Scheme: scheme, DBEngine: tc.engine, StateLayout: tc.layout,
 						CacheMB: 16, Handles: 16, Workers: 2,
 					})
 					if err != nil {
@@ -663,6 +685,12 @@ func TestDirectMigrateLargeStorageEndToEndBothSchemes(t *testing.T) {
 }
 
 func TestDirectMigrateActiveCancellationCleansOutput(t *testing.T) {
+	for _, tc := range targetTestCases() {
+		t.Run(tc.name(), func(t *testing.T) { testDirectMigrateActiveCancellation(t, tc) })
+	}
+}
+
+func testDirectMigrateActiveCancellation(t *testing.T, tc targetTestCase) {
 	chaindata := filepath.Join(t.TempDir(), "chaindata")
 	root, _ := buildTraversalBenchmarkState(t, chaindata, traversalBenchmarkWorkload{
 		accounts: 1, storageEvery: 1, slotsPerAccount: 64 * migrateStoragePartitionThreshold,
@@ -679,7 +707,7 @@ func TestDirectMigrateActiveCancellationCleansOutput(t *testing.T) {
 	done := make(chan error, 1)
 	go func() {
 		_, err := Migrate(ctx, MigrateOptions{
-			SourceChaindata: chaindata, Output: output, Scheme: rawdb.HashScheme,
+			SourceChaindata: chaindata, Output: output, Scheme: tc.scheme, DBEngine: tc.engine, StateLayout: tc.layout,
 			CacheMB: 16, Handles: 16, Workers: 2,
 			Progress: ProgressOptions{Logger: logger, Interval: time.Millisecond},
 		})

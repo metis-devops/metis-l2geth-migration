@@ -20,7 +20,7 @@ func TestVerificationReportHexTypesJSONRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Mkdir(filepath.Join(dir, "db"), 0o755); err != nil {
+	if err := os.Mkdir(filepath.Join(dir, "chaindata"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	var wire struct {
@@ -102,7 +102,7 @@ func TestLoadVerificationReportRejectsInvalidHashEvidence(t *testing.T) {
 				t.Fatal(err)
 			}
 			dir := t.TempDir()
-			if err := os.Mkdir(filepath.Join(dir, "db"), 0o755); err != nil {
+			if err := os.Mkdir(filepath.Join(dir, "chaindata"), 0o755); err != nil {
 				t.Fatal(err)
 			}
 			if err := os.WriteFile(filepath.Join(dir, VerificationFileName), data, 0o644); err != nil {

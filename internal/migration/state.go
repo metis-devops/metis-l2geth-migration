@@ -26,9 +26,10 @@ type StateVisitor interface {
 type codeReader func(ethdb.KeyValueReader, common.Hash) ([]byte, error)
 
 type stateTraversalOptions struct {
-	NodeIndex trieNodeIndexOptions
-	ReadCode  codeReader
-	TrieNodes trieNodeSink
+	CheckInventory func(stateInventory) error
+	NodeIndex      trieNodeIndexOptions
+	ReadCode       codeReader
+	TrieNodes      trieNodeSink
 }
 
 // StateResult contains a rebuilt state root and its entry counts.
@@ -82,7 +83,14 @@ func traverseState(
 		}()
 	}
 	traverser := newStateTraverser(ctx, disk, trieDB, root, visitor, collectInventory, opts, nodeIndex)
-	return traverser.run()
+	result, inventory, err := traverser.run()
+	if err == nil && opts.CheckInventory != nil {
+		inventory.codeHashes = traverser.codeHashes
+		err = opts.CheckInventory(inventory)
+	}
+	inventory.nodeIndex = nil
+	inventory.codeHashes = nil
+	return result, inventory, err
 }
 
 func newStateTraverser(
@@ -254,7 +262,6 @@ func (t *stateTraverser) finalize() (StateResult, stateInventory, error) {
 			}
 			t.inventory.TrieNodes = count
 		}
-		t.inventory.nodeIndex = nil
 	}
 	return StateResult{Root: computedRoot, Counts: t.counts}, *t.inventory, nil
 }

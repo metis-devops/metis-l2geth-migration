@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/ethdb/pebble"
 )
 
 // MigrateOptions configures direct migration from legacy l2geth state.
@@ -16,6 +15,8 @@ type MigrateOptions struct {
 	SourceChaindata string
 	Output          string
 	Scheme          string
+	DBEngine        string
+	StateLayout     string
 	CacheMB         int
 	Handles         int
 	Workers         int
@@ -34,7 +35,7 @@ func Migrate(ctx context.Context, opts MigrateOptions) (result MigrateResult, re
 	reporter := newProgressReporter("migrate", opts.Progress,
 		"source", opts.SourceChaindata,
 		"output", opts.Output,
-		"scheme", opts.Scheme,
+		"scheme", opts.Scheme, "db_engine", opts.DBEngine, "state_layout", opts.StateLayout,
 		"workers", workers,
 	)
 	defer func() {
@@ -48,6 +49,10 @@ func Migrate(ctx context.Context, opts MigrateOptions) (result MigrateResult, re
 		reporter.Finish(retErr, attrs...)
 	}()
 	if err := validateMigrateOptions(opts); err != nil {
+		return MigrateResult{}, err
+	}
+	target, err := targetOptions(opts.DBEngine, opts.StateLayout, opts.Scheme)
+	if err != nil {
 		return MigrateResult{}, err
 	}
 	source, err := openLegacySource(opts.SourceChaindata, opts.CacheMB, opts.Handles, reporter)
@@ -74,20 +79,20 @@ func Migrate(ctx context.Context, opts MigrateOptions) (result MigrateResult, re
 		return MigrateResult{}, err
 	}
 
-	dbPath := filepath.Join(output.Path(), "db")
+	dbPath := filepath.Join(output.Path(), artifactDatabaseDirName)
 	if err := os.Mkdir(dbPath, 0o755); err != nil {
 		return MigrateResult{}, fmt.Errorf("create artifact database directory: %w", err)
 	}
-	diskKV, err := pebble.New(dbPath, opts.CacheMB, opts.Handles, "l2state/migrate", false)
+	diskKV, err := target.open(dbPath, opts.CacheMB, opts.Handles, false)
 	if err != nil {
-		return MigrateResult{}, fmt.Errorf("open target Pebble database: %w", err)
+		return MigrateResult{}, fmt.Errorf("open target database: %w", err)
 	}
 	disk := rawdb.NewDatabase(diskKV)
 	reporter.Info("Target database opened",
 		"phase", "prepare_target",
 		"status", "completed",
 		"path", dbPath,
-		"scheme", opts.Scheme,
+		"scheme", opts.Scheme, "db_engine", target.engine, "state_layout", target.layout,
 	)
 	diskClosed := false
 	defer func() {
@@ -130,7 +135,7 @@ func Migrate(ctx context.Context, opts MigrateOptions) (result MigrateResult, re
 		return MigrateResult{}, err
 	}
 
-	dbState, closed, err := finalizeAndVerifyTarget(ctx, disk, dbPath, opts.Scheme, sourceEvidence, stateResult, opts.CacheMB, opts.Handles, reporter)
+	dbState, closed, err := finalizeAndVerifyTarget(ctx, disk, dbPath, opts.Scheme, target, sourceEvidence, stateResult, opts.CacheMB, opts.Handles, reporter)
 	diskClosed = closed
 	if err != nil {
 		return MigrateResult{}, err
@@ -139,6 +144,7 @@ func Migrate(ctx context.Context, opts MigrateOptions) (result MigrateResult, re
 		return MigrateResult{}, fmt.Errorf("target state result mismatch: database %+v source %+v", dbState, stateResult)
 	}
 	report := newDirectVerificationReport(sourceEvidence, stateResult, opts.Scheme)
+	report.DBEngine, report.StateLayout = target.engine, target.layout
 	if err := publishDirectArtifact(ctx, output, report, opts, reporter); err != nil {
 		return MigrateResult{}, err
 	}
@@ -157,6 +163,9 @@ func validateMigrateOptions(opts MigrateOptions) error {
 	}
 	if opts.Workers > maxMigrateWorkers {
 		return fmt.Errorf("workers must not exceed %d", maxMigrateWorkers)
+	}
+	if _, err := targetOptions(opts.DBEngine, opts.StateLayout, opts.Scheme); err != nil {
+		return err
 	}
 	return rejectOutputInsideSource(opts.SourceChaindata, opts.Output)
 }

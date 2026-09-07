@@ -26,6 +26,8 @@ const (
 type artifactFlags struct {
 	output  *string
 	scheme  *string
+	engine  *string
+	layout  *string
 	cache   *int
 	handles *int
 	quiet   *bool
@@ -92,6 +94,8 @@ func runMigrate(ctx context.Context, args []string, stdout, stderr io.Writer) er
 		SourceChaindata: *source,
 		Output:          *target.output,
 		Scheme:          *target.scheme,
+		DBEngine:        *target.engine,
+		StateLayout:     *target.layout,
 		CacheMB:         *target.cache,
 		Handles:         *target.handles,
 		Workers:         *workers,
@@ -141,12 +145,14 @@ func runImport(ctx context.Context, args []string, stdout, stderr io.Writer) err
 		return err
 	}
 	result, err := migration.Import(ctx, migration.ImportOptions{
-		Bundle:   *bundlePath,
-		Output:   *target.output,
-		Scheme:   *target.scheme,
-		CacheMB:  *target.cache,
-		Handles:  *target.handles,
-		Progress: newProgressOptions(stderr, *target.quiet),
+		Bundle:      *bundlePath,
+		Output:      *target.output,
+		Scheme:      *target.scheme,
+		DBEngine:    *target.engine,
+		StateLayout: *target.layout,
+		CacheMB:     *target.cache,
+		Handles:     *target.handles,
+		Progress:    newProgressOptions(stderr, *target.quiet),
 	})
 	if err != nil {
 		return err
@@ -210,6 +216,8 @@ func writeJSON(w io.Writer, value any) error {
 func addArtifactFlags(flags *flag.FlagSet) artifactFlags {
 	return artifactFlags{
 		output:  flags.String("out", "", "new state artifact directory"),
+		engine:  flags.String("db-engine", "pebble", "target database engine: pebble or leveldb"),
+		layout:  flags.String("state-layout", "geth", "target state layout: geth or legacy-l2geth (requires leveldb and hash)"),
 		scheme:  flags.String("scheme", "", "target state scheme: hash or path"),
 		cache:   flags.Int("cache-mb", defaultCacheMB, "database cache allowance in MiB"),
 		handles: flags.Int("handles", defaultHandles, "database file handle allowance"),
@@ -228,6 +236,11 @@ func parseFlags(flags *flag.FlagSet, args []string, command string) error {
 	if flags.NArg() != 0 {
 		return fmt.Errorf("%s does not accept positional arguments", command)
 	}
+	for _, name := range []string{"db-engine", "state-layout"} {
+		if option := flags.Lookup(name); option != nil && option.Value.String() == "" {
+			return fmt.Errorf("--%s must not be empty", name)
+		}
+	}
 	return nil
 }
 
@@ -242,15 +255,16 @@ func newProgressOptions(stderr io.Writer, quiet bool) migration.ProgressOptions 
 func printUsage(w io.Writer) error {
 	_, err := fmt.Fprintf(w, `Usage:
   l2state export --source-chaindata PATH --out BUNDLE [--compression zstd|none] [--quiet]
-  l2state import --bundle BUNDLE --out ARTIFACT --scheme hash|path [--quiet]
-  l2state migrate --source-chaindata PATH --out ARTIFACT --scheme hash|path [--workers N] [--quiet]
+  l2state import --bundle BUNDLE --out ARTIFACT --scheme hash|path [--db-engine pebble|leveldb] [--state-layout geth|legacy-l2geth] [--quiet]
+  l2state migrate --source-chaindata PATH --out ARTIFACT --scheme hash|path [--db-engine pebble|leveldb] [--state-layout geth|legacy-l2geth] [--workers N] [--quiet]
   l2state verify --bundle BUNDLE [--artifact ARTIFACT] [--quiet]
   l2state verify --source-chaindata PATH --artifact ARTIFACT [--quiet]
   l2state version
   l2state sleep
 
 The source must be a stopped l2geth LevelDB or a consistent filesystem copy.
-Outputs must not already exist. Artifacts contain state only and are not bootable geth chaindata.
+Outputs must not already exist. Artifacts contain chaindata/ and verification.json.
+Artifacts contain state only and are not bootable geth chaindata.
 `)
 	return err
 }

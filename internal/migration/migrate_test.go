@@ -131,7 +131,7 @@ func TestDirectMigrateMatchesBundleImportBothSchemes(t *testing.T) {
 			assertArtifactState(t, directArtifact, scheme, fixture.root, fixture.accounts)
 			assertArtifactHeadMetadata(t, directArtifact, direct.Report.Source)
 			assertArtifactHeadMetadata(t, importArtifact, exported.Manifest.Source)
-			assertLogicalDatabaseEqual(t, filepath.Join(directArtifact, "db"), filepath.Join(importArtifact, "db"))
+			assertLogicalDatabaseEqual(t, filepath.Join(directArtifact, "chaindata"), filepath.Join(importArtifact, "chaindata"))
 			if _, err := Verify(context.Background(), VerifyOptions{
 				Bundle: bundleDir, Artifact: directArtifact, CacheMB: 16, Handles: 16,
 			}); err == nil {
@@ -314,7 +314,7 @@ func TestVerifyDirectRejectsTamperedReportAndArtifact(t *testing.T) {
 		}); err != nil {
 			t.Fatal(err)
 		}
-		kv, err := pebble.New(filepath.Join(artifact, "db"), 16, 16, "direct-tamper", false)
+		kv, err := pebble.New(filepath.Join(artifact, "chaindata"), 16, 16, "direct-tamper", false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -346,7 +346,7 @@ func TestVerifyDirectRejectsTamperedReportAndArtifact(t *testing.T) {
 		}); err != nil {
 			t.Fatal(err)
 		}
-		kv, err := pebble.New(filepath.Join(artifact, "db"), 16, 16, "direct-head-tamper", false)
+		kv, err := pebble.New(filepath.Join(artifact, "chaindata"), 16, 16, "direct-head-tamper", false)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -30,6 +30,7 @@ type VerificationReport struct {
 	Verified        bool          `json:"verified"`
 	Scheme          string        `json:"scheme"`
 	DBEngine        string        `json:"db_engine,omitempty"`
+	StateLayout     StateLayout   `json:"state_layout,omitempty"`
 	ToolVersion     string        `json:"tool_version"`
 	GethVersion     string        `json:"geth_version"`
 	GethCommit      string        `json:"geth_commit"`
@@ -43,8 +44,10 @@ type VerificationReport struct {
 
 func newVerificationReport(bundleResult BundleResult, scheme string) VerificationReport {
 	dbEngine := ""
+	var layout StateLayout
 	if scheme == "hash" || scheme == "path" {
 		dbEngine = "pebble-v2"
+		layout = LayoutGeth
 	}
 	return VerificationReport{
 		Format:          VerificationFormat,
@@ -53,6 +56,7 @@ func newVerificationReport(bundleResult BundleResult, scheme string) Verificatio
 		Verified:        true,
 		Scheme:          scheme,
 		DBEngine:        dbEngine,
+		StateLayout:     layout,
 		ToolVersion:     version.ToolVersion,
 		GethVersion:     version.GethVersion,
 		GethCommit:      version.GethCommit,
@@ -80,11 +84,14 @@ func (r VerificationReport) Validate() error {
 		return fmt.Errorf("invalid verification scheme %q", r.Scheme)
 	}
 	if r.Scheme == "bundle" {
+		if r.StateLayout != "" {
+			return fmt.Errorf("bundle verification report has state layout %q", r.StateLayout)
+		}
 		if r.DBEngine != "" {
 			return fmt.Errorf("bundle verification report has database engine %q", r.DBEngine)
 		}
-	} else if r.DBEngine != "pebble-v2" {
-		return fmt.Errorf("invalid database engine %q", r.DBEngine)
+	} else if _, err := reportTarget(r.DBEngine, r.StateLayout, r.Scheme); err != nil {
+		return err
 	}
 	if r.ToolVersion == "" || r.GethVersion != version.GethVersion || r.GethCommit != version.GethCommit {
 		return errors.New("verification report tool/geth version mismatch")

@@ -146,6 +146,24 @@ func (i *temporaryTrieNodeIndex) flush() error {
 	return nil
 }
 
+// Has queries an index after Count has flushed all markers and traversal joined.
+func (i *temporaryTrieNodeIndex) Has(hash common.Hash) (bool, error) {
+	if i == nil || i.closed {
+		return false, errors.New("temporary trie-node index is closed")
+	}
+	_, closer, err := i.db.Get(hash[:])
+	if errors.Is(err, cpebble.ErrNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("read reachable trie-node index: %w", err)
+	}
+	if err := closer.Close(); err != nil {
+		return false, fmt.Errorf("close reachable trie-node index value: %w", err)
+	}
+	return true, nil
+}
+
 // Close closes and removes the exact temporary directory created for the
 // index. It is idempotent so callers can safely combine cleanup paths.
 func (i *temporaryTrieNodeIndex) Close() error {

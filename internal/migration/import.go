@@ -10,7 +10,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethdb/pebble"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
 	"github.com/metis-devops/metis-l2geth-migration/internal/bundle"
@@ -18,12 +17,14 @@ import (
 
 // ImportOptions configures a bundle import into a hash- or path-scheme database.
 type ImportOptions struct {
-	Bundle   string
-	Output   string
-	Scheme   string
-	CacheMB  int
-	Handles  int
-	Progress ProgressOptions
+	Bundle      string
+	Output      string
+	Scheme      string
+	DBEngine    string
+	StateLayout string
+	CacheMB     int
+	Handles     int
+	Progress    ProgressOptions
 }
 
 // ImportResult identifies a published state artifact and its verification report.
@@ -45,6 +46,10 @@ func Import(ctx context.Context, opts ImportOptions) (result ImportResult, retEr
 	if err := validateImportOptions(opts); err != nil {
 		return ImportResult{}, err
 	}
+	target, err := targetOptions(opts.DBEngine, opts.StateLayout, opts.Scheme)
+	if err != nil {
+		return ImportResult{}, err
+	}
 	if err := rejectOutputInsideBundle(opts.Bundle, opts.Output); err != nil {
 		return ImportResult{}, err
 	}
@@ -57,16 +62,17 @@ func Import(ctx context.Context, opts ImportOptions) (result ImportResult, retEr
 			retErr = errors.Join(retErr, fmt.Errorf("remove partial artifact: %w", err))
 		}
 	}()
-	dbPath := filepath.Join(output.Path(), "db")
+	dbPath := filepath.Join(output.Path(), artifactDatabaseDirName)
 	if err := os.Mkdir(dbPath, 0o755); err != nil {
 		return ImportResult{}, fmt.Errorf("create artifact database directory: %w", err)
 	}
-	diskKV, err := pebble.New(dbPath, opts.CacheMB, opts.Handles, "l2state/import", false)
+	diskKV, err := target.open(dbPath, opts.CacheMB, opts.Handles, false)
 	if err != nil {
-		return ImportResult{}, fmt.Errorf("open target Pebble database: %w", err)
+		return ImportResult{}, fmt.Errorf("open target database: %w", err)
 	}
 	disk := rawdb.NewDatabase(diskKV)
-	reporter.Info("Target database opened", "phase", "prepare_target", "status", "completed", "path", dbPath, "scheme", opts.Scheme)
+	reporter.Info("Target database opened", "phase", "prepare_target", "status", "completed", "path", dbPath,
+		"scheme", opts.Scheme, "db_engine", target.engine, "state_layout", target.layout)
 	diskClosed := false
 	defer func() {
 		if !diskClosed {
@@ -89,7 +95,7 @@ func Import(ctx context.Context, opts ImportOptions) (result ImportResult, retEr
 	}
 	flushPhase.Finish(nil)
 
-	dbState, closed, err := finalizeAndVerifyTarget(ctx, disk, dbPath, opts.Scheme, bundleResult.Manifest.Source, bundleResult.State, opts.CacheMB, opts.Handles, reporter)
+	dbState, closed, err := finalizeAndVerifyTarget(ctx, disk, dbPath, opts.Scheme, target, bundleResult.Manifest.Source, bundleResult.State, opts.CacheMB, opts.Handles, reporter)
 	diskClosed = closed
 	if err != nil {
 		return ImportResult{}, err
@@ -98,6 +104,7 @@ func Import(ctx context.Context, opts ImportOptions) (result ImportResult, retEr
 		return ImportResult{}, fmt.Errorf("target state result mismatch: database %+v bundle %+v", dbState, bundleResult.State)
 	}
 	report := newVerificationReport(bundleResult, opts.Scheme)
+	report.DBEngine, report.StateLayout = target.engine, target.layout
 	if err := publishImportedArtifact(ctx, output, report, opts.Output, reporter); err != nil {
 		return ImportResult{}, err
 	}
@@ -114,7 +121,8 @@ func validateImportOptions(opts ImportOptions) error {
 	if opts.Scheme != rawdb.HashScheme && opts.Scheme != rawdb.PathScheme {
 		return fmt.Errorf("scheme must be %q or %q", rawdb.HashScheme, rawdb.PathScheme)
 	}
-	return nil
+	_, err := targetOptions(opts.DBEngine, opts.StateLayout, opts.Scheme)
+	return err
 }
 
 func publishImportedArtifact(ctx context.Context, output *atomicDir, report VerificationReport, final string, reporter *progressReporter) error {
@@ -153,22 +161,31 @@ func finalizeAndVerifyTarget(
 	ctx context.Context,
 	disk ethdb.Database,
 	dbPath, scheme string,
+	target targetConfig,
 	source bundle.SourceEvidence,
 	expected StateResult,
 	cacheMB, handles int,
 	reporter *progressReporter,
 ) (StateResult, bool, error) {
+	if target.layout == LayoutLegacyL2Geth {
+		phase := reporter.StartPhase("finalize_legacy_code", nil)
+		err := finalizeLegacyCode(ctx, disk)
+		phase.Finish(err)
+		if err != nil {
+			return StateResult{}, false, err
+		}
+	}
 	if err := adoptPathState(ctx, disk, scheme, expected.Root, reporter); err != nil {
 		return StateResult{}, false, err
 	}
 	if err := persistHeadMetadata(ctx, disk, source, reporter); err != nil {
 		return StateResult{}, false, err
 	}
-	diskClosed, err := finalizeTargetDatabase(ctx, disk, dbPath, reporter)
+	diskClosed, err := finalizeTargetDatabase(ctx, disk, dbPath, target, reporter)
 	if err != nil {
 		return StateResult{}, diskClosed, err
 	}
-	state, err := verifyDatabase(ctx, dbPath, scheme, source, expected, cacheMB, handles, reporter, filepath.Dir(dbPath))
+	state, err := verifyTargetDatabase(ctx, dbPath, scheme, target, source, expected, cacheMB, handles, reporter, filepath.Dir(dbPath))
 	if err != nil {
 		return StateResult{}, diskClosed, err
 	}
@@ -224,7 +241,7 @@ func persistHeadMetadata(ctx context.Context, disk ethdb.Database, source bundle
 	return err
 }
 
-func finalizeTargetDatabase(ctx context.Context, disk ethdb.Database, dbPath string, reporter *progressReporter) (closed bool, retErr error) {
+func finalizeTargetDatabase(ctx context.Context, disk ethdb.Database, dbPath string, target targetConfig, reporter *progressReporter) (closed bool, retErr error) {
 	phase := reporter.StartPhase("finalize_database", nil)
 	defer func() { phase.Finish(retErr) }()
 	if err := ctx.Err(); err != nil {
@@ -237,6 +254,11 @@ func finalizeTargetDatabase(ctx context.Context, disk ethdb.Database, dbPath str
 		return false, fmt.Errorf("close target database: %w", err)
 	}
 	closed = true
+	if target.engine == "leveldb" {
+		if err := syncLevelDBFiles(ctx, dbPath, syncFile); err != nil {
+			return true, err
+		}
+	}
 	if err := syncDirectory(dbPath); err != nil {
 		return true, err
 	}

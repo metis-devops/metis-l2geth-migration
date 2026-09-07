@@ -87,7 +87,11 @@ func VerifyDirect(ctx context.Context, opts DirectVerifyOptions) (result DirectV
 		stored.Counts != stateResult.Counts || stored.RecomputedRoot != stateResult.Root {
 		return DirectVerificationReport{}, errors.New("direct artifact report evidence does not match the legacy source")
 	}
-	dbState, err := verifyDatabase(ctx, filepath.Join(opts.Artifact, "db"), stored.Scheme, sourceEvidence, stateResult, opts.CacheMB, opts.Handles, reporter, "")
+	target, err := reportTarget(stored.DBEngine, stored.StateLayout, stored.Scheme)
+	if err != nil {
+		return DirectVerificationReport{}, err
+	}
+	dbState, err := verifyTargetDatabase(ctx, filepath.Join(opts.Artifact, artifactDatabaseDirName), stored.Scheme, target, sourceEvidence, stateResult, opts.CacheMB, opts.Handles, reporter, "")
 	if err != nil {
 		return DirectVerificationReport{}, err
 	}
@@ -104,7 +108,9 @@ func VerifyDirect(ctx context.Context, opts DirectVerifyOptions) (result DirectV
 	if !sameDirectVerificationReport(storedAfter, stored) {
 		return DirectVerificationReport{}, errors.New("direct verification report changed during verification")
 	}
-	return newDirectVerificationReport(sourceEvidence, stateResult, stored.Scheme), nil
+	report := newDirectVerificationReport(sourceEvidence, stateResult, stored.Scheme)
+	report.DBEngine, report.StateLayout = target.engine, target.layout
+	return report, nil
 }
 
 func sameSourceEvidence(left, right bundle.SourceEvidence) bool {

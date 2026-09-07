@@ -58,7 +58,7 @@ func TestPortableImportMatchesGenerateTrieReference(t *testing.T) {
 				}
 				reference := filepath.Join(root, "reference-"+compression+"-"+scheme)
 				_ = buildGenerateTrieReference(t, bundleDir, reference, scheme, exported.Manifest.Source)
-				assertLogicalDatabaseEqual(t, filepath.Join(artifact, "db"), reference)
+				assertLogicalDatabaseEqual(t, filepath.Join(artifact, "chaindata"), reference)
 			})
 		}
 	}
@@ -195,7 +195,7 @@ type logicalEntry struct {
 
 func readLogicalDatabase(t *testing.T, path, namespace string) []logicalEntry {
 	t.Helper()
-	kv, err := pebble.New(path, 16, 16, namespace, true)
+	kv, err := openTestTargetKV(path, 16, 16, namespace, true)
 	if err != nil {
 		t.Fatal(err)
 	}

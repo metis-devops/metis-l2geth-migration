@@ -922,7 +922,7 @@ func TestVerifyRejectsExtraArtifactState(t *testing.T) {
 			}); err != nil {
 				t.Fatal(err)
 			}
-			kv, err := pebble.New(filepath.Join(artifact, "db"), 16, 16, "inventory-mutate", false)
+			kv, err := pebble.New(filepath.Join(artifact, "chaindata"), 16, 16, "inventory-mutate", false)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1042,7 +1042,7 @@ func TestVerifyRejectsTamperedArtifactHeadMetadata(t *testing.T) {
 				}); err != nil {
 					t.Fatal(err)
 				}
-				kv, err := pebble.New(filepath.Join(artifact, "db"), 16, 16, "head-metadata-mutate", false)
+				kv, err := pebble.New(filepath.Join(artifact, "chaindata"), 16, 16, "head-metadata-mutate", false)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1175,6 +1175,11 @@ func directoryContentDigest(t *testing.T, root string) string {
 
 func buildLegacyFixture(t *testing.T) legacyFixture {
 	t.Helper()
+	return buildLegacyFixtureWithCode(t, common.FromHex("0x60016000556002600155"))
+}
+
+func buildLegacyFixtureWithCode(t *testing.T, code []byte) legacyFixture {
+	t.Helper()
 	rootDir := t.TempDir()
 	chaindata := filepath.Join(rootDir, "chaindata")
 	kv, err := gethleveldb.New(chaindata, 32, 32, "fixture", false)
@@ -1192,7 +1197,7 @@ func buildLegacyFixture(t *testing.T) legacyFixture {
 			address: common.HexToAddress("0x2000000000000000000000000000000000000002"),
 			nonce:   7,
 			balance: uint256.NewInt(999),
-			code:    common.FromHex("0x60016000556002600155"),
+			code:    code,
 			storage: map[common.Hash]common.Hash{
 				common.HexToHash("0x01"): common.HexToHash("0x1234"),
 				common.HexToHash("0x02"): common.HexToHash("0xffff"),
@@ -1203,7 +1208,7 @@ func buildLegacyFixture(t *testing.T) legacyFixture {
 			address: common.HexToAddress("0x3000000000000000000000000000000000000003"),
 			nonce:   2,
 			balance: uint256.NewInt(55),
-			code:    common.FromHex("0x60016000556002600155"),
+			code:    code,
 		},
 	}
 	type builtAccount struct {
@@ -1345,7 +1350,7 @@ func assertArtifactState(t *testing.T, artifact, scheme string, root common.Hash
 
 func assertArtifactHeadMetadata(t *testing.T, artifact string, source bundle.SourceEvidence) {
 	t.Helper()
-	kv, err := pebble.New(filepath.Join(artifact, "db"), 16, 16, "head-metadata-read", true)
+	kv, err := openTestTargetKV(filepath.Join(artifact, "chaindata"), 16, 16, "head-metadata-read", true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1390,7 +1395,7 @@ func assertArtifactNonce(t *testing.T, artifact, scheme string, root common.Hash
 
 func withArtifactState(t *testing.T, artifact, scheme string, root common.Hash, readonly bool, fn func(*state.StateDB)) {
 	t.Helper()
-	kv, err := pebble.New(filepath.Join(artifact, "db"), 32, 32, "fixture-read", readonly)
+	kv, err := openTestTargetKV(filepath.Join(artifact, "chaindata"), 32, 32, "fixture-read", readonly)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1413,7 +1418,7 @@ func withArtifactState(t *testing.T, artifact, scheme string, root common.Hash, 
 
 func mutateAndCommitArtifact(t *testing.T, artifact, scheme string, fixture legacyFixture) common.Hash {
 	t.Helper()
-	kv, err := pebble.New(filepath.Join(artifact, "db"), 32, 32, "fixture-write", false)
+	kv, err := openTestTargetKV(filepath.Join(artifact, "chaindata"), 32, 32, "fixture-write", false)
 	if err != nil {
 		t.Fatal(err)
 	}

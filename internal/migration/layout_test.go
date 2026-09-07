@@ -122,6 +122,18 @@ func TestArtifactLayoutIsStrict(t *testing.T) {
 			}
 			return path
 		}},
+		{name: "former db directory", want: "layout", mutate: func(t *testing.T, path string) string {
+			if err := os.Rename(filepath.Join(path, "chaindata"), filepath.Join(path, "db")); err != nil {
+				t.Fatal(err)
+			}
+			return path
+		}},
+		{name: "both database directories", want: "layout", mutate: func(t *testing.T, path string) string {
+			if err := os.Mkdir(filepath.Join(path, "db"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			return path
+		}},
 		{name: "verification symlink", want: "symbolic link", mutate: func(t *testing.T, path string) string {
 			report := filepath.Join(path, VerificationFileName)
 			target := filepath.Join(root, "report-target")
@@ -134,7 +146,7 @@ func TestArtifactLayoutIsStrict(t *testing.T) {
 			return path
 		}},
 		{name: "database symlink", want: "symbolic link", mutate: func(t *testing.T, path string) string {
-			db := filepath.Join(path, "db")
+			db := filepath.Join(path, "chaindata")
 			target := filepath.Join(root, "db-target")
 			if err := os.Rename(db, target); err != nil {
 				t.Fatal(err)

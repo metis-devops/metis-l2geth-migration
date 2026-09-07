@@ -7,6 +7,8 @@ import (
 	"github.com/metis-devops/metis-l2geth-migration/internal/strictio"
 )
 
+const artifactDatabaseDirName = "chaindata"
+
 func validateArtifactLayout(dir string) (retErr error) {
 	root, err := strictio.OpenRoot(dir)
 	if err != nil {
@@ -18,8 +20,8 @@ func validateArtifactLayout(dir string) (retErr error) {
 		}
 	}()
 	if err := root.RequireExactLayout(map[string]strictio.EntryKind{
-		"db":                 strictio.Directory,
-		VerificationFileName: strictio.RegularFile,
+		artifactDatabaseDirName: strictio.Directory,
+		VerificationFileName:    strictio.RegularFile,
 	}); err != nil {
 		return fmt.Errorf("validate artifact layout: %w", err)
 	}
@@ -37,8 +39,8 @@ func loadArtifactJSON[T any](dir, label string, validate func(T) error) (result 
 		}
 	}()
 	if err := root.RequireExactLayout(map[string]strictio.EntryKind{
-		"db":                 strictio.Directory,
-		VerificationFileName: strictio.RegularFile,
+		artifactDatabaseDirName: strictio.Directory,
+		VerificationFileName:    strictio.RegularFile,
 	}); err != nil {
 		return result, fmt.Errorf("validate artifact layout: %w", err)
 	}
