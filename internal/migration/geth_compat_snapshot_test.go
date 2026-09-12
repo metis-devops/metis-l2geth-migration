@@ -338,3 +338,15 @@ func normalizeCompatBaseline(t *testing.T, capture *compatCapture) {
 		}
 	}
 }
+
+// excludeRetiredCompatTargets projects frozen evidence onto the supported targets.
+// Only these 21 retired cases are excluded, and only on the expected side. Keep
+// the corpus, bundle cases, shared database records and strict comparator intact.
+func excludeRetiredCompatTargets(capture *compatCapture) {
+	for _, scenario := range []string{"canary", "empty", "multiple-partitions", "single-leaf", "single-partition", "storage-1024", "storage-1025"} {
+		delete(capture.Contracts["direct"].Cases, scenario+"/leveldb/legacy-l2geth/hash")
+		for _, compression := range []string{"none", "zstd"} {
+			delete(capture.Contracts["verification"].Cases, scenario+"/"+compression+"/leveldb/legacy-l2geth/hash")
+		}
+	}
+}

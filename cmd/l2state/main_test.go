@@ -19,14 +19,14 @@ import (
 )
 
 func TestCLIEndToEnd(t *testing.T) {
-	for _, tc := range []struct{ engine, layout, scheme string }{
-		{"pebble", "geth", "hash"}, {"pebble", "geth", "path"}, {"leveldb", "geth", "hash"}, {"leveldb", "geth", "path"}, {"leveldb", "legacy-l2geth", "hash"},
+	for _, tc := range []struct{ engine, scheme string }{
+		{"pebble", "hash"}, {"pebble", "path"}, {"leveldb", "hash"}, {"leveldb", "path"},
 	} {
-		t.Run(tc.engine+"/"+tc.layout+"/"+tc.scheme, func(t *testing.T) { runCLIEndToEnd(t, tc.engine, tc.layout, tc.scheme) })
+		t.Run(tc.engine+"/"+tc.scheme, func(t *testing.T) { runCLIEndToEnd(t, tc.engine, tc.scheme) })
 	}
 }
 
-func runCLIEndToEnd(t *testing.T, engine, layout, scheme string) {
+func runCLIEndToEnd(t *testing.T, engine, scheme string) {
 	source := loadGoldenSource(t)
 	root := t.TempDir()
 	bundlePath := filepath.Join(root, "bundle")
@@ -47,7 +47,7 @@ func runCLIEndToEnd(t *testing.T, engine, layout, scheme string) {
 	stdout.Reset()
 	stderr.Reset()
 	if err := run(context.Background(), []string{
-		"import", "--bundle", bundlePath, "--out", artifactPath, "--scheme", scheme, "--db-engine", engine, "--state-layout", layout,
+		"import", "--bundle", bundlePath, "--out", artifactPath, "--scheme", scheme, "--db-engine", engine,
 		"--cache-mb", "16", "--handles", "16",
 	}, &stdout, &stderr); err != nil {
 		t.Fatalf("import command: %v stderr=%s", err, stderr.String())
@@ -82,7 +82,7 @@ func runCLIEndToEnd(t *testing.T, engine, layout, scheme string) {
 	stdout.Reset()
 	stderr.Reset()
 	if err := run(context.Background(), []string{
-		"migrate", "--source-chaindata", source, "--out", directArtifactPath, "--scheme", scheme, "--db-engine", engine, "--state-layout", layout,
+		"migrate", "--source-chaindata", source, "--out", directArtifactPath, "--scheme", scheme, "--db-engine", engine,
 		"--cache-mb", "16", "--handles", "16", "--workers", "1",
 	}, &stdout, &stderr); err != nil {
 		t.Fatalf("migrate command: %v stderr=%s", err, stderr.String())
@@ -368,7 +368,7 @@ func loadGoldenSource(t *testing.T) string {
 
 func TestCLITargetOptions(t *testing.T) {
 	for _, command := range []string{"migrate", "import"} {
-		for _, options := range [][]string{{"--db-engine", ""}, {"--db-engine", "invalid"}, {"--state-layout", ""}, {"--state-layout", "invalid"}, {"--state-layout", "legacy-l2geth"}, {"--db-engine", "leveldb", "--state-layout", "legacy-l2geth", "--scheme", "path"}} {
+		for _, options := range [][]string{{"--db-engine", ""}, {"--db-engine", "invalid"}, {"--state-layout", ""}, {"--state-layout", "invalid"}, {"--state-layout", "geth"}, {"--state-layout=geth"}, {"--state-layout", "legacy-l2geth"}, {"--db-engine", "leveldb", "--state-layout", "legacy-l2geth", "--scheme", "path"}} {
 			var stdout, stderr bytes.Buffer
 			output := filepath.Join(t.TempDir(), "artifact")
 			input := []string{"--source-chaindata", "missing"}
@@ -377,8 +377,12 @@ func TestCLITargetOptions(t *testing.T) {
 			}
 			args := append([]string{command, "--out", output, "--scheme", "hash"}, input...)
 			args = append(args, options...)
-			if err := run(context.Background(), args, &stdout, &stderr); err == nil {
+			err := run(context.Background(), args, &stdout, &stderr)
+			if err == nil {
 				t.Fatalf("accepted %v", args)
+			}
+			if strings.Contains(strings.Join(options, " "), "--state-layout") && !strings.Contains(err.Error(), "flag provided but not defined: -state-layout") {
+				t.Fatalf("removed flag did not fail during parsing: %v", err)
 			}
 			if stdout.Len() != 0 {
 				t.Fatalf("error emitted stdout: %s", stdout.String())
@@ -390,7 +394,7 @@ func TestCLITargetOptions(t *testing.T) {
 	}
 	source := loadGoldenSource(t)
 	var stdout, stderr bytes.Buffer
-	args := []string{"migrate", "--source-chaindata", source, "--out", filepath.Join(t.TempDir(), "artifact"), "--db-engine", "leveldb", "--scheme", "hash", "--state-layout", "legacy-l2geth", "--quiet", "--cache-mb", "16", "--handles", "16"}
+	args := []string{"migrate", "--source-chaindata", source, "--out", filepath.Join(t.TempDir(), "artifact"), "--db-engine", "leveldb", "--scheme", "hash", "--quiet", "--cache-mb", "16", "--handles", "16"}
 	if err := run(context.Background(), args, &stdout, &stderr); err != nil {
 		t.Fatal(err)
 	}
@@ -407,7 +411,7 @@ func TestCLITargetOptions(t *testing.T) {
 	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
-	if result.Verification.DBEngine != "leveldb" || result.Verification.StateLayout != "legacy-l2geth" {
+	if result.Verification.DBEngine != "leveldb" || result.Verification.StateLayout != "geth" {
 		t.Fatalf("wrong target report: %s", stdout.String())
 	}
 }

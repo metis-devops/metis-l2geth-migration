@@ -16,7 +16,6 @@ type MigrateOptions struct {
 	Output          string
 	Scheme          string
 	DBEngine        string
-	StateLayout     string
 	CacheMB         int
 	Handles         int
 	Workers         int
@@ -35,7 +34,7 @@ func Migrate(ctx context.Context, opts MigrateOptions) (result MigrateResult, re
 	reporter := newProgressReporter("migrate", opts.Progress,
 		"source", opts.SourceChaindata,
 		"output", opts.Output,
-		"scheme", opts.Scheme, "db_engine", opts.DBEngine, "state_layout", opts.StateLayout,
+		"scheme", opts.Scheme, "db_engine", opts.DBEngine, "state_layout", LayoutGeth,
 		"workers", workers,
 	)
 	defer func() {
@@ -51,7 +50,7 @@ func Migrate(ctx context.Context, opts MigrateOptions) (result MigrateResult, re
 	if err := validateMigrateOptions(opts); err != nil {
 		return MigrateResult{}, err
 	}
-	target, err := targetOptions(opts.DBEngine, opts.StateLayout, opts.Scheme)
+	target, err := targetOptions(opts.DBEngine, opts.Scheme)
 	if err != nil {
 		return MigrateResult{}, err
 	}
@@ -164,7 +163,7 @@ func validateMigrateOptions(opts MigrateOptions) error {
 	if opts.Workers > maxMigrateWorkers {
 		return fmt.Errorf("workers must not exceed %d", maxMigrateWorkers)
 	}
-	if _, err := targetOptions(opts.DBEngine, opts.StateLayout, opts.Scheme); err != nil {
+	if _, err := targetOptions(opts.DBEngine, opts.Scheme); err != nil {
 		return err
 	}
 	return rejectOutputInsideSource(opts.SourceChaindata, opts.Output)

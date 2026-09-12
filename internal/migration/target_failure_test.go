@@ -24,7 +24,7 @@ func TestTargetTamperingRejected(t *testing.T) {
 			}
 			t.Run(tc.name()+"/"+damage, func(t *testing.T) {
 				artifact := filepath.Join(t.TempDir(), "artifact")
-				result, err := Migrate(context.Background(), MigrateOptions{SourceChaindata: fixture.chaindata, Output: artifact, Scheme: tc.scheme, DBEngine: tc.engine, StateLayout: tc.layout, CacheMB: 16, Handles: 16})
+				result, err := Migrate(context.Background(), MigrateOptions{SourceChaindata: fixture.chaindata, Output: artifact, Scheme: tc.scheme, DBEngine: tc.engine, CacheMB: 16, Handles: 16})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -38,11 +38,7 @@ func TestTargetTamperingRejected(t *testing.T) {
 					}
 					writeUncheckedDirectReport(t, artifact, result.Report)
 				case "layout":
-					if tc.layout == "legacy-l2geth" {
-						result.Report.StateLayout = LayoutGeth
-					} else {
-						result.Report.StateLayout = LayoutLegacyL2Geth
-					}
+					result.Report.StateLayout = "legacy-l2geth"
 					writeUncheckedDirectReport(t, artifact, result.Report)
 				case "corrupt-current":
 					if err := os.WriteFile(filepath.Join(dbPath, "CURRENT"), []byte("bad manifest\n"), 0600); err != nil {
@@ -89,9 +85,6 @@ func damageTargetKey(t *testing.T, db ethdb.KeyValueStore, tc targetTestCase, da
 	}
 	hash := crypto.Keccak256Hash(code)
 	key := prefixedKey(rawdb.CodePrefix, hash[:])
-	if tc.layout == "legacy-l2geth" {
-		key = hash[:]
-	}
 	var err error
 	switch damage {
 	case "missing-code":
@@ -107,11 +100,7 @@ func damageTargetKey(t *testing.T, db ethdb.KeyValueStore, tc targetTestCase, da
 			err = db.Put(h[:], node)
 		}
 	case "mixed-code":
-		if tc.layout == "legacy-l2geth" {
-			key = prefixedKey(rawdb.CodePrefix, hash[:])
-		} else {
-			key = hash[:]
-		}
+		key = hash[:]
 		err = db.Put(key, code)
 	}
 	if err != nil {
@@ -119,51 +108,7 @@ func damageTargetKey(t *testing.T, db ethdb.KeyValueStore, tc targetTestCase, da
 	}
 }
 
-func TestLegacyInventorySharedCodeNodeAndCodeOnlyRLP(t *testing.T) {
-	for _, shared := range []bool{false, true} {
-		t.Run(map[bool]string{false: "code-only-rlp", true: "shared-node-code"}[shared], func(t *testing.T) {
-			db := rawdb.NewMemoryDatabase()
-			defer func() {
-				if err := db.Close(); err != nil {
-					t.Error(err)
-				}
-			}()
-			report := validDirectVerificationReport(t)
-			if err := writeHeadMetadata(db, report.Source); err != nil {
-				t.Fatal(err)
-			}
-			index, err := newTemporaryTrieNodeIndex(trieNodeIndexOptions{Parent: t.TempDir()})
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer func() {
-				if err := index.Close(); err != nil {
-					t.Error(err)
-				}
-			}()
-			code := []byte{0xc2, 0x20, 0x01}
-			hash := crypto.Keccak256Hash(code)
-			if err := db.Put(hash[:], code); err != nil {
-				t.Fatal(err)
-			}
-			if shared {
-				if err := index.Mark(hash); err != nil {
-					t.Fatal(err)
-				}
-			}
-			count, err := index.Count(context.Background())
-			if err != nil {
-				t.Fatal(err)
-			}
-			inventory := stateInventory{nodeIndex: index, codeHashes: hashSet{hash: struct{}{}}, TrieNodes: count, CodeEntries: 1}
-			if err := verifyLegacyInventory(context.Background(), db, report.Source, inventory, nil); err != nil {
-				t.Fatal(err)
-			}
-		})
-	}
-}
-
-func TestLegacyInventoryCallbackRetainsReachabilityIndex(t *testing.T) {
+func TestSourceCodeMatchingTrieNode(t *testing.T) {
 	fixture := buildLegacyFixture(t)
 	kv, err := openTestTargetKV(fixture.chaindata, 16, 16, "alias", true)
 	if err != nil {
@@ -195,11 +140,11 @@ func TestLegacyInventoryCallbackRetainsReachabilityIndex(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			direct, err := Migrate(context.Background(), MigrateOptions{SourceChaindata: fixture.chaindata, Output: filepath.Join(root, "direct"), Scheme: "hash", DBEngine: "leveldb", StateLayout: "legacy-l2geth", CacheMB: 16, Handles: 16})
+			direct, err := Migrate(context.Background(), MigrateOptions{SourceChaindata: fixture.chaindata, Output: filepath.Join(root, "direct"), Scheme: "hash", DBEngine: "leveldb", CacheMB: 16, Handles: 16})
 			if err != nil {
 				t.Fatal(err)
 			}
-			imported, err := Import(context.Background(), ImportOptions{Bundle: bundlePath, Output: filepath.Join(root, "import"), Scheme: "hash", DBEngine: "leveldb", StateLayout: "legacy-l2geth", CacheMB: 16, Handles: 16})
+			imported, err := Import(context.Background(), ImportOptions{Bundle: bundlePath, Output: filepath.Join(root, "import"), Scheme: "hash", DBEngine: "leveldb", CacheMB: 16, Handles: 16})
 			if err != nil {
 				t.Fatal(err)
 			}

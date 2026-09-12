@@ -184,11 +184,6 @@ func verifyTargetDatabase(ctx context.Context, dbPath, scheme string, target tar
 		NodeIndex: trieNodeIndexOptions{Parent: scratchParent, CacheMB: cacheMB, Handles: handles},
 		ReadCode:  target.readCode,
 	}
-	if target.layout == LayoutLegacyL2Geth {
-		traversal.CheckInventory = func(inventory stateInventory) error {
-			return verifyLegacyInventory(ctx, disk, source, inventory, progress)
-		}
-	}
 	state, inventory, err := traverseState(ctx, disk, trieDB, expected.Root, visitor, true, traversal)
 	if err != nil {
 		verifyErr := fmt.Errorf("verify artifact state: %w", err)
@@ -208,10 +203,8 @@ func verifyTargetDatabase(ctx context.Context, dbPath, scheme string, target tar
 		}
 	}
 	statePhase.Finish(nil, "recomputed_root", state.Root)
-	if target.layout != LayoutLegacyL2Geth {
-		if err := verifyDatabaseInventory(ctx, disk, scheme, source, expected.Counts, inventory, progress); err != nil {
-			return StateResult{}, err
-		}
+	if err := verifyDatabaseInventory(ctx, disk, scheme, source, expected.Counts, inventory, progress); err != nil {
+		return StateResult{}, err
 	}
 	return state, nil
 }

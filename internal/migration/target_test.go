@@ -1,19 +1,15 @@
 package migration
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/leveldb"
 	"github.com/ethereum/go-ethereum/ethdb/pebble"
@@ -28,7 +24,6 @@ func targetTestCases() []targetTestCase {
 	return []targetTestCase{
 		{"pebble", "geth", "hash"}, {"pebble", "geth", "path"},
 		{"leveldb", "geth", "hash"}, {"leveldb", "geth", "path"},
-		{"leveldb", "legacy-l2geth", "hash"},
 	}
 }
 
@@ -57,11 +52,11 @@ func TestTargetMatrixGoldenCanary(t *testing.T) {
 		for _, tc := range targetTestCases() {
 			t.Run(compression+"/"+tc.name(), func(t *testing.T) {
 				out := t.TempDir()
-				imported, err := Import(context.Background(), ImportOptions{Bundle: bundlePath, Output: filepath.Join(out, "import"), Scheme: tc.scheme, DBEngine: tc.engine, StateLayout: tc.layout, CacheMB: 16, Handles: 16})
+				imported, err := Import(context.Background(), ImportOptions{Bundle: bundlePath, Output: filepath.Join(out, "import"), Scheme: tc.scheme, DBEngine: tc.engine, CacheMB: 16, Handles: 16})
 				if err != nil {
 					t.Fatal(err)
 				}
-				direct, err := Migrate(context.Background(), MigrateOptions{SourceChaindata: source, Output: filepath.Join(out, "direct"), Scheme: tc.scheme, DBEngine: tc.engine, StateLayout: tc.layout, CacheMB: 16, Handles: 16, Workers: 2})
+				direct, err := Migrate(context.Background(), MigrateOptions{SourceChaindata: source, Output: filepath.Join(out, "direct"), Scheme: tc.scheme, DBEngine: tc.engine, CacheMB: 16, Handles: 16, Workers: 2})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -81,32 +76,12 @@ func TestTargetMatrixGoldenCanary(t *testing.T) {
 				assertLogicalDatabaseEqual(t, filepath.Join(imported.ArtifactPath, "chaindata"), filepath.Join(direct.ArtifactPath, "chaindata"))
 				reference := filepath.Join(out, "reference")
 				buildGenerateTrieReference(t, bundlePath, reference, tc.scheme, exported.Manifest.Source)
-				assertTargetReference(t, filepath.Join(direct.ArtifactPath, "chaindata"), reference, tc.layout)
+				assertLogicalDatabaseEqual(t, filepath.Join(direct.ArtifactPath, "chaindata"), reference)
 			})
 		}
 	}
 	if after := directoryContentDigest(t, source); after != before {
 		t.Fatal("source changed")
-	}
-}
-
-func assertTargetReference(t *testing.T, target, reference, layout string) {
-	t.Helper()
-	if layout == "geth" {
-		assertLogicalDatabaseEqual(t, target, reference)
-		return
-	}
-	want := readLogicalDatabase(t, reference, "reference")
-	for i := range want {
-		if ok, _ := rawdb.IsCodeKey(want[i].key); ok {
-			want[i].key = want[i].key[len(rawdb.CodePrefix):]
-		}
-	}
-	slices.SortFunc(want, func(a, b logicalEntry) int { return bytes.Compare(a.key, b.key) })
-	want = slices.CompactFunc(want, func(a, b logicalEntry) bool { return bytes.Equal(a.key, b.key) && bytes.Equal(a.value, b.value) })
-	got := readLogicalDatabase(t, target, "target")
-	if !slices.EqualFunc(got, want, func(a, b logicalEntry) bool { return bytes.Equal(a.key, b.key) && bytes.Equal(a.value, b.value) }) {
-		t.Fatal("legacy layout differs from independent reference")
 	}
 }
 
@@ -126,14 +101,14 @@ func TestLevelDBGethContinuation(t *testing.T) {
 }
 
 func TestTargetOptionsFailBeforeIO(t *testing.T) {
-	for _, tc := range []targetTestCase{{"bogus", "geth", "hash"}, {"pebble-v2", "geth", "hash"}, {"pebble", "bogus", "hash"}, {"pebble", "legacy-l2geth", "hash"}, {"leveldb", "legacy-l2geth", "path"}, {"", "legacy-l2geth", "hash"}} {
+	for _, tc := range []targetTestCase{{"bogus", "geth", "hash"}, {"pebble-v2", "geth", "hash"}, {"pebble", "geth", "invalid"}} {
 		t.Run(tc.name(), func(t *testing.T) {
 			out := filepath.Join(t.TempDir(), "absent-parent", "artifact")
-			_, err := Migrate(context.Background(), MigrateOptions{SourceChaindata: "missing-source", Output: out, Scheme: tc.scheme, DBEngine: tc.engine, StateLayout: tc.layout})
+			_, err := Migrate(context.Background(), MigrateOptions{SourceChaindata: "missing-source", Output: out, Scheme: tc.scheme, DBEngine: tc.engine})
 			if err == nil || strings.Contains(err.Error(), "open legacy") {
 				t.Fatalf("bad validation: %v", err)
 			}
-			_, err = Import(context.Background(), ImportOptions{Bundle: "missing-bundle", Output: out, Scheme: tc.scheme, DBEngine: tc.engine, StateLayout: tc.layout})
+			_, err = Import(context.Background(), ImportOptions{Bundle: "missing-bundle", Output: out, Scheme: tc.scheme, DBEngine: tc.engine})
 			if err == nil {
 				t.Fatal("invalid import accepted")
 			}
@@ -180,7 +155,7 @@ func TestStateLayoutReportStrictness(t *testing.T) {
 					err = r.Validate()
 				}
 			}
-			valid := value == "omitted" || value == `"geth"` || value == `"legacy-l2geth"`
+			valid := value == "omitted" || value == `"geth"`
 			if (err == nil) != valid {
 				t.Fatalf("direct=%v layout=%s: %v", direct, value, err)
 			}
@@ -216,40 +191,6 @@ func TestSyncLevelDBFilesFailureAndCancellation(t *testing.T) {
 	}
 	if err := syncLevelDBFiles(context.Background(), dir, syncFile); err == nil {
 		t.Fatal("symlink accepted")
-	}
-}
-
-func TestLegacyCodeRelocationProtectsFoldedOrphan(t *testing.T) {
-	db := rawdb.NewMemoryDatabase()
-	defer func() {
-		if err := db.Close(); err != nil {
-			t.Error(err)
-		}
-	}()
-	code := []byte{0xc2, 0x20, 0x01} // Valid trie leaf RLP is also valid contract bytecode.
-	hash := crypto.Keccak256Hash(code)
-	w := newDirectStateWriter(db, rawdb.HashScheme)
-	if err := w.TrieNode(common.Hash{}, nil, hash, code); err != nil {
-		t.Fatal(err)
-	}
-	if err := w.Code(common.Hash{}, hash, code); err != nil {
-		t.Fatal(err)
-	}
-	if err := w.DeleteTrieNode(common.Hash{}, nil, hash); err != nil {
-		t.Fatal(err)
-	}
-	if err := w.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := finalizeLegacyCode(context.Background(), db); err != nil {
-		t.Fatal(err)
-	}
-	got, err := db.Get(hash[:])
-	if err != nil || !bytes.Equal(got, code) {
-		t.Fatalf("code lost: %x %v", got, err)
-	}
-	if has, err := db.Has(prefixedKey(rawdb.CodePrefix, hash[:])); err != nil || has {
-		t.Fatalf("staged code survived: %v %v", has, err)
 	}
 }
 
@@ -306,6 +247,29 @@ func TestOldArtifactReportsDefaultToGethLayout(t *testing.T) {
 		}
 		if after := directoryContentDigest(t, artifact); after != before {
 			t.Fatal("old report rewritten during verification")
+		}
+
+		for _, layout := range []string{`"legacy-l2geth"`, `""`, `null`, `"unknown"`} {
+			wire["state_layout"] = json.RawMessage(layout)
+			data, err := json.Marshal(wire)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, data, 0600); err != nil {
+				t.Fatal(err)
+			}
+			before := directoryContentDigest(t, artifact)
+			if direct {
+				_, err = VerifyDirect(context.Background(), DirectVerifyOptions{SourceChaindata: fixture.chaindata, Artifact: artifact, CacheMB: 16, Handles: 16})
+			} else {
+				_, err = Verify(context.Background(), VerifyOptions{Bundle: bundlePath, Artifact: artifact, CacheMB: 16, Handles: 16})
+			}
+			if err == nil || !strings.Contains(err.Error(), "state layout") {
+				t.Fatalf("direct=%v layout=%s: %v", direct, layout, err)
+			}
+			if directoryContentDigest(t, artifact) != before {
+				t.Fatal("rejected artifact was modified")
+			}
 		}
 	}
 }

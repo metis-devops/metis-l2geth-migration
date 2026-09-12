@@ -36,9 +36,6 @@ trie preimages.
   expected evidence.
 - `testdata/legacyfixturegen` is a separate, maintenance-only module for
   intentional canary regeneration.
-- `testdata/legacycompat` independently tests current CLI output with pinned
-  l2geth `e795a258d3f2` state APIs, including continuation on a copy. It never
-  regenerates the committed canary and is part of CI and race validation.
 
 ## Immutable contracts
 
@@ -91,22 +88,18 @@ trie preimages.
 
 ### Target artifacts
 
-- Support `--db-engine pebble|leveldb` (default Pebble) independently from
-  `--state-layout geth|legacy-l2geth` (default geth). Geth layout supports explicit
-  `hash` and `path` schemes using pinned geth v1.17.5. Legacy layout requires
-  explicit LevelDB/hash and preserves the state-only and uint256 boundaries.
+- Support `--db-engine pebble|leveldb` (default Pebble) with explicit `hash`
+  and `path` schemes using pinned geth v1.17.5. The target layout is always geth.
+  Do not restore the removed `--state-layout` flag or legacy target generation.
 - Reports record `db_engine` as `pebble-v2|leveldb` and new artifact reports
-  explicitly record `state_layout`. An omitted layout in an old report means
-  geth; explicit empty/null/unknown values and illegal combinations fail.
+  explicitly record `state_layout` as `geth`. An omitted layout in an old report
+  means geth; explicit legacy-l2geth/empty/null/unknown values fail.
   Keep existing versions and bundle encoding. Pure bundle verification carries
-  neither target field. Verification uses the declared engine/layout without
-  fallback and opens LevelDB with the strict, recovery-disabled read-only adapter.
-- Geth-layout code keys use `c + codeHash`; legacy code uses bare hashes.
-  During construction legacy code is staged under prefixed keys, then relocated
-  in bounded batches after all partition tasks and folding are complete. Skip
-  32-byte trie keys sharing the staging prefix. No staged keys may be published.
-  Verify legacy key roles by reachable node and referenced code sets, counting
-  shared physical entries in both roles. Never classify code by RLP shape.
+  neither target field. Verification uses the declared engine without fallback
+  and opens LevelDB with the strict, recovery-disabled read-only adapter.
+- Target code keys use `c + codeHash`. Reject bare-hash code, unreferenced code,
+  and orphan trie nodes. Never classify code by RLP shape. Legacy source code
+  reading remains supported; source and target conventions are distinct.
 - Close LevelDB writers, sync every regular database file and then the directory
   before reopening and publishing. The pinned LevelDB SyncKeyValue is a no-op.
   Check cancellation and propagate file-sync errors; never recover a target
@@ -201,8 +194,11 @@ trie preimages.
 - `make geth-compat` compares the fixed corpus in
   `internal/migration/testdata/geth-compat`, restores frozen logical databases,
   imports frozen record streams, and checks continuation on disposable copies.
-  Existing current-geth reference comparisons and independent legacy checks are
-  still required. This gate covers tool contracts, not all geth functionality.
+  Existing current-geth reference comparisons and source canary checks are still
+  required. This gate covers tool contracts, not all geth functionality.
+  Exclude only the 21 explicitly retired legacy-target cases from expected
+  baselines in memory before comparison/replay; never filter actual output,
+  rewrite frozen files, or hide missing/changed geth cases.
 - Treat accepted version files as immutable. Ordinary tests never regenerate
   them. `make geth-compat-candidate OUT=/absolute/new/path` only exports an
   unapproved candidate outside the corpus; review differences before adding a
@@ -225,8 +221,7 @@ git diff --check
 ```
 
 `make ci` runs formatting and module-tidiness checks, lint, all root-module
-tests (including the geth compatibility gate), fixture-module and
-legacy-compatibility-module tidy/verify/test/vet, and the build.
+tests (including the geth compatibility gate), fixture-module tidy/verify/test/vet, and the build.
 `make geth-compat` remains available for a focused, uncached compatibility run;
 it is not a separate CI prerequisite because `test` already covers it. Also run
 `make test-race` when changing concurrency, cancellation, progress reporting,
@@ -243,10 +238,10 @@ Use the following change-sensitive checks:
   independent reopening, full logical comparison with the test-only
   `GenerateTrie` reference, and a subsequent state commit/read through geth
   v1.17.5 APIs.
-- Backend/layout changes: cover all five engine/layout/scheme combinations,
+- Backend/layout changes: cover all four engine/scheme combinations,
   both compression modes, report field strictness, old omitted-layout reports,
-  physical-engine mismatch, legacy shared code/node keys, RLP-shaped code,
-  mixed layouts, corrupt LevelDB read-only behavior, and file-sync failure.
+  physical-engine mismatch, rejected legacy reports, RLP-shaped code,
+  bare-hash code injection, corrupt LevelDB read-only behavior, and file-sync failure.
 - Source traversal or direct-migration changes: run the committed legacy
   canary through direct and portable workflows and confirm the source content
   remains unchanged.

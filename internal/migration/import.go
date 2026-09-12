@@ -17,14 +17,13 @@ import (
 
 // ImportOptions configures a bundle import into a hash- or path-scheme database.
 type ImportOptions struct {
-	Bundle      string
-	Output      string
-	Scheme      string
-	DBEngine    string
-	StateLayout string
-	CacheMB     int
-	Handles     int
-	Progress    ProgressOptions
+	Bundle   string
+	Output   string
+	Scheme   string
+	DBEngine string
+	CacheMB  int
+	Handles  int
+	Progress ProgressOptions
 }
 
 // ImportResult identifies a published state artifact and its verification report.
@@ -46,7 +45,7 @@ func Import(ctx context.Context, opts ImportOptions) (result ImportResult, retEr
 	if err := validateImportOptions(opts); err != nil {
 		return ImportResult{}, err
 	}
-	target, err := targetOptions(opts.DBEngine, opts.StateLayout, opts.Scheme)
+	target, err := targetOptions(opts.DBEngine, opts.Scheme)
 	if err != nil {
 		return ImportResult{}, err
 	}
@@ -121,7 +120,7 @@ func validateImportOptions(opts ImportOptions) error {
 	if opts.Scheme != rawdb.HashScheme && opts.Scheme != rawdb.PathScheme {
 		return fmt.Errorf("scheme must be %q or %q", rawdb.HashScheme, rawdb.PathScheme)
 	}
-	_, err := targetOptions(opts.DBEngine, opts.StateLayout, opts.Scheme)
+	_, err := targetOptions(opts.DBEngine, opts.Scheme)
 	return err
 }
 
@@ -167,14 +166,6 @@ func finalizeAndVerifyTarget(
 	cacheMB, handles int,
 	reporter *progressReporter,
 ) (StateResult, bool, error) {
-	if target.layout == LayoutLegacyL2Geth {
-		phase := reporter.StartPhase("finalize_legacy_code", nil)
-		err := finalizeLegacyCode(ctx, disk)
-		phase.Finish(err)
-		if err != nil {
-			return StateResult{}, false, err
-		}
-	}
 	if err := adoptPathState(ctx, disk, scheme, expected.Root, reporter); err != nil {
 		return StateResult{}, false, err
 	}

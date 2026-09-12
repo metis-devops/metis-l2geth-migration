@@ -1,7 +1,6 @@
 package migration
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -13,7 +12,6 @@ import (
 	cpebble "github.com/cockroachdb/pebble/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/leveldb"
 	"github.com/ethereum/go-ethereum/ethdb/pebble"
@@ -27,8 +25,6 @@ type StateLayout string
 const (
 	// LayoutGeth stores contract code under geth's prefixed keys.
 	LayoutGeth StateLayout = "geth"
-	// LayoutLegacyL2Geth stores contract code under bare hashes.
-	LayoutLegacyL2Geth StateLayout = "legacy-l2geth"
 )
 
 // UnmarshalJSON distinguishes an omitted old-report field from an invalid explicit value.
@@ -37,7 +33,7 @@ func (l *StateLayout) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &value); err != nil {
 		return fmt.Errorf("decode state layout: %w", err)
 	}
-	if value != string(LayoutGeth) && value != string(LayoutLegacyL2Geth) {
+	if value != string(LayoutGeth) {
 		return fmt.Errorf("invalid state layout %q", value)
 	}
 	*l = StateLayout(value)
@@ -49,7 +45,7 @@ type targetConfig struct {
 	layout StateLayout
 }
 
-func targetOptions(engine, layout, scheme string) (targetConfig, error) {
+func targetOptions(engine, scheme string) (targetConfig, error) {
 	if engine == "" {
 		engine = "pebble"
 	}
@@ -58,7 +54,7 @@ func targetOptions(engine, layout, scheme string) (targetConfig, error) {
 	} else if engine != "leveldb" {
 		return targetConfig{}, fmt.Errorf("db-engine must be pebble or leveldb: %q", engine)
 	}
-	return reportTarget(engine, StateLayout(layout), scheme)
+	return reportTarget(engine, LayoutGeth, scheme)
 }
 
 func reportTarget(engine string, layout StateLayout, scheme string) (targetConfig, error) {
@@ -68,14 +64,11 @@ func reportTarget(engine string, layout StateLayout, scheme string) (targetConfi
 	if engine != "pebble-v2" && engine != "leveldb" {
 		return targetConfig{}, fmt.Errorf("invalid database engine %q", engine)
 	}
-	if layout != LayoutGeth && layout != LayoutLegacyL2Geth {
+	if layout != LayoutGeth {
 		return targetConfig{}, fmt.Errorf("invalid state layout %q", layout)
 	}
 	if scheme != rawdb.HashScheme && scheme != rawdb.PathScheme {
 		return targetConfig{}, fmt.Errorf("invalid state scheme %q", scheme)
-	}
-	if layout == LayoutLegacyL2Geth && (engine != "leveldb" || scheme != rawdb.HashScheme) {
-		return targetConfig{}, errors.New("legacy-l2geth layout requires --db-engine leveldb --scheme hash")
 	}
 	return targetConfig{engine: engine, layout: layout}, nil
 }
@@ -109,82 +102,12 @@ func (c targetConfig) open(path string, cacheMB, handles int, readonly bool) (et
 }
 
 func (c targetConfig) readCode(db ethdb.KeyValueReader, hash common.Hash) ([]byte, error) {
-	key := hash[:]
-	if c.layout != LayoutLegacyL2Geth {
-		key = prefixedKey(rawdb.CodePrefix, key)
-	}
+	key := prefixedKey(rawdb.CodePrefix, hash[:])
 	code, err := db.Get(key)
 	if errors.Is(err, cpebble.ErrNotFound) || errors.Is(err, goleveldb.ErrNotFound) {
 		return nil, nil
 	}
 	return code, err
-}
-
-// finalizeLegacyCode runs after every builder has joined and flushed. Staging code
-// with a prefix protects code/node aliases from partition-root orphan deletion.
-func finalizeLegacyCode(ctx context.Context, disk ethdb.Database) error {
-	it := disk.NewIterator(rawdb.CodePrefix, nil)
-	defer it.Release()
-	batch := disk.NewBatch()
-	defer batch.Close()
-	for it.Next() {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		key, code := it.Key(), it.Value()
-		// Hash trie nodes can also start with the byte 'c'. They are 32-byte
-		// keys, distinct from the 33-byte prefixed staging-code entries.
-		if len(key) == common.HashLength {
-			continue
-		}
-		if len(key) != len(rawdb.CodePrefix)+common.HashLength || len(code) == 0 || !bytes.Equal(crypto.Keccak256(code), key[len(rawdb.CodePrefix):]) {
-			return fmt.Errorf("invalid staged legacy code key %x", key)
-		}
-		hash := key[len(rawdb.CodePrefix):]
-		if err := checkSharedLegacyKey(disk, hash, code); err != nil {
-			return err
-		}
-		if err := batch.Put(hash, code); err != nil {
-			return fmt.Errorf("write legacy code: %w", err)
-		}
-		if err := batch.Delete(key); err != nil {
-			return fmt.Errorf("remove staged legacy code: %w", err)
-		}
-		if batch.ValueSize() >= ethdb.IdealBatchSize {
-			if err := batch.Write(); err != nil {
-				return fmt.Errorf("flush legacy code: %w", err)
-			}
-			batch.Reset()
-		}
-	}
-	if err := it.Error(); err != nil {
-		return fmt.Errorf("iterate staged legacy code: %w", err)
-	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if err := batch.Write(); err != nil {
-		return fmt.Errorf("flush final legacy code: %w", err)
-	}
-	return nil
-}
-
-func checkSharedLegacyKey(disk ethdb.KeyValueReader, hash, code []byte) error {
-	has, err := disk.Has(hash)
-	if err != nil {
-		return fmt.Errorf("check legacy code/node alias: %w", err)
-	}
-	if !has {
-		return nil
-	}
-	existing, err := disk.Get(hash)
-	if err != nil {
-		return fmt.Errorf("read legacy code/node alias: %w", err)
-	}
-	if !bytes.Equal(existing, code) {
-		return fmt.Errorf("legacy code/node alias has conflicting bytes at %x", hash)
-	}
-	return nil
 }
 
 // syncLevelDBFiles supplies durability that geth's no-op LevelDB SyncKeyValue

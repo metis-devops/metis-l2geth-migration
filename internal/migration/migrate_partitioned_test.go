@@ -481,7 +481,7 @@ func TestPartitionedTrieAssemblyMatchesSerialNodes(t *testing.T) {
 				}
 				referenceDB := rawdb.NewDatabase(memorydb.New())
 				expectedRoot := buildSerialTestTrie(t, referenceDB, scheme, test.keys, values)
-				target, err := targetOptions(tc.engine, tc.layout, scheme)
+				target, err := targetOptions(tc.engine, scheme)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -657,7 +657,7 @@ func TestDirectMigrateLargeStorageEndToEndBothSchemes(t *testing.T) {
 				t.Run(tc.name(), func(t *testing.T) {
 					artifact := filepath.Join(t.TempDir(), "artifact")
 					migrated, err := Migrate(context.Background(), MigrateOptions{
-						SourceChaindata: chaindata, Output: artifact, Scheme: scheme, DBEngine: tc.engine, StateLayout: tc.layout,
+						SourceChaindata: chaindata, Output: artifact, Scheme: scheme, DBEngine: tc.engine,
 						CacheMB: 16, Handles: 16, Workers: 2,
 					})
 					if err != nil {
@@ -707,7 +707,7 @@ func testDirectMigrateActiveCancellation(t *testing.T, tc targetTestCase) {
 	done := make(chan error, 1)
 	go func() {
 		_, err := Migrate(ctx, MigrateOptions{
-			SourceChaindata: chaindata, Output: output, Scheme: tc.scheme, DBEngine: tc.engine, StateLayout: tc.layout,
+			SourceChaindata: chaindata, Output: output, Scheme: tc.scheme, DBEngine: tc.engine,
 			CacheMB: 16, Handles: 16, Workers: 2,
 			Progress: ProgressOptions{Logger: logger, Interval: time.Millisecond},
 		})

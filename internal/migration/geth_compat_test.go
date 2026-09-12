@@ -27,6 +27,7 @@ func TestGethCompatibility(t *testing.T) {
 		}
 		expected.Contracts[kind] = loaded
 	}
+	excludeRetiredCompatTargets(expected)
 	normalizeCompatBaseline(t, expected)
 	actual := captureGethCompatibility(t)
 	mismatched := false
@@ -155,7 +156,7 @@ func captureCompatSource(t *testing.T, c *compatCapture, name, source string) {
 		}
 		c.Contracts["verification"].add(t, bundleName+"/bundle", normalizeCompatJSON(t, report, manifest))
 		for _, tc := range targetTestCases() {
-			imported, err := Import(t.Context(), ImportOptions{Bundle: path, Output: filepath.Join(t.TempDir(), "artifact"), Scheme: tc.scheme, DBEngine: tc.engine, StateLayout: tc.layout, CacheMB: 16, Handles: 16})
+			imported, err := Import(t.Context(), ImportOptions{Bundle: path, Output: filepath.Join(t.TempDir(), "artifact"), Scheme: tc.scheme, DBEngine: tc.engine, CacheMB: 16, Handles: 16})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -172,7 +173,7 @@ func captureCompatSource(t *testing.T, c *compatCapture, name, source string) {
 		}
 	}
 	for _, tc := range targetTestCases() {
-		migrated, err := Migrate(t.Context(), MigrateOptions{SourceChaindata: source, Output: filepath.Join(t.TempDir(), "artifact"), Scheme: tc.scheme, DBEngine: tc.engine, StateLayout: tc.layout, CacheMB: 16, Handles: 16, Workers: 2})
+		migrated, err := Migrate(t.Context(), MigrateOptions{SourceChaindata: source, Output: filepath.Join(t.TempDir(), "artifact"), Scheme: tc.scheme, DBEngine: tc.engine, CacheMB: 16, Handles: 16, Workers: 2})
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -51,25 +50,12 @@ func writeCompatDatabase(t *testing.T, path string, entries []compatKV, target t
 
 func captureCompatContinuation(t *testing.T, entries []compatKV, tc targetTestCase, root common.Hash) json.RawMessage {
 	t.Helper()
-	target, err := targetOptions(tc.engine, tc.layout, tc.scheme)
+	target, err := targetOptions(tc.engine, tc.scheme)
 	if err != nil {
 		t.Fatal(err)
 	}
 	path := filepath.Join(t.TempDir(), "copy")
 	writeCompatDatabase(t, path, entries, target)
-	if target.layout == LayoutLegacyL2Geth {
-		output := filepath.Join(t.TempDir(), "continuation.json")
-		cmd := exec.CommandContext(t.Context(), "go", "test", "-count=1", "-run", "^TestFrozenGethArtifactContinuation$", ".", "-args", "-compat-db", path, "-compat-result", output)
-		cmd.Dir = filepath.Join("..", "..", "testdata", "legacycompat")
-		if data, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("legacy continuation: %v\n%s", err, data)
-		}
-		result, err := os.ReadFile(output)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return result
-	}
 	db := openCompatStateDatabase(t, path)
 	tdb := triedb.NewDatabase(db, trieConfig(tc.scheme, false))
 	sdb, err := state.New(root, state.NewDatabase(tdb, state.NewCodeDB(db)))
@@ -184,7 +170,7 @@ func replayGethCompatibility(t *testing.T, expected *compatCapture) {
 				if kind == "verification" {
 					bundleName := strings.Join(parts[:2], "/")
 					source = manifests[bundleName].Source
-					replayed, err := Import(t.Context(), ImportOptions{Bundle: bundles[bundleName], Output: filepath.Join(t.TempDir(), "import"), Scheme: scheme, DBEngine: compatCLIEngine(target), StateLayout: string(target.layout), CacheMB: 16, Handles: 16})
+					replayed, err := Import(t.Context(), ImportOptions{Bundle: bundles[bundleName], Output: filepath.Join(t.TempDir(), "import"), Scheme: scheme, DBEngine: compatCLIEngine(target), CacheMB: 16, Handles: 16})
 					if err != nil {
 						t.Fatal(err)
 					}

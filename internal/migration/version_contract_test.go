@@ -162,7 +162,7 @@ func TestOptionalGethProvenanceWorkflows(t *testing.T) {
 func assertOptionalGethArtifact(t *testing.T, source, bundlePath, provenance string, tc targetTestCase) {
 	t.Helper()
 	root := t.TempDir()
-	imported, err := Import(context.Background(), ImportOptions{Bundle: bundlePath, Output: filepath.Join(root, "import"), Scheme: tc.scheme, DBEngine: tc.engine, StateLayout: tc.layout, CacheMB: 16, Handles: 16})
+	imported, err := Import(context.Background(), ImportOptions{Bundle: bundlePath, Output: filepath.Join(root, "import"), Scheme: tc.scheme, DBEngine: tc.engine, CacheMB: 16, Handles: 16})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +177,7 @@ func assertOptionalGethArtifact(t *testing.T, source, bundlePath, provenance str
 	if after := directoryContentDigest(t, imported.ArtifactPath); after != before {
 		t.Fatal("verification changed imported artifact")
 	}
-	direct, err := Migrate(context.Background(), MigrateOptions{SourceChaindata: source, Output: filepath.Join(root, "direct"), Scheme: tc.scheme, DBEngine: tc.engine, StateLayout: tc.layout, CacheMB: 16, Handles: 16, Workers: 2})
+	direct, err := Migrate(context.Background(), MigrateOptions{SourceChaindata: source, Output: filepath.Join(root, "direct"), Scheme: tc.scheme, DBEngine: tc.engine, CacheMB: 16, Handles: 16, Workers: 2})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -21,9 +21,8 @@ type stateInventory struct {
 	TrieNodes   uint64
 	CodeEntries uint64
 
-	codeHashes hashSet
-	scheme     string
-	nodeIndex  *temporaryTrieNodeIndex
+	scheme    string
+	nodeIndex *temporaryTrieNodeIndex
 }
 
 func (t *stateTraverser) traverseStorage(accountHash, expectedRoot common.Hash) (common.Hash, error) {

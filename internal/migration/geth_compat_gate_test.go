@@ -139,3 +139,59 @@ func withHistoricalCommit(t *testing.T, document any) json.RawMessage {
 	wire["geth_commit"] = json.RawMessage(`"historical-commit"`)
 	return compatJSON(t, wire)
 }
+
+func TestGethCompatibilityRetiredTargets(t *testing.T) {
+	capture := newCompatCapture()
+	for kind, contract := range capture.Contracts {
+		loaded, err := readCompatContract(gethCompatRoot, kind, contract.Version)
+		if err != nil {
+			t.Fatal(err)
+		}
+		capture.Contracts[kind] = loaded
+	}
+	before := compatJSON(t, capture.Contracts["bundle"])
+	directCount := len(capture.Contracts["direct"].Cases)
+	portableCount := len(capture.Contracts["verification"].Cases)
+	excludeRetiredCompatTargets(capture)
+	if len(capture.Contracts["direct"].Cases) != directCount-7 || len(capture.Contracts["verification"].Cases) != portableCount-14 {
+		t.Fatal("wrong retired target selection")
+	}
+	if string(before) != string(compatJSON(t, capture.Contracts["bundle"])) {
+		t.Fatal("bundle evidence changed")
+	}
+	for _, kind := range []string{"direct", "verification"} {
+		for _, damage := range []string{"missing", "changed", "extra-legacy"} {
+			t.Run(kind+"/"+damage, func(t *testing.T) {
+				expected := capture.Contracts[kind]
+				var actual compatContract
+				if err := json.Unmarshal(compatJSON(t, expected), &actual); err != nil {
+					t.Fatal(err)
+				}
+				name := "canary/leveldb/geth/hash"
+				retired := "canary/leveldb/legacy-l2geth/hash"
+				if kind == "verification" {
+					name = "canary/none/leveldb/geth/hash"
+					retired = "canary/none/leveldb/legacy-l2geth/hash"
+				}
+				switch damage {
+				case "missing":
+					delete(actual.Cases, name)
+				case "changed":
+					actual.Cases[name] = json.RawMessage(`{"report":{"state_layout":"legacy-l2geth"}}`)
+				case "extra-legacy":
+					actual.Cases[retired] = json.RawMessage(`true`)
+					name = retired
+				}
+				if err := compareCompatContracts(expected, &actual); err == nil || !strings.Contains(err.Error(), name) {
+					t.Fatalf("contract drift hidden: %v", err)
+				}
+			})
+		}
+	}
+	// Unknown scenarios are never silently retired by a suffix/layout filter.
+	capture.Contracts["direct"].Cases["new/leveldb/legacy-l2geth/hash"] = json.RawMessage(`true`)
+	excludeRetiredCompatTargets(capture)
+	if _, ok := capture.Contracts["direct"].Cases["new/leveldb/legacy-l2geth/hash"]; !ok {
+		t.Fatal("unknown case hidden")
+	}
+}

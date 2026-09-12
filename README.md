@@ -1,8 +1,7 @@
 # l2state
 
 `l2state` migrates the latest executed state from a legacy Optimism/Metis
-l2geth LevelDB into a state database compatible with go-ethereum v1.17.5,
-or optionally the legacy l2geth state layout.
+l2geth LevelDB into a state database compatible with go-ethereum v1.17.5.
 
 > [!IMPORTANT]
 > The output is a state-only artifact, not bootable geth `chaindata`. It
@@ -28,32 +27,16 @@ Both workflows rebuild the same state root, support `hash` and `path`, reopen
 the target for independent verification, and refuse to overwrite an existing
 output.
 
-Both `migrate` and `import` accept independent target choices:
+Both `migrate` and `import` use the geth state layout and accept independent
+target choices: `--db-engine pebble|leveldb` (default Pebble) and an explicit
+`--scheme hash|path`, for four supported combinations. The `--state-layout`
+flag has been removed; passing it, including `--state-layout geth`, is an error.
+Remove that flag from existing scripts.
 
-| State layout     | Database engine                 | State scheme              |
-| ---------------- | ------------------------------- | ------------------------- |
-| `geth` (default) | `pebble` (default) or `leveldb` | explicit `hash` or `path` |
-| `legacy-l2geth`  | explicit `leveldb`              | explicit `hash`           |
-
-For example, to retain the old l2geth state-key layout:
-
-```bash
-l2state migrate \
-  --source-chaindata /snapshots/l2geth/chaindata \
-  --out /states/metis-legacy \
-  --db-engine leveldb --scheme hash --state-layout legacy-l2geth
-```
-
-Use the same three target flags with `import --bundle BUNDLE --out ARTIFACT`.
 `verify` reads the engine and layout from the report, checks the physical engine,
-and independently validates the corresponding keys; it never tries a fallback
-layout or repairs a damaged LevelDB. Existing commands keep their Pebble/geth
-defaults. Selecting LevelDB alone does not select the legacy key layout.
-
-Legacy compatibility is tested against Metis l2geth commit `e795a258d3f2`:
-its state APIs can read accounts, storage, and code, and commit and reopen new
-state on a database copy. This does not produce a complete bootable old node
-database or widen the existing uint256 account-balance limit.
+and independently validates geth keys. Reports declaring `legacy-l2geth` are
+rejected; recreate those artifacts from the source snapshot or portable bundle.
+Verification never falls back to another layout or repairs a damaged LevelDB.
 
 ## Build
 
@@ -214,14 +197,9 @@ they must not rely on normal `chaindata` auto-detection. The artifact's root
 and selected scheme are recorded in `verification.json`; `manifest.json`
 records the bundle root and its supported schemes.
 
-The geth layout stores code at `c + codeHash`; `legacy-l2geth` stores code at
-the bare `codeHash`, sharing the hash-trie node key space. Both preserve the
-same consensus bytes. Legacy verification uses exact reachable-node and
-referenced-code sets, allowing one physical entry to serve both roles while
-rejecting unreferenced entries and mixed layouts. During construction only,
-code uses prefixed staging keys until partition folding finishes; bounded
-batches then move it to bare hashes before independent verification. No staged
-code keys remain in the published legacy database.
+The geth layout stores code at `c + codeHash`, preserving consensus bytes.
+Verification rejects unreferenced code, orphan trie nodes, and bare-hash code
+entries from other layouts.
 
 LevelDB targets are closed, every regular database file is synced, and the
 database directory is synced before independent read-only verification and
@@ -229,9 +207,8 @@ atomic publication. This explicitly supplies durability because the pinned
 geth LevelDB adapter's `SyncKeyValue` does not sync data.
 
 Artifact reports record `db_engine` as `pebble-v2` or `leveldb` and explicitly
-record `state_layout` as `geth` or `legacy-l2geth`. Old reports omitting
-`state_layout` mean `geth`; explicit empty, null, unknown values and unsupported
-combinations fail validation. Direct and bundle-backed reports use v1.
+record `state_layout` as `geth`. Old reports omitting `state_layout` mean `geth`;
+explicit `legacy-l2geth`, empty, null, and unknown values fail validation. Direct and bundle-backed reports use v1.
 Pure bundle verification has neither target field; target engine and layout
 choices do not alter the portable bundle format.
 
@@ -362,11 +339,11 @@ behavior against the committed corpus under
 `internal/migration/testdata/geth-compat`, then import its frozen records and
 restore its frozen logical database entries for independent verification and
 continued state commits on disposable copies. The corpus covers both compression
-modes, all five target combinations, direct and portable workflows, empty and
+modes, all four target combinations, direct and portable workflows, empty and
 single/multiple-partition tries, and fixed 1024/1025-slot boundaries. Canary
 continuation updates nonce, balance, storage and code, closes, reopens, and checks
-the committed state. Legacy continuation uses the separately pinned old l2geth
-module. Existing GenerateTrie/rawdb comparisons remain additional checks.
+the committed state. Existing GenerateTrie/rawdb comparisons remain additional
+checks.
 
 Database baselines contain sorted logical key/value bytes, not SST or WAL file
 layouts. JSON comparisons normalize only timestamps and build provenance;
@@ -374,6 +351,10 @@ manifest-dependent report hashes are recomputed from normalized manifest bytes.
 The test normalizer removes historical `geth_commit` metadata in memory and
 recomputes dependent manifest hashes before comparison and replay. The frozen
 corpus stays unchanged; runtime readers have no old-field compatibility branch.
+Before comparison and replay, tests exclude exactly the 21 retired legacy-target
+cases from expected evidence in memory. All bundle cases and supported geth
+target cases retain strict comparison; missing or changed geth cases still fail.
+Candidate captures contain only the four supported geth target combinations.
 Format version, encoding, records, counts, roots and database metadata are not
 normalized. Failures identify the contract, scenario, target and changed field or
 key, with bounded previews and hashes for long values. Comparison failures retain
@@ -429,13 +410,6 @@ geth v1.17.5 APIs, corruption and ordering failures, exact database inventory,
 strict top-level layouts, read-only source handling, cancellation, atomic
 publication fault injection, a GenerateTrie reference build, parser fuzzing,
 and supported cross-build targets.
-
-`make ci` also runs the independent `testdata/legacycompat` module, pinned to
-the old l2geth version. It builds the current CLI and checks direct and both
-portable compression workflows using old state APIs, including OVM balance
-reads, shared code, and account/storage/code updates followed by reopening a
-copy. It consumes the committed canary without regenerating it. `make test-race`
-includes this module as well as the root module.
 
 The committed canary was generated with legacy l2geth commit `e795a258d3f2`,
 default `UsingOVM=true`, and no trie preimages. It includes the complete
