@@ -247,10 +247,10 @@ func benchmarkMigrateBuild(
 				writer.Abort()
 			}
 		} else {
-			var finalWriter *directStateWriter
+			var finalWriter partitionStateOutput
 			result, finalWriter, err = source.migratePartitionedState(context.Background(), target, scheme, workers, nil)
 			if err == nil {
-				err = finalWriter.Close()
+				err = finalWriter.CloseContext(context.Background())
 			}
 		}
 		b.StopTimer()

@@ -1,4 +1,4 @@
-.PHONY: build test test-race lint fmt-check fixture-check geth-compat geth-compat-candidate ci
+.PHONY: build test test-race lint fmt-check fixture-check legacy-prune-check geth-compat geth-compat-candidate ci
 
 build:
 	go build -o bin/l2state ./cmd/l2state
@@ -11,6 +11,7 @@ test:
 
 test-race:
 	go test -race ./...
+	cd testdata/legacyprune && L2STATE_TEST_RACE=1 go test -race -count=1 ./...
 
 fmt-check:
 	test -z "$$(gofmt -l cmd internal)"
@@ -23,6 +24,13 @@ fixture-check:
 	cd testdata/legacyfixturegen && go test ./...
 	cd testdata/legacyfixturegen && go vet ./...
 
+legacy-prune-check:
+	cd testdata/legacyprune && test -z "$$(gofmt -l .)"
+	cd testdata/legacyprune && go mod tidy -diff
+	cd testdata/legacyprune && go mod verify
+	cd testdata/legacyprune && go test -count=1 ./...
+	cd testdata/legacyprune && go vet ./...
+
 geth-compat:
 	go test -count=1 ./internal/migration -run '^TestGethCompatibility'
 
@@ -33,4 +41,4 @@ geth-compat-candidate:
 	@test -n "$$L2STATE_GETH_COMPAT_OUT" || (echo 'OUT must name a new candidate directory' >&2; exit 1)
 	go test -count=1 -v ./internal/migration -run '^TestWriteGethCompatibilityCandidate$$'
 
-ci: fmt-check lint test fixture-check build
+ci: fmt-check lint test fixture-check legacy-prune-check build

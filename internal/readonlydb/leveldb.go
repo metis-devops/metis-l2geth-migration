@@ -18,8 +18,13 @@ var ErrReadOnly = errors.New("legacy source database is strictly read-only")
 // goleveldb's true read-only mode. It never invokes RecoverFile, compaction or
 // any write path when opening a legacy l2geth database.
 type Database struct {
-	db *leveldb.DB
+	db       *leveldb.DB
+	borrowed bool
 }
+
+// Borrow exposes a strictly read-only view without taking ownership of db.
+// The caller must keep db open for the lifetime of the view.
+func Borrow(db *leveldb.DB) *Database { return &Database{db: db, borrowed: true} }
 
 // Open opens a legacy LevelDB in strict read-only mode without recovery.
 func Open(path string, cacheMB, handles int) (*Database, error) {
@@ -102,6 +107,9 @@ func (db *Database) Compact([]byte, []byte) error {
 
 // Close releases the underlying read-only LevelDB handle.
 func (db *Database) Close() error {
+	if db.borrowed {
+		return nil
+	}
 	return db.db.Close()
 }
 

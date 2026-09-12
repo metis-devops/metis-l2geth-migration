@@ -13,10 +13,16 @@ bootable geth `chaindata` or migrate bodies, transactions, receipts, total
 difficulty, `LastFast`, chain configuration, historical headers or state, or
 trie preimages.
 
+The independent `prune` command is an explicit exception to source immutability:
+it deletes old legacy state in place in a stopped full-node LevelDB. It does
+not widen migration artifact contracts or restore legacy target generation.
+
 ## Code map
 
 - `cmd/l2state` owns CLI validation, progress-log setup, and final JSON output.
 - `internal/readonlydb` is the strict read-only adapter for legacy LevelDB.
+- `internal/migration/prune*.go` owns offline pruning, the independently held
+  LevelDB lock, raw physical-state collection, and protected-inventory checks.
 - `internal/bundle` defines the v1 manifest, canonical slim-account codec, and
   deterministic account, storage, and code record stream.
 - `internal/migration/export.go`, `import.go`, `migrate.go`,
@@ -36,12 +42,14 @@ trie preimages.
   expected evidence.
 - `testdata/legacyfixturegen` is a separate, maintenance-only module for
   intentional canary regeneration.
+- `testdata/legacyprune` independently tests the prune CLI, startup at the
+  preserved head and subsequent block import with pinned legacy l2geth APIs.
 
 ## Immutable contracts
 
 ### Source and consensus data
 
-- Treat the legacy source as immutable. Never enable recovery, compaction,
+- For migration/export/verification, treat the legacy source as immutable. Never enable recovery, compaction,
   repair, or any write path. Require a stopped database or a
   point-in-time-consistent filesystem snapshot.
 - Validate `LastBlock`, its number mapping, canonical mapping, header RLP,
@@ -147,6 +155,61 @@ trie preimages.
 
 ## Implementation rules
 
+### Offline prune
+
+- Support only stopped legacy LevelDB/hash full-node databases that have never
+  enabled LES service. Reject detected LES metadata and geth/mixed state layouts
+  before any deletion. Do not infer that all 32-byte keys are state.
+  Match LES balance keys by their version prefix and complete ID/address shape;
+  never classify ordinary hash-index keys by substrings inside their hashes.
+- Retain the complete canonical `LastBlock` state plus the genesis root-node
+  KV (unless the genesis trie is empty). Preserve every non-state record,
+  head marker and ancient file; no genesis rewriting or recent-root window.
+- Record actual raw state reads in an operation-local, bounded-cache Pebble
+  keep database; never use generated geth code keys or StackTrie output as the
+  original key inventory. Keep shared physical node/code records exactly once.
+  Use the shared partitioned execution core with a validation-only output;
+  migrate retains its ordinary target writer. Both modes retain the global
+  worker limiter, twice-workers account window and 1024-slot storage probe.
+  Shard keep batches by key, validate every captured content hash, and latch
+  capture/flush failures independently of trie-reader error propagation.
+  Do not restore per-record keep-database Has/Get calls or a state-sized node set.
+- Validate the whole current state and independently reopen the keep database
+  before deletion. Delete only absent 32-byte keys whose values hash to the key.
+  Retain and count unknown records; fail on corruption in the retained state.
+- Hold the LevelDB filesystem lock across read-only preflight, writable deletion
+  and independent read-only verification. Keep the general readonlydb adapter
+  immutable, including borrowed views. Never call Recover/RecoverFile; normal
+  strict WAL replay on writable open is permitted for prune only.
+  All prune opens must resolve only the exact valid `CURRENT` manifest without
+  calling goleveldb's restoring/fallback GetMeta. Reject missing or malformed
+  CURRENT/manifest and pending CURRENT.N publications; do not use CURRENT.bak.
+- Use bounded, synced deletion batches. Verify head, state, genesis root-node
+  bytes and the ordered, length-framed digest/count of all protected KV after
+  deletion. Close and sync regular database files plus directory before success.
+  Compare source/keep via ordered cursors, rejecting missing keep keys. Preserve
+  the exact v1 digest framing/order through parallel hashing and ordered output.
+  Limit scan queues to twice-workers records and cache/8 bytes (1–16 MiB), with
+  oversize records processed synchronously after draining. Reserve a coordinator
+  slot and keep candidate hashing within the worker allowance. Sync delete
+  batches at 16384 keys or 1 MiB encoded size; report only committed deletions.
+  Workers follow migrate's normalization/defaults. Allocate one third of cache
+  and handles to the keep database (minimum 16 each), with the remainder assigned
+  to the source; these are database allowances, not a total RSS limit.
+- Default to no explicit full compaction; `--compact` opts in. Do not promise
+  instantaneous cancellation during CompactRange or physical bytes reclaimed.
+- `--dry-run` is physically read-only and incompatible with `--compact`.
+  Require an existing regular LOCK before a dry-run storage open: goleveldb's
+  read-only opener otherwise creates it. Keep filter.NewBloomFilter(10) enabled
+  in prune's LevelDB options so reads use, and compaction preserves, legacy filters.
+  Interrupted pruning restarts by building a fresh keep set, without reusing
+  incomplete sets or rolling back deletions. Only clean this invocation's
+  temporary directory; never write progress journals into chaindata.
+- Prune result v1 is independent from existing bundle and verification formats.
+  Preserve stdout JSON/stderr progress separation and the uint256 boundary.
+
+### Shared implementation rules
+
 - Preserve `context.Context` cancellation through source scans, chunked bundle
   reads/writes, path adoption, and verification.
 - Wrap errors with operation context and `%w`. Check and combine relevant
@@ -182,7 +245,8 @@ trie preimages.
 
 ## Geth compatibility and format evolution
 
-- `internal/formatversion` owns the three independent current format versions;
+- `internal/formatversion` owns the independent bundle, verification, direct
+  verification and prune-result versions;
   existing bundle/report constants are aliases. The record-chain domain derives
   from the bundle version. All currently remain v1.
 - Explicit dependency upgrades are governed by frozen compatibility evidence,
@@ -221,13 +285,26 @@ git diff --check
 ```
 
 `make ci` runs formatting and module-tidiness checks, lint, all root-module
-tests (including the geth compatibility gate), fixture-module tidy/verify/test/vet, and the build.
+tests (including the geth compatibility gate), fixture-module and legacy-prune
+module tidy/verify/test/vet, and the build. `make test-race` also runs the
+legacy-prune module with a race-enabled CLI.
 `make geth-compat` remains available for a focused, uncached compatibility run;
 it is not a separate CI prerequisite because `test` already covers it. Also run
 `make test-race` when changing concurrency, cancellation, progress reporting,
 database lifecycle, atomic publication, or shared state.
 
 Use the following change-sensitive checks:
+
+- Prune changes: exact state/protected key inventories, genesis root-only
+  startup, physical dry-run immutability, mixed layouts and LES rejection,
+  shared code/node keys, interrupted deletion and rerun, locking, sync and
+  compaction failure, plus legacy startup/next-block/restart validation.
+  Compare partitioned collection and ordered scanning against the frozen serial
+  test reference across all worker settings. Cover out-of-order hashing, byte
+  and record bounds, oversize inputs, swallowed reader errors and worker joins.
+  Performance changes require repeated paired measurements; use
+  `scripts/benchmark-prune.py` without concurrent CI/benchmarks, and report
+  regressions and measurement limits rather than asserting a fixed speedup.
 
 - CLI or progress changes: verify flags and stdout/stderr separation in
   `cmd/l2state` tests.

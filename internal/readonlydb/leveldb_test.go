@@ -6,7 +6,37 @@ import (
 	"testing"
 
 	gethleveldb "github.com/ethereum/go-ethereum/ethdb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb"
 )
+
+func TestBorrowRetainsOwnershipAndRejectsMutation(t *testing.T) {
+	owner, err := leveldb.OpenFile(filepath.Join(t.TempDir(), "db"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := owner.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	view := Borrow(owner)
+	if err := view.Put([]byte("key"), []byte("value")); !errors.Is(err, ErrReadOnly) {
+		t.Fatalf("borrowed view writable: %v", err)
+	}
+	if err := view.Delete([]byte("key")); !errors.Is(err, ErrReadOnly) {
+		t.Fatalf("borrowed view deleted data: %v", err)
+	}
+	if err := view.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := owner.Put([]byte("key"), []byte("value"), nil); err != nil {
+		t.Fatalf("view closed owner: %v", err)
+	}
+	got, err := view.Get([]byte("key"))
+	if err != nil || string(got) != "value" {
+		t.Fatalf("borrowed read: %s %v", got, err)
+	}
+}
 
 func TestStrictReadOnlyAdapter(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "chaindata")

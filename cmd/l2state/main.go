@@ -55,6 +55,8 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		return normalizeHelp(runImport(ctx, args[1:], stdout, stderr))
 	case "migrate":
 		return normalizeHelp(runMigrate(ctx, args[1:], stdout, stderr))
+	case "prune":
+		return normalizeHelp(runPrune(ctx, args[1:], stdout, stderr))
 	case "verify":
 		return normalizeHelp(runVerify(ctx, args[1:], stdout, stderr))
 	case "version":
@@ -98,6 +100,30 @@ func runMigrate(ctx context.Context, args []string, stdout, stderr io.Writer) er
 		Handles:         *target.handles,
 		Workers:         *workers,
 		Progress:        newProgressOptions(stderr, *target.quiet),
+	})
+	if err != nil {
+		return err
+	}
+	return writeJSON(stdout, result)
+}
+
+func runPrune(ctx context.Context, args []string, stdout, stderr io.Writer) error {
+	flags := flag.NewFlagSet("prune", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	path := flags.String("chaindata", "", "stopped legacy full-node LevelDB to prune in place; LES service databases are unsupported")
+	temp := flags.String("temp-dir", "", "existing parent for temporary state database, outside chaindata (default: chaindata parent)")
+	cache := flags.Int("cache-mb", defaultCacheMB, "database cache allowance in MiB, minimum 32")
+	handles := flags.Int("handles", defaultHandles, "database file handle allowance, minimum 32")
+	workers := flags.Int("workers", defaultMigrateWorkers(), "global account/storage/hash workers; minimum 2, maximum 16")
+	dryRun := flags.Bool("dry-run", false, "validate and count candidates without modifying chaindata")
+	compact := flags.Bool("compact", false, "manually compact after pruning to reclaim disk space")
+	quiet := flags.Bool("quiet", false, "disable progress logs on stderr")
+	if err := parseFlags(flags, args, "prune"); err != nil {
+		return err
+	}
+	result, err := migration.Prune(ctx, migration.PruneOptions{
+		Chaindata: *path, TempDir: *temp, CacheMB: *cache, Handles: *handles, Workers: *workers,
+		DryRun: *dryRun, Compact: *compact, Progress: newProgressOptions(stderr, *quiet),
 	})
 	if err != nil {
 		return err
@@ -253,6 +279,7 @@ func printUsage(w io.Writer) error {
   l2state export --source-chaindata PATH --out BUNDLE [--compression zstd|none] [--quiet]
   l2state import --bundle BUNDLE --out ARTIFACT --scheme hash|path [--db-engine pebble|leveldb] [--quiet]
   l2state migrate --source-chaindata PATH --out ARTIFACT --scheme hash|path [--db-engine pebble|leveldb] [--workers N] [--quiet]
+  l2state prune --chaindata PATH [--workers N] [--temp-dir PATH] [--dry-run | --compact] [--quiet]
   l2state verify --bundle BUNDLE [--artifact ARTIFACT] [--quiet]
   l2state verify --source-chaindata PATH --artifact ARTIFACT [--quiet]
   l2state version
@@ -261,6 +288,9 @@ func printUsage(w io.Writer) error {
 The source must be a stopped l2geth LevelDB or a consistent filesystem copy.
 Outputs must not already exist. Artifacts contain chaindata/ and verification.json.
 Artifacts contain state only and are not bootable geth chaindata.
+Prune is an offline in-place operation for legacy full-node LevelDB only.
+It retains latest executed state plus the genesis root node and all non-state records.
+LES service databases are unsupported. Default pruning does not manually compact.
 `)
 	return err
 }

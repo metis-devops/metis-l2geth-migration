@@ -10,6 +10,8 @@ const (
 	Verification = 1
 	// DirectVerification versions direct reports and their target layouts.
 	DirectVerification = 1
+	// Prune versions the independent offline pruning result.
+	Prune = 1
 )
 
 // RecordChainDomain binds record-chain evidence to the portable format version.

@@ -24,7 +24,10 @@ const (
 	maxMigrateWorkers                = migrateTriePartitions
 )
 
+// partitionedStateMigrator is the shared bounded traversal and root-validation
+// core. Its output factory selects persisted migration output or validation only.
 type partitionedStateMigrator struct {
+	outputFactory    func(bool) partitionStateOutput
 	ctx              context.Context
 	source           ethdb.Database
 	trieDB           *triedb.Database
@@ -53,7 +56,7 @@ func (s *legacySource) migratePartitionedState(
 	scheme string,
 	workers int,
 	progress *progressCounts,
-) (result StateResult, finalWriter *directStateWriter, retErr error) {
+) (result StateResult, finalWriter partitionStateOutput, retErr error) {
 	trieDB := triedb.NewDatabase(s.db, triedb.HashDefaults)
 	defer func() {
 		if err := trieDB.Close(); err != nil {
@@ -79,7 +82,7 @@ func (s *legacySource) migratePartitionedState(
 	return migrator.run()
 }
 
-func (m *partitionedStateMigrator) run() (StateResult, *directStateWriter, error) {
+func (m *partitionedStateMigrator) run() (StateResult, partitionStateOutput, error) {
 	runCtx, cancelRun := context.WithCancel(m.ctx)
 	defer cancelRun()
 	m.cancelRun = cancelRun
@@ -104,7 +107,7 @@ func (m *partitionedStateMigrator) run() (StateResult, *directStateWriter, error
 	for _, partition := range partitions {
 		addBundleCounts(&counts, partition.counts)
 	}
-	finalWriter := newDirectStateWriter(m.target, m.scheme)
+	finalWriter := m.newOutput(false)
 	root, err := assembleMigratedTrie(finalWriter, common.Hash{}, m.root, partitions)
 	if err != nil {
 		finalWriter.Abort()
@@ -234,7 +237,7 @@ func (m *partitionedStateMigrator) migrateAccountPartition(
 	if err != nil {
 		return migratePartitionResult{}, fmt.Errorf("open account iterator: %w", err)
 	}
-	writer := newDirectStateWriter(m.target, m.scheme)
+	writer := m.newOutput(false)
 	defer writer.Abort()
 	var (
 		result  migratePartitionResult
@@ -311,7 +314,7 @@ func (m *partitionedStateMigrator) yieldAccountLeaseForPendingBurst(lease *migra
 func (m *partitionedStateMigrator) finishMigrateAccountPartition(
 	ctx context.Context,
 	partition byte,
-	writer *directStateWriter,
+	writer partitionStateOutput,
 	accountStack *trie.PartialStackTrie,
 	nodeErr error,
 	result *migratePartitionResult,
@@ -367,7 +370,7 @@ func (m *partitionedStateMigrator) runMigrateAccountBurst(
 	partition byte,
 	accounts *trie.Iterator,
 	first migrateAccountResult,
-	writer *directStateWriter,
+	writer partitionStateOutput,
 	accountStack migrateTrieUpdater,
 	nodeErr *error,
 	partitionResult *migratePartitionResult,
@@ -482,7 +485,7 @@ func (m *partitionedStateMigrator) mergeMigrateAccounts(
 	ctx context.Context,
 	partition byte,
 	next uint64,
-	writer *directStateWriter,
+	writer partitionStateOutput,
 	accountStack migrateTrieUpdater,
 	nodeErr *error,
 	results <-chan migrateAccountResult,
@@ -534,7 +537,7 @@ func (m *partitionedStateMigrator) mergeMigrateAccounts(
 func (m *partitionedStateMigrator) mergeMigrateAccount(
 	ctx context.Context,
 	partition byte,
-	writer *directStateWriter,
+	writer partitionStateOutput,
 	accountStack migrateTrieUpdater,
 	nodeErr *error,
 	result migrateAccountResult,
@@ -556,7 +559,7 @@ func (m *partitionedStateMigrator) mergeMigrateAccount(
 
 func (m *partitionedStateMigrator) mergeMigrateAccountDataHeld(
 	partition byte,
-	writer *directStateWriter,
+	writer partitionStateOutput,
 	accountStack migrateTrieUpdater,
 	nodeErr *error,
 	accountHash common.Hash,
@@ -622,7 +625,7 @@ func (m *partitionedStateMigrator) probeStorage(
 	if err != nil {
 		return false, bundle.Counts{}, fmt.Errorf("open storage iterator for account %s: %w", accountHash, err)
 	}
-	writer := newDeferredDirectStateWriter(m.target, m.scheme)
+	writer := m.newOutput(true)
 	defer writer.Abort()
 	var nodeErr error
 	storageStack := trie.NewStackTrie(func(path []byte, hash common.Hash, blob []byte) {
@@ -652,7 +655,7 @@ func (m *partitionedStateMigrator) probeStorage(
 
 func (m *partitionedStateMigrator) finishProbedStorage(
 	ctx context.Context,
-	writer *directStateWriter,
+	writer partitionStateOutput,
 	stack *trie.StackTrie,
 	iteratorErr, nodeErr error,
 	accountHash, expectedRoot common.Hash,
@@ -704,7 +707,7 @@ func (m *partitionedStateMigrator) migratePartitionedStorage(
 	for _, partition := range partitions {
 		addBundleCounts(&counts, partition.counts)
 	}
-	writer := newDirectStateWriter(m.target, m.scheme)
+	writer := m.newOutput(false)
 	defer writer.Abort()
 	if _, err := assembleMigratedTrie(writer, accountHash, expectedRoot, partitions); err != nil {
 		return bundle.Counts{}, fmt.Errorf("assemble account %s storage trie: %w", accountHash, err)
@@ -727,7 +730,7 @@ func (m *partitionedStateMigrator) migrateStoragePartition(
 	if err != nil {
 		return migratePartitionResult{}, fmt.Errorf("open iterator: %w", err)
 	}
-	writer := newDirectStateWriter(m.target, m.scheme)
+	writer := m.newOutput(false)
 	defer writer.Abort()
 	var (
 		result  migratePartitionResult
@@ -837,7 +840,7 @@ type migrateTrieUpdater interface {
 }
 
 func processMigratedStorageSlot(
-	writer *directStateWriter,
+	writer partitionStateOutput,
 	stack migrateTrieUpdater,
 	accountHash common.Hash,
 	key, value []byte,
@@ -883,7 +886,7 @@ func validateMigratePartitionResult(partition byte, result migratePartitionResul
 }
 
 func assembleMigratedTrie(
-	writer *directStateWriter,
+	writer partitionStateOutput,
 	owner, expectedRoot common.Hash,
 	partitions [migrateTriePartitions]migratePartitionResult,
 ) (common.Hash, error) {
