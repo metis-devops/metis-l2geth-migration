@@ -88,6 +88,10 @@ func runMigrate(ctx context.Context, args []string, stdout, stderr io.Writer) er
 	source := flags.String("source-chaindata", "", "stopped l2geth LevelDB chaindata directory")
 	target := addArtifactFlags(flags)
 	workers := flags.Int("workers", defaultMigrateWorkers(), "global account/storage workers; values below 2 are raised to 2, maximum 16")
+	ovmEnabled := flags.Bool("migrate-ovm-eth", false, "convert OVM ETH balances and create a migration checkpoint")
+	wrappedCode := flags.String("wrapped-ether-code", "", "storage-compatible wrappedEther runtime bytecode hex file")
+	ancient := flags.String("source-ancient", "", "legacy ancient directory (default: source-chaindata/ancient)")
+	witness := flags.String("ovm-state-witness", "", "OVM address/allowance ownership JSONL file")
 	if err := parseFlags(flags, args, "migrate"); err != nil {
 		return err
 	}
@@ -100,6 +104,7 @@ func runMigrate(ctx context.Context, args []string, stdout, stderr io.Writer) er
 		Handles:         *target.handles,
 		Workers:         *workers,
 		Progress:        newProgressOptions(stderr, *target.quiet),
+		OVM:             migration.OVMOptions{Enabled: *ovmEnabled, WrappedEtherCode: *wrappedCode, SourceAncient: *ancient, StateWitness: *witness},
 	})
 	if err != nil {
 		return err
@@ -192,6 +197,10 @@ func runVerify(ctx context.Context, args []string, stdout, stderr io.Writer) err
 	cache := flags.Int("cache-mb", defaultCacheMB, "database cache allowance in MiB")
 	handles := flags.Int("handles", defaultHandles, "database file handle allowance")
 	quiet := flags.Bool("quiet", false, "disable progress logs on stderr")
+	wrappedCode := flags.String("wrapped-ether-code", "", "original wrappedEther runtime bytecode hex file for OVM verification")
+	ancient := flags.String("source-ancient", "", "legacy ancient directory for OVM verification")
+	witness := flags.String("ovm-state-witness", "", "original OVM ownership JSONL file")
+	workers := flags.Int("workers", defaultMigrateWorkers(), "global workers for OVM verification, maximum 16")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
@@ -205,6 +214,21 @@ func runVerify(ctx context.Context, args []string, stdout, stderr io.Writer) err
 		if *artifact == "" {
 			return errors.New("--artifact is required with --source-chaindata")
 		}
+		format, err := migration.ArtifactVerificationFormat(*artifact)
+		if err != nil {
+			return err
+		}
+		if format == migration.OVMVerificationFormat {
+			report, err := migration.VerifyOVM(ctx, migration.OVMVerifyOptions{SourceChaindata: *source, Artifact: *artifact, CacheMB: *cache, Handles: *handles, Workers: *workers,
+				OVM: migration.OVMOptions{Enabled: true, WrappedEtherCode: *wrappedCode, SourceAncient: *ancient, StateWitness: *witness}, Progress: newProgressOptions(stderr, *quiet)})
+			if err != nil {
+				return err
+			}
+			return writeJSON(stdout, report)
+		}
+		if *wrappedCode != "" || *ancient != "" || *witness != "" {
+			return errors.New("OVM input flags require an OVM artifact")
+		}
 		report, err := migration.VerifyDirect(ctx, migration.DirectVerifyOptions{
 			SourceChaindata: *source,
 			Artifact:        *artifact,
@@ -216,6 +240,9 @@ func runVerify(ctx context.Context, args []string, stdout, stderr io.Writer) err
 			return err
 		}
 		return writeJSON(stdout, report)
+	}
+	if *wrappedCode != "" || *ancient != "" || *witness != "" {
+		return errors.New("OVM input flags cannot be used with --bundle")
 	}
 	report, err := migration.Verify(ctx, migration.VerifyOptions{
 		Bundle:   *bundlePath,

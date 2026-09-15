@@ -12,6 +12,8 @@ const (
 	DirectVerification = 1
 	// Prune versions the independent offline pruning result.
 	Prune = 1
+	// OVMVerification versions the opt-in balance-conversion checkpoint report.
+	OVMVerification = 1
 )
 
 // RecordChainDomain binds record-chain evidence to the portable format version.

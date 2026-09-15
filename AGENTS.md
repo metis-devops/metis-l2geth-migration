@@ -155,6 +155,48 @@ not widen migration artifact contracts or restore legacy target generation.
 
 ## Implementation rules
 
+### Opt-in OVM balance conversion
+
+- `migrate --migrate-ovm-eth` is an explicit exception to consensus-byte and
+  original-head preservation. Default migrate, portable workflows and prune
+  retain their existing boundaries. `ovm_*.go` owns the conversion implementation.
+- Require an operator-supplied storage-compatible wrappedEther runtime hex file;
+  never install the test runtime by default or execute a constructor. All source
+  native balances must be zero. Reconcile every identified balance against the
+  original totalSupply; unknown storage and accounting discrepancies fail closed.
+- Classify by code at the selected head. Only authenticated canonical OVM_ETH
+  Transfer-from membership retains a contract's ERC20 balance (including zero
+  transfers, transferFrom and burns). EOA balances always convert. OVM_ETH self
+  holdings always remain, and its native backing equals retained totalSupply.
+- Read complete legacy headers/receipts, including freezer files, physically
+  read-only. No restoring freezer constructors, recovery, writes or RPC fallback.
+  Stop at the selected `LastBlock` even when ancient or fast/header heads are
+  further ahead. Hash/header overlaps must match bytes; differently encoded
+  legacy receipt overlaps must both match the canonical receipt root, gas and
+  bloom. Use the cold encoding for history evidence and budget both raw copies;
+  never ignore malformed/empty copies or rewrite source receipts to normalize them.
+  Witnesses provide addresses and allowance pairs, never balances or eligibility.
+  Keep evidence/patches disk-backed and reject unclassified storage slots.
+- Complete and independently reopen the original migrated state before applying
+  balance changes. Build the final artifact afresh with the partitioned core.
+  Share the worker limiter with history and balance workers; join all jobs on
+  errors/cancellation. Preserve record/byte queue bounds and path state ID 0.
+- The synthetic checkpoint uses parent height/time +1, the new root, inherited
+  gas limit, empty body/transaction/receipt/uncle commitments, zero execution and
+  consensus fields, no optional fork fields, and extra `metis-l2state-ovm/v1`.
+  Its six chain-data KVs are the only metadata exception; it is not a bootable
+  database or a normally validated consensus block.
+- Keep `metis-l2state-ovm-verification` v1 independent of ordinary reports.
+  Standalone OVM verification replays source/history/operator inputs before
+  checking the actual target's full inventory. Never relax ordinary root equality.
+- Exercise four target combinations, independent serial state conversion,
+  legacy-module receipt/state reading, wrapped runtime execution, continuation,
+  history failures, input/report tampering, source immutability, concurrency and
+  cancellation. Do not regenerate the old canary or geth compatibility corpus.
+  The old canary's inconsistent synthetic supply must fail conversion validation.
+  Finish with `make ci`, `make test-race`, and paired OVM measurements in isolated
+  processes; report synthetic measurement limits and any regressions.
+
 ### Offline prune
 
 - Support only stopped legacy LevelDB/hash full-node databases that have never

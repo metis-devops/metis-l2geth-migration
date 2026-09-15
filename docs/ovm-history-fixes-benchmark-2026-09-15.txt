@@ -1,0 +1,155 @@
+# macOS-27.0-arm64-arm-64bit-Mach-O CPUs=16
+# source-sha256=477443744e13f3d7f7246c8f92cde4624cc221092bce64abf0dc8b979a1c8a4a cache-mb=128 handles=128
+# Synthetic 10000 holder state, two-block history, hash/Pebble.
+# Fresh process; OS caches not flushed; setup excluded from ns/op.
+# RSS includes fixture setup; disk peak sampled at 20 ms includes scratch and target.
+# sample=1 workers=2
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMMigration/workers=2-16         	       1	 965835667 ns/op	  14785288 sampled-disk-peak-B	218334352 B/op	 3226994 allocs/op
+PASS
+        2.62 real         0.87 user         0.24 sys
+            84082688  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                5320  page reclaims
+                 221  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                 544  signals received
+                 589  voluntary context switches
+               37847  involuntary context switches
+         11630683147  instructions retired
+          3701254766  cycles elapsed
+            61948696  peak memory footprint
+# sample=1 workers=8
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMMigration/workers=8-16         	       1	 806531917 ns/op	  12195904 sampled-disk-peak-B	217327240 B/op	 3200088 allocs/op
+PASS
+        0.97 real         0.99 user         0.24 sys
+            87244800  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                6176  page reclaims
+                 220  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                 697  signals received
+                 863  voluntary context switches
+               41124  involuntary context switches
+         11398202920  instructions retired
+          4197291230  cycles elapsed
+            62587720  peak memory footprint
+# sample=2 workers=8
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMMigration/workers=8-16         	       1	 787795916 ns/op	  10746213 sampled-disk-peak-B	218311896 B/op	 3199055 allocs/op
+PASS
+        0.94 real         0.97 user         0.23 sys
+            86441984  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                5978  page reclaims
+                 220  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                 571  signals received
+                 734  voluntary context switches
+               40275  involuntary context switches
+         11117462099  instructions retired
+          4096871657  cycles elapsed
+            63865648  peak memory footprint
+# sample=2 workers=2
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMMigration/workers=2-16         	       1	 934071333 ns/op	  14849196 sampled-disk-peak-B	218038920 B/op	 3226436 allocs/op
+PASS
+        1.09 real         0.85 user         0.22 sys
+            85098496  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                5368  page reclaims
+                 221  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                 403  signals received
+                 498  voluntary context switches
+               37682  involuntary context switches
+         11450881184  instructions retired
+          3559843894  cycles elapsed
+            63259416  peak memory footprint
+# sample=3 workers=2
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMMigration/workers=2-16         	       1	 918655750 ns/op	  14830912 sampled-disk-peak-B	219326464 B/op	 3225914 allocs/op
+PASS
+        1.08 real         0.85 user         0.21 sys
+            87015424  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                5506  page reclaims
+                 221  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                 379  signals received
+                 498  voluntary context switches
+               36697  involuntary context switches
+         11412937555  instructions retired
+          3519367864  cycles elapsed
+            65045296  peak memory footprint
+# sample=3 workers=8
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMMigration/workers=8-16         	       1	 750300334 ns/op	  10637909 sampled-disk-peak-B	216895512 B/op	 3199749 allocs/op
+PASS
+        0.90 real         0.95 user         0.21 sys
+            84426752  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                5801  page reclaims
+                 220  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                 575  signals received
+                 739  voluntary context switches
+               39445  involuntary context switches
+         11073956619  instructions retired
+          3985405600  cycles elapsed
+            62538568  peak memory footprint

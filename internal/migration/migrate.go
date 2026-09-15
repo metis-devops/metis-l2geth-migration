@@ -2,6 +2,7 @@ package migration
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -20,16 +21,36 @@ type MigrateOptions struct {
 	Handles         int
 	Workers         int
 	Progress        ProgressOptions
+	OVM             OVMOptions
 }
 
 // MigrateResult identifies a directly migrated artifact and its verification report.
 type MigrateResult struct {
 	ArtifactPath string                   `json:"artifact"`
 	Report       DirectVerificationReport `json:"verification"`
+	OVMReport    *OVMVerificationReport   `json:"-"`
+}
+
+// MarshalJSON preserves the ordinary result shape while selecting the independent OVM report.
+func (r MigrateResult) MarshalJSON() ([]byte, error) {
+	var report any = r.Report
+	if r.OVMReport != nil {
+		report = r.OVMReport
+	}
+	return json.Marshal(struct {
+		Artifact     string `json:"artifact"`
+		Verification any    `json:"verification"`
+	}{r.ArtifactPath, report})
 }
 
 // Migrate directly rebuilds and verifies a state database without creating a bundle.
 func Migrate(ctx context.Context, opts MigrateOptions) (result MigrateResult, retErr error) {
+	if err := validateOVMOptions(opts.OVM); err != nil {
+		return result, err
+	}
+	if opts.OVM.Enabled {
+		return migrateOVM(ctx, opts)
+	}
 	workers := normalizeMigrateWorkers(opts.Workers)
 	reporter := newProgressReporter("migrate", opts.Progress,
 		"source", opts.SourceChaindata,

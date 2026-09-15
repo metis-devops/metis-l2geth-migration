@@ -103,7 +103,7 @@ func compareStoredReport(stored VerificationReport, current BundleResult) error 
 	return nil
 }
 
-func verifyTargetDatabase(ctx context.Context, dbPath, scheme string, target targetConfig, source bundle.SourceEvidence, expected StateResult, cacheMB, handles int, progress *progressReporter, scratchParent string) (result StateResult, retErr error) {
+func verifyTargetDatabase(ctx context.Context, dbPath, scheme string, target targetConfig, source bundle.SourceEvidence, expected StateResult, cacheMB, handles int, progress *progressReporter, scratchParent string, extraMetadata ...headMetadataEntries) (result StateResult, retErr error) {
 	diskKV, err := target.open(dbPath, cacheMB, handles, true)
 	if err != nil {
 		return StateResult{}, fmt.Errorf("open artifact database read-only: %w", err)
@@ -203,7 +203,7 @@ func verifyTargetDatabase(ctx context.Context, dbPath, scheme string, target tar
 		}
 	}
 	statePhase.Finish(nil, "recomputed_root", state.Root)
-	if err := verifyDatabaseInventory(ctx, disk, scheme, source, expected.Counts, inventory, progress); err != nil {
+	if err := verifyDatabaseInventory(ctx, disk, scheme, source, expected.Counts, inventory, progress, extraMetadata...); err != nil {
 		return StateResult{}, err
 	}
 	return state, nil
@@ -291,12 +291,15 @@ func (v *flatStateVerifier) Release() {
 	v.storage.Release()
 }
 
-func verifyDatabaseInventory(ctx context.Context, db ethdb.Database, scheme string, source bundle.SourceEvidence, counts bundle.Counts, expected stateInventory, progress *progressReporter) (retErr error) {
+func verifyDatabaseInventory(ctx context.Context, db ethdb.Database, scheme string, source bundle.SourceEvidence, counts bundle.Counts, expected stateInventory, progress *progressReporter, extraMetadata ...headMetadataEntries) (retErr error) {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	headMetadata, err := expectedHeadMetadata(source)
 	if err != nil {
+		return err
+	}
+	if err := mergeExpectedMetadata(headMetadata, extraMetadata); err != nil {
 		return err
 	}
 	it := db.NewIterator(nil, nil)
@@ -497,4 +500,16 @@ func allowedPathMetadataKey(key []byte) bool {
 		}
 	}
 	return false
+}
+
+func mergeExpectedMetadata(headMetadata headMetadataEntries, extraMetadata []headMetadataEntries) error {
+	for _, entries := range extraMetadata {
+		for key, value := range entries {
+			if _, exists := headMetadata[key]; exists {
+				return errors.New("duplicate expected artifact metadata")
+			}
+			headMetadata[key] = bytes.Clone(value)
+		}
+	}
+	return nil
 }

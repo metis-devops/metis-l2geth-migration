@@ -27,20 +27,22 @@ const (
 // partitionedStateMigrator is the shared bounded traversal and root-validation
 // core. Its output factory selects persisted migration output or validation only.
 type partitionedStateMigrator struct {
-	outputFactory    func(bool) partitionStateOutput
-	ctx              context.Context
-	source           ethdb.Database
-	trieDB           *triedb.Database
-	target           ethdb.Database
-	scheme           string
-	root             common.Hash
-	limiter          *migrateWorkLimiter
-	accounts         *migrateAccountWindow
-	accountProcessor migrateAccountProcessor
-	cancelRun        context.CancelFunc
-	runFailure       migrateRunFailure
-	codeHashes       *concurrentHashSet
-	progress         *progressCounts
+	outputFactory     func(bool) partitionStateOutput
+	ctx               context.Context
+	source            ethdb.Database
+	trieDB            *triedb.Database
+	target            ethdb.Database
+	scheme            string
+	root              common.Hash
+	limiter           *migrateWorkLimiter
+	accounts          *migrateAccountWindow
+	accountProcessor  migrateAccountProcessor
+	cancelRun         context.CancelFunc
+	runFailure        migrateRunFailure
+	codeHashes        *concurrentHashSet
+	progress          *progressCounts
+	readCode          codeReader
+	requireZeroNative bool
 }
 
 type migratePartitionResult struct {
@@ -351,6 +353,9 @@ func (m *partitionedStateMigrator) prepareMigrateAccount(
 	account, err := decodeFullAccount(accountHash, accountRLP)
 	if err != nil {
 		return migratePreparedAccount{}, false, err
+	}
+	if m.requireZeroNative && !account.Balance.IsZero() {
+		return migratePreparedAccount{}, false, fmt.Errorf("OVM migration requires zero source native balance: account %s has %s", accountHash, account.Balance)
 	}
 	codeHash := common.BytesToHash(account.CodeHash)
 	prepared := migratePreparedAccount{
@@ -781,7 +786,13 @@ func (m *partitionedStateMigrator) readMigrateCode(
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	code, err := m.source.Get(codeHash[:])
+	var code []byte
+	var err error
+	if m.readCode != nil {
+		code, err = m.readCode(m.source, codeHash)
+	} else {
+		code, err = m.source.Get(codeHash[:])
+	}
 	if errors.Is(err, leveldb.ErrNotFound) {
 		code = nil
 		err = nil

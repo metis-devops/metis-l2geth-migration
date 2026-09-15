@@ -12,6 +12,12 @@ l2geth LevelDB into a state database compatible with go-ethereum v1.17.5.
 > transactions, receipts, total difficulty, `LastFast`, chain configuration,
 > historical headers or state, or trie preimages.
 
+The explicit `migrate --migrate-ovm-eth` mode is an exception: it converts OVM
+balances, replaces the OVM_ETH runtime, and publishes a synthetic empty-block
+checkpoint with the new root. Its independent report and six chain-data entries
+are described under [OVM ETH conversion](#ovm-eth-conversion). It still does not
+produce a bootable full-node database.
+
 The source must be a stopped l2geth database or a point-in-time-consistent
 filesystem snapshot. Migration does not read from RPC and never repairs,
 compacts, or writes to the source LevelDB. The separate offline `prune` command
@@ -24,7 +30,7 @@ described below intentionally deletes old state in place.
 | `migrate`              | The source snapshot and destination are available together.                                            | Avoids creating a bundle, but later full verification requires the same source snapshot.           |
 | `export` then `import` | The environments are separate, the state must be portable, or both schemes may be built from one scan. | Stores a portable record stream with file and ordered-record digests; needs additional disk space. |
 
-Both workflows rebuild the same state root, support `hash` and `path`, reopen
+Without OVM conversion, both workflows rebuild the same state root, support `hash` and `path`, reopen
 the target for independent verification, and refuse to overwrite an existing
 output.
 
@@ -332,10 +338,142 @@ Pure bundle verification has neither target field; target engine and layout
 choices do not alter the portable bundle format.
 
 `UsingOVM` changes legacy execution and RPC interpretation, not MPT encoding.
-The tool does not convert OVM balances into ordinary account balances or
+Without the explicit OVM conversion option, the tool does not convert balances or
 execute a state transition. Source and target account RLP, storage-value RLP,
 `OVM_ETH` storage, and contract code remain identical consensus data; only the
 portable bundle's account payload uses the reversible slim representation.
+
+## OVM ETH conversion
+
+```bash
+./bin/l2state migrate \
+  --source-chaindata /snapshot/chaindata \
+  --out /states/metis-converted --scheme path --db-engine pebble \
+  --migrate-ovm-eth \
+  --wrapped-ether-code /inputs/wrapped-runtime.hex \
+  --ovm-state-witness /inputs/ownership.jsonl \
+  --workers 8 --cache-mb 512 --handles 256
+
+./bin/l2state verify \
+  --source-chaindata /snapshot/chaindata --artifact /states/metis-converted \
+  --wrapped-ether-code /inputs/wrapped-runtime.hex \
+  --ovm-state-witness /inputs/ownership.jsonl --workers 8
+```
+
+`--migrate-ovm-eth` defaults to false. Its input flags are rejected without that
+option. Verification selects the independent OVM report automatically and
+requires the original code file and, if used, the original witness file.
+`--source-ancient /snapshot/ancient` overrides the default `source-chaindata/ancient`.
+Keep the source, including any separate ancient directory, stopped or frozen for
+the entire operation. Outputs must be outside both source directories.
+
+The code file must be a regular non-symlink file, at most 1 MiB, containing one
+nonempty, even-length `0x`-prefixed hex string; leading/trailing whitespace is
+allowed. Supply **runtime** bytecode compatible with OVM_ETH storage: balances
+at slot 0, allowances at slot 1, totalSupply at slot 2, name/symbol at slots 3/4,
+and l1Token/l2Bridge at slots 5/6. The tool installs the supplied bytes without
+running a constructor. It does not prove arbitrary bytecode implements wrapping
+correctly; review the implementation independently. Ordinary WETH9's different
+layout cannot be substituted directly. Other storage, including allowances and
+name/symbol, is preserved.
+
+Every source account's native balance must be zero. At the selected head,
+addresses with empty code (including balance holders without an account leaf)
+convert their entire OVM balance to native. Contracts do the same unless the
+complete canonical history contains an OVM_ETH `Transfer` with that contract as
+`from`. Such contracts retain their ERC20 balance and zero native balance.
+Zero-value transfers, transferFrom and burns count; the rule does not prove the
+calling contract's identity. Classification uses code at the selected head.
+
+At `0xDeadDeAddeAddEAddeadDEaDDEAdDeaDDeAD0000`, the original self-held ERC20
+balance is always retained. The contract's native backing and totalSupply both
+become the sum of retained ERC20 balances. Converted balance slots are deleted.
+Source balances must sum exactly to the original totalSupply. Any discrepancy,
+nonzero source native balance, or uint256 overflow fails the operation; l2state
+never repairs the source accounting. The old canary has inconsistent synthetic
+supply and is not an eligible conversion snapshot.
+
+### History and storage ownership
+
+The tool reads all canonical headers and receipts from genesis through LastBlock,
+checks parent links, hashes, receipt roots, bloom and cumulative gas, and rejects
+missing/corrupt/conflicting hot or ancient history. It reads legacy freezer files
+directly with read-only descriptors; it does not open a repairing freezer or
+create locks or metadata. Historical bodies and execution traces are not required.
+This validates commitments and event membership, not historical EVM re-execution.
+
+`LastBlock` remains the history cutoff even when fast sync has already stored
+higher blocks in ancient or advanced `LastFast`/`LastHeader`; those later events
+do not grant retention eligibility. Overlapping hash/header copies must match
+byte-for-byte. Overlapping receipts may use different supported legacy storage
+encodings: both copies must decode and match the canonical header's receipt root,
+gas and bloom. The cold encoding remains the history-digest input. Missing,
+empty, malformed or conflicting required history fails without rewriting source
+files; both differing receipt copies count toward the queue's byte budget.
+
+Transfer/Approval addresses, valid address preimages and the optional JSONL
+witness identify hashed storage slots. Legacy native transfers need not emit
+Transfer events, so a witness can be necessary even with complete history.
+Each nonblank input line (maximum 4095 bytes excluding newline) must be one of:
+
+```json
+{"type":"address","address":"0x1000000000000000000000000000000000000001"}
+{"type":"allowance","owner":"0x2000000000000000000000000000000000000002","spender":"0x3000000000000000000000000000000000000003"}
+```
+
+Blank lines, nulls, unknown/repeated fields and malformed addresses fail.
+Repeated identical records are harmless and deduplicated on disk. Files do not
+specify balances or grant retention eligibility. Every nonzero storage slot must
+be identified as a balance, allowance, or supported metadata/string slot; unknown
+or ambiguous slots fail instead of being silently retained. Add the missing
+holder or allowance pair to the witness and restart with a new output path.
+
+### Resources, checkpoint and evidence
+
+The original state is first migrated to a private hash database and independently
+reopened and verified while history is collected. Conversion begins only after
+both finish. The transformed account/storage tries are then rebuilt into a fresh
+final target; no obsolete trie nodes or unreferenced old code are published.
+Other accounts that still reference the old code keep it. Hash/path and
+Pebble/LevelDB remain supported, including path completion metadata and state ID 0.
+
+Account/storage work, history reading/decoding and balance classification share
+the global 2–16 worker limiter. Account and balance queues hold at most twice the
+worker count. History queues also cap encoded bytes at cache/8 (1–16 MiB); an
+oversize atomic source record drains the queue and is processed synchronously.
+These are working-queue limits, not a total RSS or maximum source-record size.
+Evidence and patches are disk-backed. Cache and handles must each be at least 64;
+four concurrent database allowances each receive one quarter. Independent node
+inventory checks also use the existing bounded temporary index.
+
+Allow disk space for the original state, conversion scratch nodes, evidence and
+final target simultaneously. Standalone verification independently reconstructs
+the expected target in a temporary sibling directory, so it needs comparable
+extra disk space and source access. It compares fresh evidence and inventories
+the actual artifact, rather than trusting the report. The original code/witness
+file digests are checked again before completion.
+
+The checkpoint has height `LastBlock+1`, parent hash equal to LastBlock, the new
+state root and timestamp `parent+1`. Its gas limit is inherited; difficulty,
+coinbase, nonce, mixDigest, gasUsed and bloom are zero. Transaction/receipt roots
+and uncle hash are empty; optional fork fields are omitted. Extra data is
+`metis-l2state-ovm/v1`. It has a real empty body. This synthetic migration boundary
+does not claim normal consensus validity. Only its header, hash/number mappings,
+LastBlock, LastHeader and empty body are stored; no old header, receipts, TD,
+chain configuration or historical state is copied.
+
+`verification.json` uses `metis-l2state-ovm-verification` v1. It records source and
+checkpoint header evidence, original/final roots and counts, code/input digests,
+complete-history/event digests, classified holder counts, migrated amount,
+remaining supply and self-held balance. Ordinary direct and bundle reports retain
+their existing v1 contracts and source-root equality checks. Progress remains on
+stderr; stdout contains a single final JSON value. Cancellation removes only this
+invocation's staging data; publication durability failures retain the final path.
+
+Use `scripts/benchmark-ovm.py --out /absolute/new/results.txt --count 3` for repeated
+paired synthetic worker measurements, without concurrent CI or benchmarks.
+The test runtime and logical source fixture live in `testdata/ovm-conversion`
+under the migration package; ordinary tests never regenerate them.
 
 ## Formats and compatibility
 
