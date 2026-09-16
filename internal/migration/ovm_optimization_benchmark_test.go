@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/golang/snappy"
@@ -16,9 +17,11 @@ func BenchmarkOVMVerification(b *testing.B)      { benchmarkOVMVerification(b, f
 func BenchmarkOVMVerificationAlloc(b *testing.B) { benchmarkOVMVerification(b, true) }
 
 func benchmarkOVMVerification(b *testing.B, withAlloc bool) {
+	count, mode := ovmBenchmarkSettings(b)
 	for _, workers := range []int{2, 8} {
 		b.Run(fmt.Sprintf("workers=%d", workers), func(b *testing.B) {
-			f := newOVMFixtureSized(b, 10000, nil)
+			setup := time.Now()
+			f := newOVMFixtureSized(b, count, nil)
 			opts := MigrateOptions{SourceChaindata: f.source, Output: filepath.Join(b.TempDir(), "artifact"), Scheme: "hash", DBEngine: "pebble", CacheMB: 128, Handles: 128, Workers: workers, OVM: OVMOptions{Enabled: true, WrappedEtherCode: f.code, StateWitness: f.witness}}
 			if withAlloc {
 				opts.OVM.GenesisAlloc = writeOVMBenchmarkAlloc(b, f)
@@ -26,13 +29,18 @@ func benchmarkOVMVerification(b *testing.B, withAlloc bool) {
 			if _, err := Migrate(b.Context(), opts); err != nil {
 				b.Fatal(err)
 			}
+			setupElapsed := time.Since(setup)
+			ctx, stop := sampleTemporaryBenchmark(b, b.Context(), filepath.Dir(opts.Output))
 			b.ReportAllocs()
 			b.ResetTimer()
 			for range b.N {
-				if _, err := VerifyOVM(b.Context(), OVMVerifyOptions{SourceChaindata: f.source, Artifact: opts.Output, CacheMB: 128, Handles: 128, Workers: workers, OVM: opts.OVM}); err != nil {
+				if _, err := VerifyOVM(ctx, OVMVerifyOptions{TempDB: mode, SourceChaindata: f.source, Artifact: opts.Output, CacheMB: 128, Handles: 128, Workers: workers, OVM: opts.OVM}); err != nil {
 					b.Fatal(err)
 				}
 			}
+			b.StopTimer()
+			stop()
+			b.ReportMetric(setupElapsed.Seconds(), "setup-s")
 		})
 	}
 }

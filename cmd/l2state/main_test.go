@@ -19,14 +19,14 @@ import (
 )
 
 func TestCLIEndToEnd(t *testing.T) {
-	for _, tc := range []struct{ engine, scheme string }{
-		{"pebble", "hash"}, {"pebble", "path"}, {"leveldb", "hash"}, {"leveldb", "path"},
-	} {
-		t.Run(tc.engine+"/"+tc.scheme, func(t *testing.T) { runCLIEndToEnd(t, tc.engine, tc.scheme) })
+	for _, mode := range []string{"disk", "memory"} {
+		for _, tc := range []struct{ engine, scheme string }{{"pebble", "hash"}, {"pebble", "path"}, {"leveldb", "hash"}, {"leveldb", "path"}} {
+			t.Run(mode+"/"+tc.engine+"/"+tc.scheme, func(t *testing.T) { runCLIEndToEnd(t, tc.engine, tc.scheme, mode) })
+		}
 	}
 }
 
-func runCLIEndToEnd(t *testing.T, engine, scheme string) {
+func runCLIEndToEnd(t *testing.T, engine, scheme, mode string) {
 	source := loadGoldenSource(t)
 	root := t.TempDir()
 	bundlePath := filepath.Join(root, "bundle")
@@ -47,7 +47,7 @@ func runCLIEndToEnd(t *testing.T, engine, scheme string) {
 	stdout.Reset()
 	stderr.Reset()
 	if err := run(context.Background(), []string{
-		"import", "--bundle", bundlePath, "--out", artifactPath, "--scheme", scheme, "--db-engine", engine,
+		"import", "--temp-db", mode, "--bundle", bundlePath, "--out", artifactPath, "--scheme", scheme, "--db-engine", engine,
 		"--cache-mb", "16", "--handles", "16",
 	}, &stdout, &stderr); err != nil {
 		t.Fatalf("import command: %v stderr=%s", err, stderr.String())
@@ -65,7 +65,7 @@ func runCLIEndToEnd(t *testing.T, engine, scheme string) {
 	stdout.Reset()
 	stderr.Reset()
 	if err := run(context.Background(), []string{
-		"verify", "--bundle", bundlePath, "--artifact", artifactPath,
+		"verify", "--temp-db", mode, "--bundle", bundlePath, "--artifact", artifactPath,
 		"--cache-mb", "16", "--handles", "16",
 	}, &stdout, &stderr); err != nil {
 		t.Fatalf("verify command: %v stderr=%s", err, stderr.String())
@@ -82,7 +82,7 @@ func runCLIEndToEnd(t *testing.T, engine, scheme string) {
 	stdout.Reset()
 	stderr.Reset()
 	if err := run(context.Background(), []string{
-		"migrate", "--source-chaindata", source, "--out", directArtifactPath, "--scheme", scheme, "--db-engine", engine,
+		"migrate", "--temp-db", mode, "--source-chaindata", source, "--out", directArtifactPath, "--scheme", scheme, "--db-engine", engine,
 		"--cache-mb", "16", "--handles", "16", "--workers", "1",
 	}, &stdout, &stderr); err != nil {
 		t.Fatalf("migrate command: %v stderr=%s", err, stderr.String())
@@ -105,7 +105,7 @@ func runCLIEndToEnd(t *testing.T, engine, scheme string) {
 	stdout.Reset()
 	stderr.Reset()
 	if err := run(context.Background(), []string{
-		"verify", "--source-chaindata", source, "--artifact", directArtifactPath,
+		"verify", "--temp-db", mode, "--source-chaindata", source, "--artifact", directArtifactPath,
 		"--cache-mb", "16", "--handles", "16",
 	}, &stdout, &stderr); err != nil {
 		t.Fatalf("direct verify command: %v stderr=%s", err, stderr.String())
@@ -413,5 +413,23 @@ func TestCLITargetOptions(t *testing.T) {
 	}
 	if result.Verification.DBEngine != "leveldb" || result.Verification.StateLayout != "geth" {
 		t.Fatalf("wrong target report: %s", stdout.String())
+	}
+}
+
+func TestTempDBFlags(t *testing.T) {
+	for _, command := range []string{"migrate", "import", "verify"} {
+		for _, mode := range []string{"", "geth", "MEMORY"} {
+			var stdout, stderr bytes.Buffer
+			err := run(t.Context(), []string{command, "--temp-db=" + mode}, &stdout, &stderr)
+			if err == nil || !strings.Contains(err.Error(), "temp-db") || stdout.Len() != 0 {
+				t.Fatalf("%s %q: %v %s", command, mode, err, stdout.String())
+			}
+		}
+	}
+	for _, command := range []string{"export", "prune"} {
+		var stdout, stderr bytes.Buffer
+		if err := run(t.Context(), []string{command, "--temp-db=memory"}, &stdout, &stderr); err == nil {
+			t.Fatalf("%s accepted memory flag", command)
+		}
 	}
 }

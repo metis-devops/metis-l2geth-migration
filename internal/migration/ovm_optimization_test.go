@@ -25,11 +25,18 @@ import (
 )
 
 func TestOVMLateInputMutation(t *testing.T) {
+	for _, mode := range []TempDBMode{TempDBDisk, TempDBMemory} {
+		t.Run(string(mode), func(t *testing.T) { testOVMLateInputMutation(t, mode) })
+	}
+}
+
+func testOVMLateInputMutation(t *testing.T, tempMode TempDBMode) {
 	for _, mode := range []string{"publish", "verify"} {
 		for _, input := range []string{"code", "witness"} {
 			t.Run(mode+"/"+input, func(t *testing.T) {
 				f := newOVMFixture(t, nil)
 				opts := f.options(t, "pebble", "hash", 2)
+				opts.TempDB = tempMode
 				changed := false
 				act := func() {
 					path, data := f.code, []byte("0x00\n")
@@ -54,7 +61,7 @@ func TestOVMLateInputMutation(t *testing.T) {
 						t.Fatal(err)
 					}
 					writer := allocDatabasePhaseWriter{path: filepath.Join(opts.Output, "chaindata"), phase: ovmPhaseWriter{phase: "verify_state", act: act}}
-					_, err = VerifyOVM(t.Context(), OVMVerifyOptions{SourceChaindata: f.source, Artifact: opts.Output, CacheMB: 64, Handles: 64, Workers: 2, OVM: opts.OVM, Progress: ProgressOptions{Logger: log.NewLogger(log.NewTerminalHandler(&writer, false))}})
+					_, err = VerifyOVM(t.Context(), OVMVerifyOptions{TempDB: tempMode, SourceChaindata: f.source, Artifact: opts.Output, CacheMB: 64, Handles: 64, Workers: 2, OVM: opts.OVM, Progress: ProgressOptions{Logger: log.NewLogger(log.NewTerminalHandler(&writer, false))}})
 				}
 				if !changed || err == nil || !strings.Contains(err.Error(), "input changed") {
 					t.Fatalf("late input mutation: changed=%t err=%v", changed, err)

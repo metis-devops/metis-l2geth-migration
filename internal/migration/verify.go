@@ -21,6 +21,7 @@ import (
 
 // VerifyOptions configures independent bundle and optional artifact verification.
 type VerifyOptions struct {
+	TempDB   TempDBMode
 	Bundle   string
 	Artifact string
 	CacheMB  int
@@ -30,7 +31,10 @@ type VerifyOptions struct {
 
 // Verify recomputes bundle evidence and optionally validates an imported database.
 func Verify(ctx context.Context, opts VerifyOptions) (result VerificationReport, retErr error) {
-	reporter := newProgressReporter("verify", opts.Progress,
+	if err := opts.TempDB.validate(); err != nil {
+		return result, err
+	}
+	reporter := newProgressReporter("verify", opts.Progress, "temp_db", opts.TempDB.normalized(),
 		"bundle", opts.Bundle,
 		"artifact", opts.Artifact,
 	)
@@ -68,7 +72,7 @@ func Verify(ctx context.Context, opts VerifyOptions) (result VerificationReport,
 	if err != nil {
 		return VerificationReport{}, err
 	}
-	state, err := verifyTargetDatabase(ctx, filepath.Join(opts.Artifact, artifactDatabaseDirName), stored.Scheme, target, bundleResult.Manifest.Source, bundleResult.State, opts.CacheMB, opts.Handles, reporter, "")
+	state, err := verifyTargetDatabase(ctx, filepath.Join(opts.Artifact, artifactDatabaseDirName), stored.Scheme, target, bundleResult.Manifest.Source, bundleResult.State, opts.CacheMB, opts.Handles, reporter, trieNodeIndexOptions{Mode: opts.TempDB, CacheMB: opts.CacheMB, Handles: opts.Handles})
 	if err != nil {
 		return VerificationReport{}, err
 	}
@@ -103,7 +107,7 @@ func compareStoredReport(stored VerificationReport, current BundleResult) error 
 	return nil
 }
 
-func verifyTargetDatabase(ctx context.Context, dbPath, scheme string, target targetConfig, source bundle.SourceEvidence, expected StateResult, cacheMB, handles int, progress *progressReporter, scratchParent string, extraMetadata ...headMetadataEntries) (result StateResult, retErr error) {
+func verifyTargetDatabase(ctx context.Context, dbPath, scheme string, target targetConfig, source bundle.SourceEvidence, expected StateResult, cacheMB, handles int, progress *progressReporter, scratch trieNodeIndexOptions, extraMetadata ...headMetadataEntries) (result StateResult, retErr error) {
 	diskKV, err := target.open(dbPath, cacheMB, handles, true)
 	if err != nil {
 		return StateResult{}, fmt.Errorf("open artifact database read-only: %w", err)
@@ -114,6 +118,13 @@ func verifyTargetDatabase(ctx context.Context, dbPath, scheme string, target tar
 			retErr = errors.Join(retErr, fmt.Errorf("close artifact database: %w", err))
 		}
 	}()
+	return verifyOpenedTarget(ctx, disk, dbPath, scheme, target, source, expected, progress, scratch, extraMetadata...)
+}
+
+// verifyOpenedTarget performs the same complete logical verification for a
+// freshly reopened disk artifact or private in-memory original-state database.
+// The caller owns and closes disk; this function owns only its trie readers.
+func verifyOpenedTarget(ctx context.Context, disk ethdb.Database, dbPath, scheme string, target targetConfig, source bundle.SourceEvidence, expected StateResult, progress *progressReporter, scratch trieNodeIndexOptions, extraMetadata ...headMetadataEntries) (result StateResult, retErr error) {
 	headPhase := progress.StartPhase("verify_head_metadata", nil,
 		"block", source.HeadBefore.BlockNumber,
 		"hash", source.HeadBefore.BlockHash,
@@ -181,7 +192,7 @@ func verifyTargetDatabase(ctx context.Context, dbPath, scheme string, target tar
 	}, totalCountAttrs(expected.Counts)...)
 	statePhase := progress.StartPhase("verify_state", progressView, phaseAttrs...)
 	traversal := stateTraversalOptions{
-		NodeIndex: trieNodeIndexOptions{Parent: scratchParent, CacheMB: cacheMB, Handles: handles},
+		NodeIndex: scratch,
 		ReadCode:  target.readCode,
 	}
 	state, inventory, err := traverseState(ctx, disk, trieDB, expected.Root, visitor, true, traversal)

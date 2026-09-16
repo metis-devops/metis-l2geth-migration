@@ -24,11 +24,18 @@ import (
 )
 
 func TestOVMWrappedRuntimeAndContinuation(t *testing.T) {
+	for _, mode := range []TempDBMode{TempDBDisk, TempDBMemory} {
+		t.Run(string(mode), func(t *testing.T) { testOVMWrappedRuntimeAndContinuation(t, mode) })
+	}
+}
+
+func testOVMWrappedRuntimeAndContinuation(t *testing.T, tempMode TempDBMode) {
 	f := newOVMFixture(t, nil)
 	for _, engine := range []string{"pebble", "leveldb"} {
 		for _, scheme := range []string{"hash", "path"} {
 			t.Run(engine+"/"+scheme, func(t *testing.T) {
 				opts := f.options(t, engine, scheme, 2)
+				opts.TempDB = tempMode
 				result, err := Migrate(t.Context(), opts)
 				if err != nil {
 					t.Fatal(err)

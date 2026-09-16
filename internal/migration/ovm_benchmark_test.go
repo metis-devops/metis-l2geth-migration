@@ -1,12 +1,10 @@
 package migration
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
-	"sync"
 	"testing"
 	"time"
 
@@ -24,56 +22,29 @@ func BenchmarkOVMMigrationAlloc(b *testing.B) {
 }
 
 func benchmarkOVMMigration(b *testing.B, withAlloc bool) {
+	count, mode := ovmBenchmarkSettings(b)
 	for _, workers := range []int{2, 8} {
 		b.Run(fmt.Sprintf("workers=%d", workers), func(b *testing.B) {
-			f := newOVMFixtureSized(b, 10000, nil)
+			setup := time.Now()
+			f := newOVMFixtureSized(b, count, nil)
 			var alloc string
 			if withAlloc {
 				alloc = writeOVMBenchmarkAlloc(b, f)
 			}
 			root := b.TempDir()
+			setupElapsed := time.Since(setup)
+			ctx, stop := sampleTemporaryBenchmark(b, b.Context(), root)
 			b.ReportAllocs()
 			b.ResetTimer()
-			var peak int64
 			for n := range b.N {
-				opts := MigrateOptions{SourceChaindata: f.source, Output: filepath.Join(root, fmt.Sprint(n)), Scheme: "hash", DBEngine: "pebble", CacheMB: 128, Handles: 128, Workers: workers, OVM: OVMOptions{Enabled: true, WrappedEtherCode: f.code, StateWitness: f.witness, GenesisAlloc: alloc}}
-				ctx, cancel := context.WithCancel(b.Context())
-				var wg sync.WaitGroup
-				wg.Go(func() {
-					ticker := time.NewTicker(20 * time.Millisecond)
-					defer ticker.Stop()
-					for {
-						select {
-						case <-ctx.Done():
-							return
-						case <-ticker.C:
-							var size int64
-							err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
-								if err != nil {
-									return nil
-								}
-								if entry.Type().IsRegular() {
-									info, err := entry.Info()
-									if err == nil {
-										size += info.Size()
-									}
-								}
-								return nil
-							})
-							if err == nil {
-								peak = max(peak, size)
-							}
-						}
-					}
-				})
-				_, err := Migrate(ctx, opts)
-				cancel()
-				wg.Wait()
-				if err != nil {
+				opts := MigrateOptions{TempDB: mode, SourceChaindata: f.source, Output: filepath.Join(root, fmt.Sprint(n)), Scheme: "hash", DBEngine: "pebble", CacheMB: 128, Handles: 128, Workers: workers, OVM: OVMOptions{Enabled: true, WrappedEtherCode: f.code, StateWitness: f.witness, GenesisAlloc: alloc}}
+				if _, err := Migrate(ctx, opts); err != nil {
 					b.Fatal(err)
 				}
 			}
-			b.ReportMetric(float64(peak), "sampled-disk-peak-B")
+			b.StopTimer()
+			stop()
+			b.ReportMetric(setupElapsed.Seconds(), "setup-s")
 		})
 	}
 }

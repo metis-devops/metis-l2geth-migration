@@ -142,12 +142,19 @@ func encodeOVMOverlapReceipts(t *testing.T, f ovmFixture, format string) []byte 
 }
 
 func TestOVMEquivalentHotColdReceipts(t *testing.T) {
+	for _, mode := range []TempDBMode{TempDBDisk, TempDBMemory} {
+		t.Run(string(mode), func(t *testing.T) { testOVMEquivalentHotColdReceipts(t, mode) })
+	}
+}
+
+func testOVMEquivalentHotColdReceipts(t *testing.T, tempMode TempDBMode) {
 	for _, target := range targetTestCases() {
 		for _, format := range []string{"v3", "v4", "fee-metadata"} {
 			t.Run(target.name()+"/"+format, func(t *testing.T) {
 				f := newOVMFixture(t, nil)
 				writeOVMFixtureAncients(t, f)
 				opts := f.options(t, target.engine, target.scheme, 2)
+				opts.TempDB = tempMode
 				baseline, err := Migrate(t.Context(), opts)
 				if err != nil {
 					t.Fatal(err)
@@ -162,7 +169,7 @@ func TestOVMEquivalentHotColdReceipts(t *testing.T) {
 				if converted.OVMReport.History != baseline.OVMReport.History || converted.OVMReport.Target != baseline.OVMReport.Target {
 					t.Fatal("equivalent hot receipt encoding changed selected cold evidence or target")
 				}
-				if _, err := VerifyOVM(t.Context(), OVMVerifyOptions{SourceChaindata: f.source, Artifact: opts.Output, CacheMB: 64, Handles: 64, Workers: 2, OVM: opts.OVM}); err != nil {
+				if _, err := VerifyOVM(t.Context(), OVMVerifyOptions{TempDB: tempMode, SourceChaindata: f.source, Artifact: opts.Output, CacheMB: 64, Handles: 64, Workers: 2, OVM: opts.OVM}); err != nil {
 					t.Fatal(err)
 				}
 				if after := directoryContentDigest(t, f.source); after != before {
@@ -174,6 +181,12 @@ func TestOVMEquivalentHotColdReceipts(t *testing.T) {
 }
 
 func TestOVMReceiptOverlapRejectsCorruption(t *testing.T) {
+	for _, mode := range []TempDBMode{TempDBDisk, TempDBMemory} {
+		t.Run(string(mode), func(t *testing.T) { testOVMReceiptOverlapRejectsCorruption(t, mode) })
+	}
+}
+
+func testOVMReceiptOverlapRejectsCorruption(t *testing.T, tempMode TempDBMode) {
 	f := newOVMFixture(t, nil)
 	logs := ovmOverlapLogs(f)
 	logs[0].Topics[1] = common.BytesToHash(f.holders[2][:])
@@ -203,7 +216,9 @@ func TestOVMReceiptOverlapRejectsCorruption(t *testing.T) {
 	}
 	writeOVMFixtureAncients(t, f)
 	editOVMSource(t, f, func(db ethdb.Database) { putOVMTest(t, db, ovmReceiptKey(f.head), nil) })
-	if _, err := Migrate(t.Context(), f.options(t, "pebble", "hash", 2)); err == nil {
+	opts := f.options(t, "pebble", "hash", 2)
+	opts.TempDB = tempMode
+	if _, err := Migrate(t.Context(), opts); err == nil {
 		t.Fatal("empty hot receipt was mistaken for a missing copy")
 	}
 	if _, err := mergeLegacyHistoryValue([]byte{1}, []byte{2}); err == nil {

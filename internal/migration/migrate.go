@@ -13,6 +13,7 @@ import (
 
 // MigrateOptions configures direct migration from legacy l2geth state.
 type MigrateOptions struct {
+	TempDB          TempDBMode
 	SourceChaindata string
 	Output          string
 	Scheme          string
@@ -45,6 +46,9 @@ func (r MigrateResult) MarshalJSON() ([]byte, error) {
 
 // Migrate directly rebuilds and verifies a state database without creating a bundle.
 func Migrate(ctx context.Context, opts MigrateOptions) (result MigrateResult, retErr error) {
+	if err := opts.TempDB.validate(); err != nil {
+		return result, err
+	}
 	if err := validateOVMOptions(opts.OVM); err != nil {
 		return result, err
 	}
@@ -52,7 +56,7 @@ func Migrate(ctx context.Context, opts MigrateOptions) (result MigrateResult, re
 		return migrateOVM(ctx, opts)
 	}
 	workers := normalizeMigrateWorkers(opts.Workers)
-	reporter := newProgressReporter("migrate", opts.Progress,
+	reporter := newProgressReporter("migrate", opts.Progress, "temp_db", opts.TempDB.normalized(),
 		"source", opts.SourceChaindata,
 		"output", opts.Output,
 		"scheme", opts.Scheme, "db_engine", opts.DBEngine, "state_layout", LayoutGeth,
@@ -155,7 +159,7 @@ func Migrate(ctx context.Context, opts MigrateOptions) (result MigrateResult, re
 		return MigrateResult{}, err
 	}
 
-	dbState, closed, err := finalizeAndVerifyTarget(ctx, disk, dbPath, opts.Scheme, target, sourceEvidence, stateResult, opts.CacheMB, opts.Handles, reporter)
+	dbState, closed, err := finalizeAndVerifyTarget(ctx, disk, dbPath, opts.Scheme, target, sourceEvidence, stateResult, opts.CacheMB, opts.Handles, reporter, opts.TempDB)
 	diskClosed = closed
 	if err != nil {
 		return MigrateResult{}, err

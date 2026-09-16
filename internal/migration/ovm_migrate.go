@@ -18,7 +18,7 @@ import (
 func cryptoCodeHash(in ovmInputs) common.Hash { return crypto.Keccak256Hash(in.code) }
 
 func migrateOVM(ctx context.Context, opts MigrateOptions) (result MigrateResult, retErr error) {
-	reporter := newProgressReporter("migrate", opts.Progress, "ovm_eth", true, "workers", normalizeMigrateWorkers(opts.Workers))
+	reporter := newProgressReporter("migrate", opts.Progress, "temp_db", opts.TempDB.normalized(), "ovm_eth", true, "workers", normalizeMigrateWorkers(opts.Workers))
 	defer func() { reporter.Finish(retErr, "artifact", result.ArtifactPath) }()
 	if err := validateMigrateOptions(opts); err != nil {
 		return result, err
@@ -88,6 +88,7 @@ func rejectOVMOutputs(opts MigrateOptions, output string) error {
 }
 
 type ovmWork struct {
+	storage  *temporaryStorage
 	ctx      context.Context
 	opts     MigrateOptions
 	path     string
@@ -103,11 +104,12 @@ type ovmWork struct {
 }
 
 func replayOVMState(ctx context.Context, opts MigrateOptions, root string, reporter *progressReporter, persistTarget bool) (report OVMVerificationReport, retErr error) {
-	w := ovmWork{ctx: ctx, opts: opts, path: filepath.Join(root, ".ovm-work"), reporter: reporter, limiter: newMigrateWorkLimiter(opts.Workers)}
+	w := ovmWork{storage: newTemporaryStorage(opts.TempDB), ctx: ctx, opts: opts, path: filepath.Join(root, ".ovm-work"), reporter: reporter, limiter: newMigrateWorkLimiter(opts.Workers)}
+	observeTemporaryStorage(ctx, w.storage)
 	if err := os.Mkdir(w.path, 0700); err != nil {
 		return report, err
 	}
-	defer func() { retErr = errors.Join(retErr, w.close(), os.RemoveAll(w.path)) }()
+	defer func() { retErr = errors.Join(retErr, w.close(), w.storage.remove(w.path), os.RemoveAll(w.path)) }()
 	if err := w.prepare(); err != nil {
 		return report, err
 	}
@@ -180,12 +182,11 @@ func (w *ovmWork) prepare() error {
 	if _, err := ovmCheckpoint(w.sourceEvidence(), w.source.head.StateRoot); err != nil {
 		return err
 	}
-	baseConfig := targetConfig{engine: "pebble-v2", layout: LayoutGeth}
-	w.base, err = openOVMDatabase(baseConfig, filepath.Join(w.path, "base"), cache, handles)
+	w.base, err = w.storage.create(filepath.Join(w.path, "base"), cache, handles)
 	if err != nil {
 		return err
 	}
-	w.indexDB, err = openOVMDatabase(baseConfig, filepath.Join(w.path, "evidence"), cache, handles)
+	w.indexDB, err = w.storage.create(filepath.Join(w.path, "evidence"), cache, handles)
 	if err != nil {
 		return err
 	}
@@ -251,22 +252,54 @@ func (w *ovmWork) migrateOriginalAndHistory() error {
 	if err := errors.Join(stateErr, historyErr); err != nil {
 		return err
 	}
+	return w.reopenOriginal()
+}
+
+func (w *ovmWork) reopenOriginal() (retErr error) {
 	cache, handles := w.opts.CacheMB/4, w.opts.Handles/4
 	config := targetConfig{engine: "pebble-v2", layout: LayoutGeth}
-	_, closed, err := finalizeAndVerifyTarget(w.ctx, w.base, filepath.Join(w.path, "base"), "hash", config, w.sourceEvidence(), w.original, cache, handles, w.reporter)
-	if closed {
+	path := filepath.Join(w.path, "base")
+	if w.storage.fs == nil {
+		_, closed, err := finalizeAndVerifyTarget(w.ctx, w.base, path, "hash", config, w.sourceEvidence(), w.original, cache, handles, w.reporter, w.opts.TempDB)
+		if closed {
+			w.base = nil
+		}
+		if err != nil {
+			return err
+		}
+	} else {
+		if err := persistHeadMetadata(w.ctx, w.base, w.sourceEvidence(), w.reporter); err != nil {
+			return err
+		}
+		if err := w.base.SyncKeyValue(); err != nil {
+			return err
+		}
+		err := w.base.Close()
 		w.base = nil
+		if err != nil {
+			return err
+		}
+		if err := w.verifyMemoryOriginal(path, config, cache, handles); err != nil {
+			return err
+		}
 	}
+	var err error
+	w.base, err = w.storage.open(path, cache, handles, false)
+	return err
+}
+
+func (w *ovmWork) verifyMemoryOriginal(path string, config targetConfig, cache, handles int) (retErr error) {
+	if err := w.ctx.Err(); err != nil {
+		return err
+	}
+	db, err := w.storage.open(path, cache, handles, true)
 	if err != nil {
 		return err
 	}
-	// This is this invocation's private scratch database, never a reused target.
-	kv, err := config.open(filepath.Join(w.path, "base"), cache, handles, false)
-	if err != nil {
-		return err
-	}
-	w.base = rawdb.NewDatabase(kv)
-	return nil
+	defer func() { retErr = errors.Join(retErr, db.Close()) }()
+	_, err = verifyOpenedTarget(w.ctx, db, path, "hash", config, w.sourceEvidence(), w.original, w.reporter,
+		trieNodeIndexOptions{Mode: w.opts.TempDB, CacheMB: cache, Handles: handles})
+	return err
 }
 
 func runOVMPartitioned(ctx context.Context, source, target ethdb.Database, root common.Hash, scheme string, workers int, limiter *migrateWorkLimiter, readCode codeReader, zeroNative bool) (result StateResult, retErr error) {
@@ -346,7 +379,7 @@ func (w *ovmWork) finalTarget(root string, newRoot common.Hash, checkpoint bundl
 	if err != nil {
 		return final, target, err
 	}
-	verified, err := verifyTargetDatabase(w.ctx, path, w.opts.Scheme, target, checkpoint, final, cache, handles, w.reporter, w.path, ovmBodyMetadata(checkpoint))
+	verified, err := verifyTargetDatabase(w.ctx, path, w.opts.Scheme, target, checkpoint, final, cache, handles, w.reporter, trieNodeIndexOptions{Mode: w.opts.TempDB, Parent: w.path, CacheMB: cache, Handles: handles}, ovmBodyMetadata(checkpoint))
 	if err != nil {
 		return final, target, err
 	}

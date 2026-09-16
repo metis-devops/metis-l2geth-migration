@@ -33,8 +33,11 @@ def configurations(args, repetition):
         yield "BenchmarkOVMAncientRead", None, False
 
 
-def timed_command(binary, name, workers):
+def timed_command(binary, name, workers, component=None):
     selector = f"^{name}$"
+    if component:
+        backend, count, operation = component
+        selector += f"/^backend={backend}$/^records={count}$/^op={operation}$"
     if workers is not None:
         selector += f"/^workers={workers}$"
     command = [str(binary), "-test.run=^$", f"-test.bench={selector}",
@@ -54,11 +57,19 @@ def main():
                         help="pair ordinary conversion with 1000 GenesisAlloc account overrides")
     parser.add_argument("--with-verify", action="store_true", help="also measure standalone verification")
     parser.add_argument("--with-ancient", action="store_true", help="also measure 60000 sequential ancient record reads")
+    parser.add_argument("--holders", type=int, nargs="+", default=[10000],
+                        help="synthetic state sizes, e.g. 10000 100000")
+    parser.add_argument("--temp-dbs", choices=["disk", "memory"], nargs="+", default=["disk"],
+                        help="alternate temporary storage modes in fresh processes")
+    parser.add_argument("--with-components", action="store_true",
+                        help="also compare disk/memory Pebble and geth memorydb traces")
     parser.add_argument("--baseline-root", type=Path,
                         help="alternate with an isolated baseline checkout containing the same benchmark harness")
     args = parser.parse_args()
     if args.count < 2:
         parser.error("count must be at least 2 for paired measurements")
+    if any(size < 1000 for size in args.holders):
+        parser.error("holders must be at least 1000")
     root = Path(__file__).resolve().parents[1]
     sources = {"current": root}
     if args.baseline_root:
@@ -70,10 +81,16 @@ def main():
     with tempfile.TemporaryDirectory(prefix="l2state-ovm-bench-") as temp:
         binaries = {}
         required = {name for name, _, _ in configurations(args, 0)}
+        if args.with_components:
+            required.add("BenchmarkTemporaryDB")
         for label, source in sources.items():
+            if args.temp_dbs != ["disk"] or args.holders != [10000] or args.with_components:
+                harness = source / "internal/migration/tempdb_benchmark_test.go"
+                if not harness.exists() or "L2STATE_BENCH_TEMP_DB" not in harness.read_text():
+                    parser.error(f"{label} lacks the temporary storage benchmark harness")
             binary = Path(temp) / f"{label}.test"
             subprocess.run(["go", "test", "-c", "-o", str(binary), "./internal/migration"], cwd=source, check=True)
-            available = subprocess.check_output([str(binary), "-test.list=^BenchmarkOVM"], text=True).splitlines()
+            available = subprocess.check_output([str(binary), "-test.list=^Benchmark"], text=True).splitlines()
             if not required.issubset(available):
                 parser.error(f"{label} is missing benchmark harness entries: {required - set(available)}")
             binaries[label] = binary
@@ -81,26 +98,54 @@ def main():
             output.write(f"# {platform.platform()} CPUs={os.cpu_count()}\n")
             for label, source in sources.items():
                 output.write(f"# {label} source-sha256={source_digest(source)} cache-mb=128 handles=128\n")
-            output.write("# Synthetic 10000 holder state, two-block history, hash/Pebble.\n")
+            output.write(f"# Synthetic holders={args.holders}, two-block history, hash/Pebble; temp-dbs={args.temp_dbs}.\n")
             if args.with_alloc:
                 output.write("# Alloc: first 1000 holders receive code, balance and one storage override.\n")
             if args.with_ancient:
                 output.write("# Ancient microbenchmark: 20000 synthetic blocks, 3 tables, 4 files/table.\n")
             output.write("# Fresh processes; OS caches not flushed; setup excluded from ns/op.\n")
-            output.write("# RSS includes setup (also initial migration for verify); sampled disk metric is migration only.\n")
+            output.write("# RSS includes setup (also initial migration for verify); operation heap/files are sampled every 20ms; file lengths exclude allocator capacity.\n")
             for repetition in range(args.count):
                 labels = list(sources)
                 if repetition % 2:
                     labels.reverse()
+                modes = list(args.temp_dbs)
+                sizes = list(args.holders)
+                if repetition % 2:
+                    modes.reverse()
+                    sizes.reverse()
                 for name, workers, alloc in configurations(args, repetition):
-                    for label in labels:
-                        message = f"sample={repetition + 1} variant={label} benchmark={name} workers={workers} alloc={alloc}"
-                        print(message, flush=True)
-                        output.write(f"# {message}\n")
-                        output.flush()
-                        subprocess.run(timed_command(binaries[label], name, workers),
-                                       cwd=sources[label] / "internal/migration", stdout=output,
-                                       stderr=subprocess.STDOUT, check=True)
+                    for holders in (sizes if workers is not None else [10000]):
+                        for mode in (modes if workers is not None else ["disk"]):
+                            for label in labels:
+                                message = (f"sample={repetition + 1} variant={label} benchmark={name} "
+                                           f"workers={workers} alloc={alloc} holders={holders} temp_db={mode}")
+                                print(message, flush=True)
+                                output.write(f"# {message}\n")
+                                output.flush()
+                                env = dict(os.environ, L2STATE_BENCH_HOLDERS=str(holders),
+                                           L2STATE_BENCH_TEMP_DB=mode)
+                                subprocess.run(timed_command(binaries[label], name, workers), env=env,
+                                               cwd=sources[label] / "internal/migration", stdout=output,
+                                               stderr=subprocess.STDOUT, check=True)
+                if args.with_components:
+                    backends = ["disk", "memory", "geth"]
+                    if repetition % 2:
+                        backends.reverse()
+                    for count in [10000, 100000, 1000000]:
+                        for operation in ["batch", "dedup", "get", "scan", "prefix"]:
+                            for backend in backends:
+                                for label in labels:
+                                    message = (f"sample={repetition + 1} variant={label} component={operation} "
+                                               f"records={count} backend={backend}")
+                                    print(message, flush=True)
+                                    output.write(f"# {message}\n")
+                                    output.flush()
+                                    subprocess.run(timed_command(binaries[label], "BenchmarkTemporaryDB", None,
+                                                                 (backend, count, operation)),
+                                                   cwd=sources[label] / "internal/migration", stdout=output,
+                                                   stderr=subprocess.STDOUT, check=True)
+
 
 
 if __name__ == "__main__":

@@ -183,7 +183,7 @@ func replayGethCompatibility(t *testing.T, expected *compatCapture) {
 				dbPath := filepath.Join(t.TempDir(), "chaindata")
 				entries := contract.Databases[frozen.Database]
 				writeCompatDatabase(t, dbPath, entries, target)
-				if _, err := verifyTargetDatabase(t.Context(), dbPath, scheme, target, source, expectedState, 16, 16, nil, ""); err != nil {
+				if _, err := verifyTargetDatabase(t.Context(), dbPath, scheme, target, source, expectedState, 16, 16, nil, trieNodeIndexOptions{}); err != nil {
 					t.Fatalf("read frozen logical database %s: %v", name, err)
 				}
 				if len(frozen.Continuation) != 0 {

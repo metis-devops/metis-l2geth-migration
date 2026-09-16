@@ -127,9 +127,10 @@ not widen migration artifact contracts or restore legacy target generation.
   `map[common.Hash]struct{}`. The supported assumption is fewer than one
   million unique code hashes; do not add a pre-count scan, hard limit, or disk
   fallback without an explicit contract change.
-- Keep exact reachable hash-node tracking disk-backed and bounded. Do not
-  replace its operation-local Pebble index with a set whose memory grows with
-  the full state trie.
+- Keep exact reachable hash-node tracking in its operation-local Pebble index.
+  Disk-backed bounded-cache storage remains the default. Explicit `--temp-db
+  memory` is the only exception: use Pebble vfs.NewMem, not a state-sized map.
+  Preserve batch/queue/worker bounds; memory files grow with scratch data.
 - Independently reopen and verify every artifact before publication. Do not
   trust `verification.json` as the source of truth for bundle verification.
 - Artifact roots must contain exactly the real `chaindata/` directory and real
@@ -176,7 +177,8 @@ not widen migration artifact contracts or restore legacy target generation.
   bloom. Use the cold encoding for history evidence and budget both raw copies;
   never ignore malformed/empty copies or rewrite source receipts to normalize them.
   Witnesses provide addresses and allowance pairs, never balances or eligibility.
-  Keep evidence/patches disk-backed and reject unclassified storage slots.
+  Keep evidence/patches in operation-local Pebble (disk by default, or explicit
+  `--temp-db memory`) and reject unclassified storage slots.
 - Complete and independently reopen the original migrated state before applying
   balance changes. Build the final artifact afresh with the partitioned core.
   Share the worker limiter with history and balance workers; join all jobs on
@@ -303,6 +305,30 @@ not widen migration artifact contracts or restore legacy target generation.
 
 ### Shared implementation rules
 
+- `migrate`, `import`, and `verify` support `--temp-db disk|memory`; empty Go
+  options mean disk, explicit empty/unknown CLI values fail. Export has no
+  temporary database; prune remains disk-only. Do not add temp settings to
+  reports or change artifact engines, layouts, versions or compression.
+- Memory temporary databases use the pinned Pebble v2 filesystem and internal
+  ethdb adapter. Keep one private filesystem alive across OVM original-state
+  writer close, independent read-only reopen/complete verification and writable
+  reopen. Artifact verification still opens physical storage through its
+  declared engine without fallback. Join workers, close all handles and release
+  private filesystems on success, failure and cancellation. Never claim memory
+  sync as disk durability or skip final target sync/publication.
+- Memory mode has no hard RAM cap or automatic spill. Cache allowances do not
+  include memory files, compaction peaks or total RSS. Keep geth memorydb in
+  benchmarks only. Preserve error sentinels, value ownership, iterator ordering,
+  batch replay and propagation of resource-release errors in the adapter.
+- Temporary-backend changes require four-target logical/reference comparisons,
+  both bundle compression modes, cross-mode standalone verification, OVM alloc,
+  runtime/continuation, corruption, input tampering, source immutability, no
+  physical temporary DB files, and cancellation/cleanup checks. Run `make ci`,
+  `make test-race`, and isolated alternating measurements with
+  `scripts/benchmark-ovm.py --holders 10000 100000 --temp-dbs disk memory
+  --with-alloc --with-verify --with-components --count 3 --out /absolute/new/file`.
+  Report RSS/setup and sampled heap/file limitations and any regressions.
+
 - Preserve `context.Context` cancellation through source scans, chunked bundle
   reads/writes, path adoption, and verification.
 - Wrap errors with operation context and `%w`. Check and combine relevant
@@ -310,8 +336,9 @@ not widen migration artifact contracts or restore legacy target generation.
 - Keep human-readable progress on standard error and the single final JSON
   value on standard output. `--quiet` suppresses progress, not diagnostics or
   the final error.
-- Keep long operations streaming. The operation-local codehash set is the only
-  state-sized in-memory exception; keep other working state bounded by the
+- Keep long operations streaming. With default disk temporary storage, the operation-local codehash set is the only
+  state-sized in-memory exception; explicit memory mode also retains temporary
+  Pebble files. Keep remaining working state bounded by the
   configured cache and handle allowances. Do not add a pre-count scan merely
   to report a percentage or ETA.
 - Direct migrate always uses the partitioned builder. Normalize workers below

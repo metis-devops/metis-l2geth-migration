@@ -37,6 +37,7 @@ func ArtifactVerificationFormat(dir string) (format string, retErr error) {
 
 // OVMVerifyOptions supplies the source and operator inputs for independent replay.
 type OVMVerifyOptions struct {
+	TempDB          TempDBMode
 	SourceChaindata string
 	Artifact        string
 	CacheMB         int
@@ -49,7 +50,10 @@ type OVMVerifyOptions struct {
 // VerifyOVM independently regenerates the expected checkpoint from source state
 // and authenticated history, then opens and inventories the supplied artifact.
 func VerifyOVM(ctx context.Context, opts OVMVerifyOptions) (report OVMVerificationReport, retErr error) {
-	reporter := newProgressReporter("verify", opts.Progress, "ovm_eth", true, "artifact", opts.Artifact)
+	if err := opts.TempDB.validate(); err != nil {
+		return report, err
+	}
+	reporter := newProgressReporter("verify", opts.Progress, "temp_db", opts.TempDB.normalized(), "ovm_eth", true, "artifact", opts.Artifact)
 	defer func() { reporter.Finish(retErr) }()
 	stored, err := loadOVMReport(opts.Artifact)
 	if err != nil {
@@ -62,7 +66,7 @@ func VerifyOVM(ctx context.Context, opts OVMVerifyOptions) (report OVMVerificati
 	if err := confirmOVMAllocEvidence(ctx, opts.OVM.GenesisAlloc, stored.GenesisAlloc); err != nil {
 		return report, err
 	}
-	migrate := MigrateOptions{SourceChaindata: opts.SourceChaindata, Scheme: stored.Scheme, DBEngine: stored.DBEngine, CacheMB: opts.CacheMB, Handles: opts.Handles, Workers: opts.Workers, OVM: opts.OVM, Progress: opts.Progress}
+	migrate := MigrateOptions{TempDB: opts.TempDB, SourceChaindata: opts.SourceChaindata, Scheme: stored.Scheme, DBEngine: stored.DBEngine, CacheMB: opts.CacheMB, Handles: opts.Handles, Workers: opts.Workers, OVM: opts.OVM, Progress: opts.Progress}
 	if migrate.DBEngine == "pebble-v2" {
 		migrate.DBEngine = "pebble"
 	}
@@ -99,7 +103,7 @@ func VerifyOVM(ctx context.Context, opts OVMVerifyOptions) (report OVMVerificati
 		return report, err
 	}
 	state := StateResult{Root: recomputed.Target.Root, Counts: recomputed.Target.Counts}
-	_, err = verifyTargetDatabase(ctx, filepath.Join(opts.Artifact, artifactDatabaseDirName), stored.Scheme, target, recomputed.Checkpoint, state, opts.CacheMB/4, opts.Handles/4, reporter, scratch, ovmBodyMetadata(recomputed.Checkpoint))
+	_, err = verifyTargetDatabase(ctx, filepath.Join(opts.Artifact, artifactDatabaseDirName), stored.Scheme, target, recomputed.Checkpoint, state, opts.CacheMB/4, opts.Handles/4, reporter, trieNodeIndexOptions{Mode: opts.TempDB, Parent: scratch, CacheMB: opts.CacheMB / 4, Handles: opts.Handles / 4}, ovmBodyMetadata(recomputed.Checkpoint))
 	if err != nil {
 		return report, err
 	}

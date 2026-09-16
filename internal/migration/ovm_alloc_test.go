@@ -121,6 +121,12 @@ func TestOVMGenesisAllocRejectsMalformedInput(t *testing.T) {
 }
 
 func TestOVMGenesisAllocAllTargets(t *testing.T) {
+	for _, mode := range []TempDBMode{TempDBDisk, TempDBMemory} {
+		t.Run(string(mode), func(t *testing.T) { testOVMGenesisAllocAllTargets(t, mode) })
+	}
+}
+
+func testOVMGenesisAllocAllTargets(t *testing.T, tempMode TempDBMode) {
 	slot1, slot2 := common.HexToHash("0x01"), common.HexToHash("0x02")
 	f := newOVMFixture(t, func(accounts []fixtureAccount) {
 		accounts[3].storage = map[common.Hash]common.Hash{slot1: common.HexToHash("0x11"), slot2: common.HexToHash("0x22")}
@@ -159,6 +165,7 @@ func TestOVMGenesisAllocAllTargets(t *testing.T) {
 		for _, engine := range []string{"pebble", "leveldb"} {
 			t.Run(engine+"/"+scheme, func(t *testing.T) {
 				opts := f.options(t, engine, scheme, 4)
+				opts.TempDB = tempMode
 				opts.OVM.GenesisAlloc = allocPath
 				result, err := Migrate(t.Context(), opts)
 				if err != nil {
@@ -180,7 +187,7 @@ func TestOVMGenesisAllocAllTargets(t *testing.T) {
 				if !reflect.DeepEqual(actual, reference) {
 					t.Fatal("final inventory differs from independent StateDB/GenerateTrie reference")
 				}
-				if _, err := VerifyOVM(t.Context(), OVMVerifyOptions{SourceChaindata: f.source, Artifact: opts.Output, CacheMB: 64, Handles: 64, Workers: 2, OVM: opts.OVM}); err != nil {
+				if _, err := VerifyOVM(t.Context(), OVMVerifyOptions{TempDB: tempMode, SourceChaindata: f.source, Artifact: opts.Output, CacheMB: 64, Handles: 64, Workers: 2, OVM: opts.OVM}); err != nil {
 					t.Fatal(err)
 				}
 				withArtifactState(t, opts.Output, scheme, expected, true, func(s *state.StateDB) {
@@ -206,8 +213,6 @@ func TestOVMGenesisAllocAllTargets(t *testing.T) {
 	}
 }
 
-// Rebuild a fresh layout from the independent StateDB's committed result using
-// the pinned GenerateTrie reference, including the exact checkpoint inventory.
 func allocReferenceInventory(t *testing.T, source ethdb.Database, root common.Hash, scheme string, checkpoint bundle.SourceEvidence) []logicalEntry {
 	t.Helper()
 	db := rawdb.NewMemoryDatabase()
@@ -282,6 +287,12 @@ func allocReferenceInventory(t *testing.T, source ethdb.Database, root common.Ha
 }
 
 func TestOVMGenesisAllocLargeStorageAndDuplicates(t *testing.T) {
+	for _, mode := range []TempDBMode{TempDBDisk, TempDBMemory} {
+		t.Run(string(mode), func(t *testing.T) { testOVMGenesisAllocLargeStorageAndDuplicates(t, mode) })
+	}
+}
+
+func testOVMGenesisAllocLargeStorageAndDuplicates(t *testing.T, tempMode TempDBMode) {
 	f := newOVMFixture(t, nil)
 	var fields strings.Builder
 	for n := range 10000 {
@@ -301,6 +312,7 @@ func TestOVMGenesisAllocLargeStorageAndDuplicates(t *testing.T) {
 		}
 	}
 	opts := f.options(t, "pebble", "path", 2)
+	opts.TempDB = tempMode
 	opts.OVM.GenesisAlloc = writeAllocFile(t, data)
 	result, err := Migrate(t.Context(), opts)
 	if err != nil {

@@ -13,6 +13,7 @@ import (
 
 // DirectVerifyOptions configures independent legacy-source and artifact verification.
 type DirectVerifyOptions struct {
+	TempDB          TempDBMode
 	SourceChaindata string
 	Artifact        string
 	CacheMB         int
@@ -22,7 +23,10 @@ type DirectVerifyOptions struct {
 
 // VerifyDirect recomputes legacy source evidence and validates a directly migrated artifact.
 func VerifyDirect(ctx context.Context, opts DirectVerifyOptions) (result DirectVerificationReport, retErr error) {
-	reporter := newProgressReporter("verify", opts.Progress,
+	if err := opts.TempDB.validate(); err != nil {
+		return result, err
+	}
+	reporter := newProgressReporter("verify", opts.Progress, "temp_db", opts.TempDB.normalized(),
 		"source", opts.SourceChaindata,
 		"artifact", opts.Artifact,
 	)
@@ -91,7 +95,7 @@ func VerifyDirect(ctx context.Context, opts DirectVerifyOptions) (result DirectV
 	if err != nil {
 		return DirectVerificationReport{}, err
 	}
-	dbState, err := verifyTargetDatabase(ctx, filepath.Join(opts.Artifact, artifactDatabaseDirName), stored.Scheme, target, sourceEvidence, stateResult, opts.CacheMB, opts.Handles, reporter, "")
+	dbState, err := verifyTargetDatabase(ctx, filepath.Join(opts.Artifact, artifactDatabaseDirName), stored.Scheme, target, sourceEvidence, stateResult, opts.CacheMB, opts.Handles, reporter, trieNodeIndexOptions{Mode: opts.TempDB, CacheMB: opts.CacheMB, Handles: opts.Handles})
 	if err != nil {
 		return DirectVerificationReport{}, err
 	}

@@ -21,14 +21,21 @@ import (
 )
 
 func TestOVMGenesisAllocVerificationTampering(t *testing.T) {
+	for _, mode := range []TempDBMode{TempDBDisk, TempDBMemory} {
+		t.Run(string(mode), func(t *testing.T) { testOVMGenesisAllocVerificationTampering(t, mode) })
+	}
+}
+
+func testOVMGenesisAllocVerificationTampering(t *testing.T, tempMode TempDBMode) {
 	f := newOVMFixture(t, nil)
 	opts := f.options(t, "pebble", "hash", 4)
+	opts.TempDB = tempMode
 	opts.OVM.GenesisAlloc = writeAllocFile(t, fmt.Sprintf(`{"%s":{"balance":123}}`, f.holders[0]))
 	result, err := Migrate(t.Context(), opts)
 	if err != nil {
 		t.Fatal(err)
 	}
-	verify := OVMVerifyOptions{SourceChaindata: f.source, Artifact: opts.Output, CacheMB: 64, Handles: 64, Workers: 2, OVM: opts.OVM}
+	verify := OVMVerifyOptions{TempDB: tempMode, SourceChaindata: f.source, Artifact: opts.Output, CacheMB: 64, Handles: 64, Workers: 2, OVM: opts.OVM}
 	original, err := json.Marshal(result.OVMReport)
 	if err != nil {
 		t.Fatal(err)
@@ -94,6 +101,7 @@ func TestOVMGenesisAllocVerificationTampering(t *testing.T) {
 	}
 
 	plain := f.options(t, "pebble", "hash", 2)
+	plain.TempDB = tempMode
 	if _, err := Migrate(t.Context(), plain); err != nil {
 		t.Fatal(err)
 	}
@@ -104,12 +112,19 @@ func TestOVMGenesisAllocVerificationTampering(t *testing.T) {
 }
 
 func TestOVMGenesisAllocCancellationAndMutationCleanup(t *testing.T) {
+	for _, mode := range []TempDBMode{TempDBDisk, TempDBMemory} {
+		t.Run(string(mode), func(t *testing.T) { testOVMGenesisAllocCancellationAndMutationCleanup(t, mode) })
+	}
+}
+
+func testOVMGenesisAllocCancellationAndMutationCleanup(t *testing.T, tempMode TempDBMode) {
 	for _, phase := range []string{"apply_genesis_alloc", "build_converted_state", "publish_artifact"} {
 		for _, mutation := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/mutate=%t", phase, mutation), func(t *testing.T) {
 				f := newOVMFixture(t, nil)
 				before := directoryContentDigest(t, f.source)
 				opts := f.options(t, "leveldb", "path", 16)
+				opts.TempDB = tempMode
 				data := fmt.Sprintf(`{"%s":{"nonce":42}}`, f.holders[0])
 				opts.OVM.GenesisAlloc = writeAllocFile(t, data)
 				ctx, cancel := context.WithCancel(t.Context())
@@ -149,6 +164,12 @@ func TestOVMGenesisAllocCancellationAndMutationCleanup(t *testing.T) {
 }
 
 func TestOVMGenesisAllocDoesNotRepairSource(t *testing.T) {
+	for _, mode := range []TempDBMode{TempDBDisk, TempDBMemory} {
+		t.Run(string(mode), func(t *testing.T) { testOVMGenesisAllocDoesNotRepairSource(t, mode) })
+	}
+}
+
+func testOVMGenesisAllocDoesNotRepairSource(t *testing.T, tempMode TempDBMode) {
 	for _, kind := range []string{"native", "supply", "ownership"} {
 		t.Run(kind, func(t *testing.T) {
 			f := newOVMFixture(t, func(a []fixtureAccount) {
@@ -162,6 +183,7 @@ func TestOVMGenesisAllocDoesNotRepairSource(t *testing.T) {
 				}
 			})
 			opts := f.options(t, "pebble", "hash", 2)
+			opts.TempDB = tempMode
 			opts.OVM.GenesisAlloc = writeAllocFile(t, fmt.Sprintf(`{"%s":{"balance":0},"%s":{"balance":0}}`, f.holders[0], common.Address{0xfe}))
 			if _, err := Migrate(t.Context(), opts); err == nil {
 				t.Fatal("alloc repaired invalid source or provided ownership witness")
@@ -171,6 +193,12 @@ func TestOVMGenesisAllocDoesNotRepairSource(t *testing.T) {
 }
 
 func TestOVMBalanceClassifiesCodeAtOriginalHead(t *testing.T) {
+	for _, mode := range []TempDBMode{TempDBDisk, TempDBMemory} {
+		t.Run(string(mode), func(t *testing.T) { testOVMBalanceClassifiesCodeAtOriginalHead(t, mode) })
+	}
+}
+
+func testOVMBalanceClassifiesCodeAtOriginalHead(t *testing.T, tempMode TempDBMode) {
 	f := newOVMFixture(t, nil)
 	s, err := openLegacySource(f.source, 16, 16, newProgressReporter("test", ProgressOptions{}))
 	if err != nil {

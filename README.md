@@ -529,11 +529,12 @@ per reader, with at most one reader per worker; alloc uses one such bounded
 reader. Ancient scanning keeps only the current data-file handle for each of
 its three tables and checks file identity/metadata on rotation and close.
 These are working-queue limits, not a total RSS or maximum source-record size.
-Evidence and patches are disk-backed. Cache and handles must each be at least 64;
+Evidence and patches use disk-backed Pebble by default, or Pebble memory files
+with `--temp-db memory`. Cache and handles must each be at least 64;
 four concurrent database allowances each receive one quarter. Independent node
 inventory checks also use the existing bounded temporary index.
 
-Allow disk space for the original state, conversion scratch nodes, evidence and
+With the default `--temp-db disk`, allow disk space for the original state, conversion scratch nodes, evidence and
 final target simultaneously. Standalone verification independently replays the
 original state and conversion in a temporary sibling directory, but does not
 write another final artifact. Its `replay_converted_state` phase recomputes the
@@ -619,6 +620,25 @@ external canonicality, or L1 finality.
 - `-h` and `--help` on every subcommand print that subcommand's usage to
   standard error and exit successfully without starting an operation or
   emitting JSON.
+- `migrate`, `import`, and `verify` accept `--temp-db disk|memory` (default
+  `disk`). `memory` uses Pebble's in-memory filesystem for reachable-node
+  indexes and OVM original-state/evidence/patch databases, including standalone
+  OVM verification replay. It never changes `--db-engine`, final artifact
+  storage, report fields, or format versions. Export has no temporary database
+  and does not accept this flag; prune retains its disk-backed keep database.
+  Pure bundle verification accepts the option but needs no temporary database.
+- Memory mode is an explicit space-for-speed option, not a throughput guarantee.
+  All temporary database files remain in RAM; memory grows with the full scratch
+  data, in addition to caches, memtables, compaction and Go allocations.
+  `--cache-mb` is not a memory limit, and there is no automatic spill to disk or
+  hard RAM cap. Choose a machine with capacity for peak scratch data and the
+  remaining process overhead. Existing streaming queues and worker bounds remain.
+- OVM memory mode still closes and independently reopens the original migrated
+  database read-only on the same operation-local filesystem before conversion.
+  Every final artifact is independently reopened from physical storage and
+  verified, synced and published with the usual rules. Private staging
+  directories may exist on disk, but temporary database files do not. Memory
+  mode does not provide restart/resume persistence; interrupted work is rerun.
 - `--cache-mb` defaults to 512 MiB and `--handles` defaults to 256 for every
   state operation. Direct migration keeps source and target databases open
   together, so account for both allowances.
@@ -633,8 +653,9 @@ external canonicality, or L1 finality.
 - While verifying `hash` artifacts, reachable trie-node hashes use a separate
   operation-local Pebble index with at most 16 MiB of cache and 16 file handles
   (or the lower positive configured allowances). Import and direct migration
-  keep this verification index inside the current `.partial-*` directory.
-  Standalone artifact verification uses the operating system temporary
+  keep this verification index inside the current `.partial-*` directory in
+  disk mode. Memory mode retains it in a private in-memory filesystem.
+  In disk mode, standalone artifact verification uses the operating system temporary
   directory; set `TMPDIR` to place it on a disk with enough capacity. `path`
   verification does not create this index. The index is removed before a
   successful output is published or a verification command returns.
@@ -770,3 +791,36 @@ Andromeda `OVM_ETH` allocation pinned to `metis-networks` commit `696b5613df9c`:
 ordinary account balances are zero and positive user balances live in
 `OVM_ETH` storage. This fixture is deterministic regression evidence, not a
 production-snapshot or production-scale acceptance result.
+
+### Temporary database performance measurements
+
+Compare disk and memory temporary storage with identical final Pebble/hash output:
+
+```bash
+python3 scripts/benchmark-ovm.py --out /absolute/new/temp-db-results.txt \
+  --count 3 --holders 10000 100000 --temp-dbs disk memory \
+  --with-alloc --with-verify --with-components
+```
+
+This alternates fresh processes for workers 2/8, conversion/alloc and
+migration/verification. The optional component traces compare disk Pebble,
+Pebble memory files and geth memorydb at 10k/100k/1m records: batched overwrites,
+repeated node markers, random reads, ordered scans and 1000 prefix scans. Geth
+memorydb is a benchmark reference only, not a supported CLI backend.
+Component traces use fixed high-entropy 32-byte keys/values (empty values for
+node markers); retained input arrays contribute equally to measured memory.
+Component disk and memory Pebble use the same adapter/settings; end-to-end disk
+runs use the existing production disk adapter. Do not run CI or other benchmarks
+concurrently. The harness preserves `--baseline-root` comparisons when both
+checkouts contain the same benchmark harness.
+
+`ns/op`, allocation counters and GC counts cover the measured operation; `setup-s`
+is separate. OS peak RSS includes setup and the initial disk migration used to
+prepare verification artifacts. Heap and file metrics sample every 20 ms and
+can miss short peaks. Memory-file lengths exclude capacity/allocator overhead;
+Go heap excludes some Pebble allocations and OS cache. Physical temporary-file
+bytes exclude the final artifact, while total disk bytes include it. OS caches
+are not flushed. The synthetic fixtures do not establish production throughput,
+maximum memory requirements or LevelDB/path performance.
+
+Measured results and limitations: [temporary database performance](docs/temp-db-performance.md).

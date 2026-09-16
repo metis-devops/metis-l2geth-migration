@@ -198,6 +198,12 @@ func (f ovmFixture) options(t testing.TB, engine, scheme string, workers int) Mi
 }
 
 func TestOVMMigrateAllTargets(t *testing.T) {
+	for _, mode := range []TempDBMode{TempDBDisk, TempDBMemory} {
+		t.Run(string(mode), func(t *testing.T) { testOVMMigrateAllTargets(t, mode) })
+	}
+}
+
+func testOVMMigrateAllTargets(t *testing.T, tempMode TempDBMode) {
 	f := newOVMFixture(t, nil)
 	before := directoryContentDigest(t, f.source)
 	expected := ovmReferenceRoot(t, f)
@@ -205,6 +211,7 @@ func TestOVMMigrateAllTargets(t *testing.T) {
 		for _, scheme := range []string{"hash", "path"} {
 			t.Run(engine+"/"+scheme, func(t *testing.T) {
 				opts := f.options(t, engine, scheme, 4)
+				opts.TempDB = tempMode
 				result, err := Migrate(t.Context(), opts)
 				if err != nil {
 					t.Fatal(err)
@@ -219,7 +226,7 @@ func TestOVMMigrateAllTargets(t *testing.T) {
 				if r.Checkpoint.HeadBefore.BlockNumber != 2 || r.History.Transfers != 2 {
 					t.Fatalf("bad checkpoint/history: %+v", r)
 				}
-				got, err := VerifyOVM(t.Context(), OVMVerifyOptions{SourceChaindata: f.source, Artifact: opts.Output, CacheMB: 64, Handles: 64, Workers: 3, OVM: opts.OVM})
+				got, err := VerifyOVM(t.Context(), OVMVerifyOptions{TempDB: oppositeTempMode(tempMode), SourceChaindata: f.source, Artifact: opts.Output, CacheMB: 64, Handles: 64, Workers: 3, OVM: opts.OVM})
 				if err != nil {
 					t.Fatal(err)
 				}

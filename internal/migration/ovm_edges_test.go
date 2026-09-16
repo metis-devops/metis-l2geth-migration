@@ -94,10 +94,17 @@ func (w *ovmPhaseWriter) Write(p []byte) (int, error) {
 }
 
 func TestOVMCancellationAtStageBoundaries(t *testing.T) {
+	for _, mode := range []TempDBMode{TempDBDisk, TempDBMemory} {
+		t.Run(string(mode), func(t *testing.T) { testOVMCancellationAtStageBoundaries(t, mode) })
+	}
+}
+
+func testOVMCancellationAtStageBoundaries(t *testing.T, tempMode TempDBMode) {
 	for _, phase := range []string{"scan_ovm_history", "convert_ovm_balances", "build_converted_state", "publish_artifact"} {
 		t.Run(phase, func(t *testing.T) {
 			f := newOVMFixture(t, nil)
 			opts := f.options(t, "pebble", "path", 16)
+			opts.TempDB = tempMode
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 			writer := &ovmPhaseWriter{phase: phase, act: cancel}

@@ -41,6 +41,12 @@ func openTestTargetKV(path string, cache, handles int, namespace string, readonl
 }
 
 func TestTargetMatrixGoldenCanary(t *testing.T) {
+	for _, mode := range []TempDBMode{TempDBDisk, TempDBMemory} {
+		t.Run(string(mode), func(t *testing.T) { testTargetMatrixGoldenCanary(t, mode) })
+	}
+}
+
+func testTargetMatrixGoldenCanary(t *testing.T, tempMode TempDBMode) {
 	source := loadGoldenLegacyKV(t)
 	before := directoryContentDigest(t, source)
 	for _, compression := range []string{bundle.CompressionNone, bundle.CompressionZstd} {
@@ -52,11 +58,11 @@ func TestTargetMatrixGoldenCanary(t *testing.T) {
 		for _, tc := range targetTestCases() {
 			t.Run(compression+"/"+tc.name(), func(t *testing.T) {
 				out := t.TempDir()
-				imported, err := Import(context.Background(), ImportOptions{Bundle: bundlePath, Output: filepath.Join(out, "import"), Scheme: tc.scheme, DBEngine: tc.engine, CacheMB: 16, Handles: 16})
+				imported, err := Import(context.Background(), ImportOptions{TempDB: tempMode, Bundle: bundlePath, Output: filepath.Join(out, "import"), Scheme: tc.scheme, DBEngine: tc.engine, CacheMB: 16, Handles: 16})
 				if err != nil {
 					t.Fatal(err)
 				}
-				direct, err := Migrate(context.Background(), MigrateOptions{SourceChaindata: source, Output: filepath.Join(out, "direct"), Scheme: tc.scheme, DBEngine: tc.engine, CacheMB: 16, Handles: 16, Workers: 2})
+				direct, err := Migrate(context.Background(), MigrateOptions{TempDB: tempMode, SourceChaindata: source, Output: filepath.Join(out, "direct"), Scheme: tc.scheme, DBEngine: tc.engine, CacheMB: 16, Handles: 16, Workers: 2})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -67,10 +73,10 @@ func TestTargetMatrixGoldenCanary(t *testing.T) {
 					assertArtifactHeadMetadata(t, artifact, exported.Manifest.Source)
 					assertNoTemporaryTrieNodeIndexes(t, artifact)
 				}
-				if _, err := Verify(context.Background(), VerifyOptions{Bundle: bundlePath, Artifact: imported.ArtifactPath, CacheMB: 16, Handles: 16}); err != nil {
+				if _, err := Verify(context.Background(), VerifyOptions{TempDB: oppositeTempMode(tempMode), Bundle: bundlePath, Artifact: imported.ArtifactPath, CacheMB: 16, Handles: 16}); err != nil {
 					t.Fatal(err)
 				}
-				if _, err := VerifyDirect(context.Background(), DirectVerifyOptions{SourceChaindata: source, Artifact: direct.ArtifactPath, CacheMB: 16, Handles: 16}); err != nil {
+				if _, err := VerifyDirect(context.Background(), DirectVerifyOptions{TempDB: oppositeTempMode(tempMode), SourceChaindata: source, Artifact: direct.ArtifactPath, CacheMB: 16, Handles: 16}); err != nil {
 					t.Fatal(err)
 				}
 				assertLogicalDatabaseEqual(t, filepath.Join(imported.ArtifactPath, "chaindata"), filepath.Join(direct.ArtifactPath, "chaindata"))
@@ -86,10 +92,16 @@ func TestTargetMatrixGoldenCanary(t *testing.T) {
 }
 
 func TestLevelDBGethContinuation(t *testing.T) {
+	for _, mode := range []TempDBMode{TempDBDisk, TempDBMemory} {
+		t.Run(string(mode), func(t *testing.T) { testLevelDBGethContinuation(t, mode) })
+	}
+}
+
+func testLevelDBGethContinuation(t *testing.T, tempMode TempDBMode) {
 	fixture := buildLegacyFixture(t)
 	for _, scheme := range []string{"hash", "path"} {
 		t.Run(scheme, func(t *testing.T) {
-			result, err := Migrate(context.Background(), MigrateOptions{SourceChaindata: fixture.chaindata, Output: filepath.Join(t.TempDir(), "artifact"), Scheme: scheme, DBEngine: "leveldb", CacheMB: 16, Handles: 16})
+			result, err := Migrate(context.Background(), MigrateOptions{TempDB: tempMode, SourceChaindata: fixture.chaindata, Output: filepath.Join(t.TempDir(), "artifact"), Scheme: scheme, DBEngine: "leveldb", CacheMB: 16, Handles: 16})
 			if err != nil {
 				t.Fatal(err)
 			}

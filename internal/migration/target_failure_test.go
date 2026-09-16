@@ -16,6 +16,11 @@ import (
 )
 
 func TestTargetTamperingRejected(t *testing.T) {
+	for _, mode := range []TempDBMode{TempDBDisk, TempDBMemory} {
+		t.Run(string(mode), func(t *testing.T) { testTargetTamperingRejected(t, mode) })
+	}
+}
+func testTargetTamperingRejected(t *testing.T, mode TempDBMode) {
 	fixture := buildLegacyFixture(t)
 	for _, tc := range targetTestCases() {
 		for _, damage := range []string{"missing-code", "extra-code", "extra-node", "mixed-code", "engine", "layout", "corrupt-current"} {
@@ -24,7 +29,7 @@ func TestTargetTamperingRejected(t *testing.T) {
 			}
 			t.Run(tc.name()+"/"+damage, func(t *testing.T) {
 				artifact := filepath.Join(t.TempDir(), "artifact")
-				result, err := Migrate(context.Background(), MigrateOptions{SourceChaindata: fixture.chaindata, Output: artifact, Scheme: tc.scheme, DBEngine: tc.engine, CacheMB: 16, Handles: 16})
+				result, err := Migrate(context.Background(), MigrateOptions{TempDB: mode, SourceChaindata: fixture.chaindata, Output: artifact, Scheme: tc.scheme, DBEngine: tc.engine, CacheMB: 16, Handles: 16})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -55,7 +60,7 @@ func TestTargetTamperingRejected(t *testing.T) {
 					}
 				}
 				before := directoryContentDigest(t, artifact)
-				if _, err := VerifyDirect(context.Background(), DirectVerifyOptions{SourceChaindata: fixture.chaindata, Artifact: artifact, CacheMB: 16, Handles: 16}); err == nil {
+				if _, err := VerifyDirect(context.Background(), DirectVerifyOptions{TempDB: mode, SourceChaindata: fixture.chaindata, Artifact: artifact, CacheMB: 16, Handles: 16}); err == nil {
 					t.Fatal("tampered artifact accepted")
 				}
 				if after := directoryContentDigest(t, artifact); after != before {

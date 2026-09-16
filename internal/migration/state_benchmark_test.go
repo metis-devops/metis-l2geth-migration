@@ -109,7 +109,7 @@ func BenchmarkPortableImport(b *testing.B) {
 					output := filepath.Join(runRoot, "db")
 					result := buildGenerateTrieReference(b, bundleDir, output, scheme, exported.Manifest.Source)
 					reporter := newProgressReporter("reference-benchmark", ProgressOptions{})
-					if _, err := verifyTargetDatabase(context.Background(), output, scheme, targetConfig{engine: "pebble-v2", layout: LayoutGeth}, exported.Manifest.Source, result.State, 128, 128, reporter, filepath.Dir(output)); err != nil {
+					if _, err := verifyTargetDatabase(context.Background(), output, scheme, targetConfig{engine: "pebble-v2", layout: LayoutGeth}, exported.Manifest.Source, result.State, 128, 128, reporter, trieNodeIndexOptions{Parent: filepath.Dir(output), CacheMB: 128, Handles: 128}); err != nil {
 						b.Fatal(err)
 					}
 				}
