@@ -416,6 +416,11 @@ git diff --check
 tests (including the geth compatibility gate), fixture-module and legacy-prune
 module tidy/verify/test/vet, and the build. `make test-race` also runs the
 legacy-prune module with a race-enabled CLI.
+Keep the fixture and legacy-prune check recipes in their module-local Makefiles;
+root targets delegate through `$(MAKE) -C`. GitHub CI runs `ci-root test-race-root`
+and separate fixture/legacy-prune jobs with disjoint Go cache key and restore
+prefixes. The legacy-prune cache includes root dependencies because its tests
+build the CLI. Preserve aggregate local `ci` and `test-race` coverage.
 `make geth-compat` remains available for a focused, uncached compatibility run;
 it is not a separate CI prerequisite because `test` already covers it. Also run
 `make test-race` when changing concurrency, cancellation, progress reporting,

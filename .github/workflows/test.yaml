@@ -27,7 +27,43 @@ jobs:
           version: v2.13.1
           skip-cache: true
           install-only: true
-      - run: make ci test-race
+      - run: make ci-root
+
+  race-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.27"
+          check-latest: true
+      - run: make test-race-root
+
+  fixture-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.27"
+          check-latest: true
+          cache: false
+          cache-dependency-path: "testdata/legacyfixturegen/go.sum"
+      - run: make check
+        working-directory: testdata/legacyfixturegen
+
+  legacy-prune-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.27"
+          check-latest: true
+          cache: false
+          cache-dependency-path: "testdata/legacyprune/go.sum"
+      - run: make check test-race
+        working-directory: testdata/legacyprune
 
   cross-build:
     strategy:
@@ -63,7 +99,7 @@ jobs:
           go-version: "1.27"
           check-latest: true
       - name: Fuzz ${{ matrix.fuzz }}
-        run: go test "${{ matrix.package }}" -run '^$' -fuzz '^${{ matrix.fuzz }}$' -fuzztime 30s
+        run: go test "${{ matrix.package }}" -run '^$' -fuzz '^${{ matrix.fuzz }}$' -fuzztime 1m
 
   image:
     strategy:

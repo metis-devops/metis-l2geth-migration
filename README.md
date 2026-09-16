@@ -710,6 +710,12 @@ make test-race
 ```
 
 `make ci` includes the geth compatibility tests through its `test` target.
+The root `fixture-check` and `legacy-prune-check` targets delegate to `make check`
+in `testdata/legacyfixturegen` and `testdata/legacyprune`, respectively. The latter
+also provides `make test-race`, including a race-enabled CLI. GitHub CI runs the
+root module (`make ci-root test-race-root`) and these two modules in separate jobs
+with separate Go cache keys. Local `make ci` and `make test-race` retain full
+coverage across the modules.
 For a focused, uncached run, use `make geth-compat`. These tests compare current
 behavior against the committed corpus under
 `internal/migration/testdata/geth-compat`, then import its frozen records and
