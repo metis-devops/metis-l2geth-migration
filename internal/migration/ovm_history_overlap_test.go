@@ -113,7 +113,7 @@ func TestOVMAncientsPastExecutedHead(t *testing.T) {
 
 func ovmOverlapLogs(f ovmFixture) []*types.Log {
 	return []*types.Log{
-		ovmTestEvent(ovmTransferTopic, f.holders[1], f.holders[3], 0),
+		ovmTestEvent(ovmTransferTopic, f.holders[1], f.holders[3], 1),
 		ovmTestEvent(ovmTransferTopic, f.holders[0], f.holders[3], 1),
 		ovmTestEvent(ovmApprovalTopic, f.holders[1], f.holders[3], 0x1234),
 	}

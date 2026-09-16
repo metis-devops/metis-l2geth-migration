@@ -166,8 +166,10 @@ not widen migration artifact contracts or restore legacy target generation.
   native balances must be zero. Reconcile every identified balance against the
   original totalSupply; unknown storage and accounting discrepancies fail closed.
 - Classify by code at the selected head. Only authenticated canonical OVM_ETH
-  Transfer-from membership retains a contract's ERC20 balance (including zero
-  transfers, transferFrom and burns). EOA balances always convert. OVM_ETH self
+  nonzero Transfer-from membership retains a contract's ERC20 balance (including
+  nonzero transferFrom and burns). Zero-value events still discover addresses
+  and enter event counts/digests, but never grant or revoke membership. EOA
+  balances always convert. OVM_ETH self
   holdings always remain, and its native backing equals retained totalSupply.
 - Read complete legacy headers/receipts, including freezer files, physically
   read-only. No restoring freezer constructors, recovery, writes or RPC fallback.
@@ -396,6 +398,12 @@ not widen migration artifact contracts or restore legacy target generation.
   malformed input acceptance, or relaxed source/publication invariants.
 
 ## Validation
+
+Keep benchmark evidence under `docs/benchmarks/`: one dataset index, consolidated
+OVM/prune reports, and immutable raw logs in `raw/`. Use source fingerprints and
+explicit historical labels; never pool samples across revisions or fixtures.
+Replace superseded stage summaries while retaining unique baseline/scale/component
+evidence and measured regressions. Update README links when reorganizing results.
 
 Run focused tests while iterating, then finish every change with:
 

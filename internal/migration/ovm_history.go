@@ -250,8 +250,12 @@ func (s *ovmHistoryScanner) event(block, receipt, position uint64, log *types.Lo
 		return err
 	}
 	if topic == ovmTransferTopic {
-		if err := s.index.put('f', from[:], []byte{1}); err != nil {
-			return err
+		// Zero-value events still discover addresses and commit to history, but
+		// only a positive transfer grants the sender retention eligibility.
+		if common.BytesToHash(log.Data) != (common.Hash{}) {
+			if err := s.index.put('f', from[:], []byte{1}); err != nil {
+				return err
+			}
 		}
 		s.evidence.Transfers++
 	} else {

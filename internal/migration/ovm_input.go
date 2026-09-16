@@ -191,7 +191,7 @@ func (i *ovmIndex) addWitness(r ovmWitnessRecord) error {
 }
 
 // Keys: b+hashed balance slot => address; a+hashed allowance slot => owner/spender;
-// f+address => Transfer-from membership; p+account hash => replacement account RLP;
+// f+address => nonzero Transfer-from membership; p+account hash => replacement account RLP;
 // s+hashed storage slot => replacement storage RLP (empty value means deletion).
 type ovmIndex struct {
 	db    ethdb.Database

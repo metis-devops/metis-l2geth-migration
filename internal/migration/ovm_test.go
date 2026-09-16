@@ -88,7 +88,7 @@ func newOVMFixtureSized(t testing.TB, holders int, change func([]fixtureAccount)
 	rawdb.WriteCanonicalHash(db, genesis.Hash(), 0)
 	putOVMTest(t, db, ovmReceiptKey(genesis), []byte{0xc0})
 	logs := []*types.Log{
-		ovmTestEvent(ovmTransferTopic, f.holders[1], f.holders[3], 0),
+		ovmTestEvent(ovmTransferTopic, f.holders[1], f.holders[3], 1),
 		ovmTestEvent(ovmTransferTopic, f.holders[0], f.holders[3], 1),
 		ovmTestEvent(ovmApprovalTopic, f.holders[1], f.holders[3], 0x1234),
 	}

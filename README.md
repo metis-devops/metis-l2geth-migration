@@ -161,7 +161,7 @@ reports Go allocations, sampled peak Go heap, temporary database file sizes for
 the component phases and OS block-I/O counters. Go heap excludes native memory
 and kernel cache; the OS counters may be uninformative (including zero) on some
 platforms and must not be interpreted as proof of zero disk traffic. Page caches
-are not flushed. See [measured results](docs/prune-performance.md).
+are not flushed. See [historical measurements](docs/benchmarks/prune.md).
 
 ## Build
 
@@ -384,9 +384,13 @@ Every source account's native balance must be zero. At the selected head,
 addresses with empty code (including balance holders without an account leaf)
 convert their entire OVM balance to native. Contracts do the same unless the
 complete canonical history contains an OVM_ETH `Transfer` with that contract as
-`from`. Such contracts retain their ERC20 balance and zero native balance.
-Zero-value transfers, transferFrom and burns count; the rule does not prove the
-calling contract's identity. Classification uses code at the selected head.
+`from` and an amount greater than zero. Such contracts retain their ERC20 balance
+and zero native balance. Nonzero transferFrom and burns count; zero-value events
+neither grant nor revoke retention eligibility, but still contribute addresses,
+event counts and history digests. The rule does not prove the calling contract's
+identity. Classification uses code at the selected head. Artifacts produced under
+the former zero-value eligibility rule must be recreated if independent replay
+under this rule produces a different result; the report format remains v1.
 
 At `0xDeadDeAddeAddEAddeadDEaDDEAdDeaDDeAD0000`, the original self-held ERC20
 balance is always retained. The contract's native backing and totalSupply both
@@ -473,7 +477,7 @@ To measure the additional cost on the synthetic OVM fixture, run
 `python3 scripts/benchmark-ovm.py --out /absolute/new/results.txt --with-alloc`.
 This pairs ordinary conversion with 1,000 account overrides in fresh processes,
 alternating order across samples. Run it separately from CI or other benchmarks.
-See [validation and local measurements](docs/ovm-genesis-alloc-performance.md)
+See [consolidated OVM measurements](docs/benchmarks/ovm.md#alloc-overhead-within-the-latest-source)
 for the measured overhead and synthetic-fixture limits.
 
 ### History and storage ownership
@@ -545,9 +549,8 @@ code, witness and alloc file digests are confirmed over raw bytes immediately
 before publication or verification success; confirmation neither reparses the
 inputs nor rewrites their evidence index.
 
-See [optimization validation and paired measurements](docs/ovm-optimization-performance.md)
-for the baseline comparison, including standalone verification and the separate
-ancient-read microbenchmark.
+See [OVM measurements](docs/benchmarks/ovm.md) for the latest standalone
+verification comparison and separately labeled historical ancient-read results.
 
 The checkpoint has height `LastBlock+1`, parent hash equal to LastBlock, the new
 state root and timestamp `parent+1`. Its gas limit is inherited; difficulty,
@@ -823,4 +826,5 @@ bytes exclude the final artifact, while total disk bytes include it. OS caches
 are not flushed. The synthetic fixtures do not establish production throughput,
 maximum memory requirements or LevelDB/path performance.
 
-Measured results and limitations: [temporary database performance](docs/temp-db-performance.md).
+Measured results and limitations: [benchmark index](docs/benchmarks/README.md) and
+[OVM scale/component results](docs/benchmarks/ovm.md#historical-100k-holder-and-component-measurements).

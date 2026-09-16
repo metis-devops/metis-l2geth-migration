@@ -38,7 +38,7 @@ func replaceOVMFixtureLogs(t *testing.T, f ovmFixture, logs []*types.Log) {
 func TestOVMOversizeHistoryAndPreimages(t *testing.T) {
 	f := newOVMFixture(t, nil)
 	logs := []*types.Log{
-		ovmTestEvent(ovmTransferTopic, f.holders[1], f.holders[3], 0),
+		ovmTestEvent(ovmTransferTopic, f.holders[1], f.holders[3], 1),
 		ovmTestEvent(ovmTransferTopic, f.holders[0], f.holders[3], 1),
 		ovmTestEvent(ovmApprovalTopic, f.holders[1], f.holders[3], 0x1234),
 		{Address: common.Address{0x33}, Data: bytes.Repeat([]byte{0x42}, 9<<20)},
