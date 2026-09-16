@@ -15,12 +15,13 @@ import (
 	"testing"
 
 	gethleveldb "github.com/ethereum/go-ethereum/ethdb/leveldb"
+	"github.com/metis-devops/metis-l2geth-migration/internal/migration"
 	"github.com/metis-devops/metis-l2geth-migration/internal/version"
 )
 
 func TestCLIEndToEnd(t *testing.T) {
 	for _, mode := range []string{"disk", "memory"} {
-		for _, tc := range []struct{ engine, scheme string }{{"pebble", "hash"}, {"pebble", "path"}, {"leveldb", "hash"}, {"leveldb", "path"}} {
+		for _, tc := range []struct{ engine, scheme string }{{migration.DBEnginePebble, "hash"}, {migration.DBEnginePebble, "path"}, {migration.DBEngineLevelDB, "hash"}, {migration.DBEngineLevelDB, "path"}} {
 			t.Run(mode+"/"+tc.engine+"/"+tc.scheme, func(t *testing.T) { runCLIEndToEnd(t, tc.engine, tc.scheme, mode) })
 		}
 	}
@@ -368,7 +369,7 @@ func loadGoldenSource(t *testing.T) string {
 
 func TestCLITargetOptions(t *testing.T) {
 	for _, command := range []string{"migrate", "import"} {
-		for _, options := range [][]string{{"--db-engine", ""}, {"--db-engine", "invalid"}, {"--state-layout", ""}, {"--state-layout", "invalid"}, {"--state-layout", "geth"}, {"--state-layout=geth"}, {"--state-layout", "legacy-l2geth"}, {"--db-engine", "leveldb", "--state-layout", "legacy-l2geth", "--scheme", "path"}} {
+		for _, options := range [][]string{{"--db-engine", ""}, {"--db-engine", "invalid"}, {"--state-layout", ""}, {"--state-layout", "invalid"}, {"--state-layout", "geth"}, {"--state-layout=geth"}, {"--state-layout", "legacy-l2geth"}, {"--db-engine", migration.DBEngineLevelDB, "--state-layout", "legacy-l2geth", "--scheme", "path"}} {
 			var stdout, stderr bytes.Buffer
 			output := filepath.Join(t.TempDir(), "artifact")
 			input := []string{"--source-chaindata", "missing"}
@@ -394,7 +395,7 @@ func TestCLITargetOptions(t *testing.T) {
 	}
 	source := loadGoldenSource(t)
 	var stdout, stderr bytes.Buffer
-	args := []string{"migrate", "--source-chaindata", source, "--out", filepath.Join(t.TempDir(), "artifact"), "--db-engine", "leveldb", "--scheme", "hash", "--quiet", "--cache-mb", "16", "--handles", "16"}
+	args := []string{"migrate", "--source-chaindata", source, "--out", filepath.Join(t.TempDir(), "artifact"), "--db-engine", migration.DBEngineLevelDB, "--scheme", "hash", "--quiet", "--cache-mb", "16", "--handles", "16"}
 	if err := run(context.Background(), args, &stdout, &stderr); err != nil {
 		t.Fatal(err)
 	}
@@ -411,7 +412,7 @@ func TestCLITargetOptions(t *testing.T) {
 	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
-	if result.Verification.DBEngine != "leveldb" || result.Verification.StateLayout != "geth" {
+	if result.Verification.DBEngine != migration.DBEngineLevelDB || result.Verification.StateLayout != "geth" {
 		t.Fatalf("wrong target report: %s", stdout.String())
 	}
 }

@@ -19,6 +19,15 @@ import (
 	goleveldb "github.com/syndtr/goleveldb/leveldb"
 )
 
+const (
+	// DBEnginePebble is the Pebble engine name accepted by CLI and Go options.
+	DBEnginePebble = "pebble"
+	// DBEnginePebbleV2 is the Pebble engine identifier stored in artifact reports.
+	DBEnginePebbleV2 = "pebble-v2"
+	// DBEngineLevelDB is the LevelDB engine name used in options and reports.
+	DBEngineLevelDB = "leveldb"
+)
+
 // StateLayout identifies the target code-key convention independently of its engine.
 type StateLayout string
 
@@ -47,12 +56,12 @@ type targetConfig struct {
 
 func targetOptions(engine, scheme string) (targetConfig, error) {
 	if engine == "" {
-		engine = "pebble"
+		engine = DBEnginePebble
 	}
-	if engine == "pebble" {
-		engine = "pebble-v2"
-	} else if engine != "leveldb" {
-		return targetConfig{}, fmt.Errorf("db-engine must be pebble or leveldb: %q", engine)
+	if engine == DBEnginePebble {
+		engine = DBEnginePebbleV2
+	} else if engine != DBEngineLevelDB {
+		return targetConfig{}, fmt.Errorf("db-engine must be %s or %s: %q", DBEnginePebble, DBEngineLevelDB, engine)
 	}
 	return reportTarget(engine, LayoutGeth, scheme)
 }
@@ -61,7 +70,7 @@ func reportTarget(engine string, layout StateLayout, scheme string) (targetConfi
 	if layout == "" {
 		layout = LayoutGeth // Existing reports predate this field and always used geth layout.
 	}
-	if engine != "pebble-v2" && engine != "leveldb" {
+	if engine != DBEnginePebbleV2 && engine != DBEngineLevelDB {
 		return targetConfig{}, fmt.Errorf("invalid database engine %q", engine)
 	}
 	if layout != LayoutGeth {
@@ -76,14 +85,14 @@ func reportTarget(engine string, layout StateLayout, scheme string) (targetConfi
 func (c targetConfig) open(path string, cacheMB, handles int, readonly bool) (ethdb.KeyValueStore, error) {
 	if readonly {
 		want := rawdb.DBPebble
-		if c.engine == "leveldb" {
+		if c.engine == DBEngineLevelDB {
 			want = rawdb.DBLeveldb
 		}
 		if actual := rawdb.PreexistingDatabase(path); actual != want {
 			return nil, fmt.Errorf("artifact database engine mismatch: found %q, report specifies %q", actual, c.engine)
 		}
 	}
-	if c.engine == "leveldb" {
+	if c.engine == DBEngineLevelDB {
 		if readonly {
 			// Match the writable geth adapter's minimum resource allowances.
 			return readonlydb.Open(path, max(cacheMB, 16), max(handles, 16))

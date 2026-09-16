@@ -250,7 +250,7 @@ func finalizeTargetDatabase(ctx context.Context, disk ethdb.Database, dbPath str
 		return false, fmt.Errorf("close target database: %w", err)
 	}
 	closed = true
-	if target.engine == "leveldb" {
+	if target.engine == DBEngineLevelDB {
 		if err := syncLevelDBFiles(ctx, dbPath, syncFile); err != nil {
 			return true, err
 		}

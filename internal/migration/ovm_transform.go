@@ -133,6 +133,11 @@ func transformOVMState(ctx context.Context, db ethdb.Database, root common.Hash,
 		return newRoot, evidence, errors.New("OVM_ETH contract is missing or has no code")
 	}
 	t.account = account
+	if inputs.retention != nil {
+		if err := validateOVMERC20RetainList(ctx, index, tdb, root); err != nil {
+			return newRoot, evidence, err
+		}
+	}
 	supply, err := t.storageValue(common.HexToHash("0x02"))
 	if err != nil {
 		return newRoot, evidence, err

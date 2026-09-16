@@ -165,12 +165,35 @@ not widen migration artifact contracts or restore legacy target generation.
   never install the test runtime by default or execute a constructor. All source
   native balances must be zero. Reconcile every identified balance against the
   original totalSupply; unknown storage and accounting discrepancies fail closed.
-- Classify by code at the selected head. Only authenticated canonical OVM_ETH
-  nonzero Transfer-from membership retains a contract's ERC20 balance (including
-  nonzero transferFrom and burns). Zero-value events still discover addresses
+- Classify by code at the selected head. Authenticated canonical OVM_ETH
+  nonzero Transfer-from membership or an explicit validated ERC20 retain-list
+  entry retains a contract's ERC20 balance (including nonzero transferFrom and
+  burns for automatic eligibility). Zero-value events still discover addresses
   and enter event counts/digests, but never grant or revoke membership. EOA
   balances always convert. OVM_ETH self
   holdings always remain, and its native backing equals retained totalSupply.
+- `--ovm-erc20-retain-list` is an OVM-only manual retention policy, separate from
+  witnesses, history and GenesisAlloc. Stream one 0x-prefixed 20-byte address per
+  line (at most 4095 bytes before LF), accepting surrounding whitespace/CRLF and
+  missing final newline; reject blank/comment/malformed lines, normalized
+  duplicates and non-regular/symlink files. Empty files have explicit presence.
+  Store eligibility and bounded duplicate detection in temporary Pebble, in a
+  namespace separate from Transfer-from evidence; addresses also identify balance
+  slots. Never put manual entries into the historical membership index.
+- Independently verify the original migrated state before checking every retain
+  address against its original code, including zero-balance entries. Reject EOAs,
+  nonexistent/destroyed accounts and OVM_ETH; alloc cannot fix list eligibility.
+  Check manual membership only for contracts and only when a list was supplied.
+  Preserve conservation and source validation, count overlapping eligibility once,
+  and apply alloc afterward. Reuse bounded account readers and worker allowances.
+- OVM report v1 optionally records `erc20_retention.file_sha256`; omit it when
+  unused and reject null/invalid digests. Verify input presence and raw bytes,
+  replay policy with validation-only output, and rehash before publication or
+  verification success. Witnesses never grant manual eligibility. Cover four
+  targets, both temporary modes, source-head classification, independent inventory,
+  runtime/continuation, alloc interaction, duplicates across batches, tampering,
+  source immutability, cancellation and cleanup. Use benchmark `--with-retain-list`
+  to compare absent/present lists on the same source-contract fixture.
 - Read complete legacy headers/receipts, including freezer files, physically
   read-only. No restoring freezer constructors, recovery, writes or RPC fallback.
   Stop at the selected `LastBlock` even when ancient or fast/header heads are
@@ -205,7 +228,7 @@ not widen migration artifact contracts or restore legacy target generation.
   not-found sentinel as absence. EOA conversion does not query Transfer-from
   membership. Input confirmation hashes bounded raw-byte chunks without
   reparsing or rewriting evidence, and rechecks all supplied runtime/witness/
-  alloc inputs immediately before publication or verification success.
+  alloc/retain-list inputs immediately before publication or verification success.
 - Ancient readers retain at most one current read-only data handle per table
   (three total), verify file identity/size/mtime on rotation and close, and
   propagate validation/close errors. Do not introduce freezer constructors.

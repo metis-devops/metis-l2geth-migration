@@ -46,7 +46,7 @@ func newVerificationReport(bundleResult BundleResult, scheme string) Verificatio
 	dbEngine := ""
 	var layout StateLayout
 	if scheme == "hash" || scheme == "path" {
-		dbEngine = "pebble-v2"
+		dbEngine = DBEnginePebbleV2
 		layout = LayoutGeth
 	}
 	return VerificationReport{

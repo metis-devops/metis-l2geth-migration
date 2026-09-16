@@ -42,7 +42,7 @@ func writeAllocFile(t testing.TB, data string) string {
 
 func testAllocIndex(t testing.TB) *ovmIndex {
 	t.Helper()
-	db, err := openOVMDatabase(targetConfig{engine: "pebble-v2"}, filepath.Join(t.TempDir(), "index"), 16, 16)
+	db, err := openOVMDatabase(targetConfig{engine: DBEnginePebbleV2}, filepath.Join(t.TempDir(), "index"), 16, 16)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,7 +162,7 @@ func testOVMGenesisAllocAllTargets(t *testing.T, tempMode TempDBMode) {
 	converted := ovmReferenceRoot(t, f)
 	for _, scheme := range []string{"hash", "path"} {
 		var reference []logicalEntry
-		for _, engine := range []string{"pebble", "leveldb"} {
+		for _, engine := range []string{DBEnginePebble, DBEngineLevelDB} {
 			t.Run(engine+"/"+scheme, func(t *testing.T) {
 				opts := f.options(t, engine, scheme, 4)
 				opts.TempDB = tempMode
@@ -311,7 +311,7 @@ func testOVMGenesisAllocLargeStorageAndDuplicates(t *testing.T, tempMode TempDBM
 			t.Fatal("duplicate after batch flush was accepted")
 		}
 	}
-	opts := f.options(t, "pebble", "path", 2)
+	opts := f.options(t, DBEnginePebble, "path", 2)
 	opts.TempDB = tempMode
 	opts.OVM.GenesisAlloc = writeAllocFile(t, data)
 	result, err := Migrate(t.Context(), opts)
@@ -331,7 +331,7 @@ func testOVMGenesisAllocLargeStorageAndDuplicates(t *testing.T, tempMode TempDBM
 func TestOVMGenesisAllocNoOpAndInputStability(t *testing.T) {
 	f := newOVMFixture(t, nil)
 	for _, data := range []string{`{}`, fmt.Sprintf(`{"%s":{},"%s":{"storage":{}}}`, f.holders[0], common.Address{0xab})} {
-		opts := f.options(t, "pebble", "hash", 2)
+		opts := f.options(t, DBEnginePebble, "hash", 2)
 		opts.OVM.GenesisAlloc = writeAllocFile(t, data)
 		result, err := Migrate(t.Context(), opts)
 		if err != nil {

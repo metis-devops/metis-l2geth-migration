@@ -40,27 +40,33 @@ type OVMGenesisAllocEvidence struct {
 	Converted  OVMStateEvidence `json:"converted_state"`
 }
 
+// OVMERC20RetentionEvidence binds manual eligibility to an exact operator input.
+type OVMERC20RetentionEvidence struct {
+	FileSHA256 common.Hash `json:"file_sha256"`
+}
+
 // OVMVerificationReport is independent of root-preserving direct reports.
 type OVMVerificationReport struct {
-	Format          string                   `json:"format"`
-	Version         uint64                   `json:"version"`
-	VerifiedAt      time.Time                `json:"verified_at"`
-	Verified        bool                     `json:"verified"`
-	Scheme          string                   `json:"scheme"`
-	DBEngine        string                   `json:"db_engine"`
-	StateLayout     StateLayout              `json:"state_layout"`
-	ToolVersion     string                   `json:"tool_version"`
-	GethVersion     string                   `json:"geth_version"`
-	Source          bundle.SourceEvidence    `json:"source"`
-	Original        OVMStateEvidence         `json:"original_state"`
-	Target          OVMStateEvidence         `json:"target_state"`
-	Checkpoint      bundle.SourceEvidence    `json:"checkpoint"`
-	WrappedCodeHash common.Hash              `json:"wrapped_code_hash"`
-	CodeFileSHA256  common.Hash              `json:"code_file_sha256"`
-	WitnessSHA256   common.Hash              `json:"witness_sha256"`
-	History         OVMHistoryEvidence       `json:"history"`
-	Balances        OVMBalanceEvidence       `json:"balances"`
-	GenesisAlloc    *OVMGenesisAllocEvidence `json:"genesis_alloc,omitempty"`
+	Format          string                     `json:"format"`
+	Version         uint64                     `json:"version"`
+	VerifiedAt      time.Time                  `json:"verified_at"`
+	Verified        bool                       `json:"verified"`
+	Scheme          string                     `json:"scheme"`
+	DBEngine        string                     `json:"db_engine"`
+	StateLayout     StateLayout                `json:"state_layout"`
+	ToolVersion     string                     `json:"tool_version"`
+	GethVersion     string                     `json:"geth_version"`
+	Source          bundle.SourceEvidence      `json:"source"`
+	Original        OVMStateEvidence           `json:"original_state"`
+	Target          OVMStateEvidence           `json:"target_state"`
+	Checkpoint      bundle.SourceEvidence      `json:"checkpoint"`
+	WrappedCodeHash common.Hash                `json:"wrapped_code_hash"`
+	CodeFileSHA256  common.Hash                `json:"code_file_sha256"`
+	WitnessSHA256   common.Hash                `json:"witness_sha256"`
+	History         OVMHistoryEvidence         `json:"history"`
+	Balances        OVMBalanceEvidence         `json:"balances"`
+	GenesisAlloc    *OVMGenesisAllocEvidence   `json:"genesis_alloc,omitempty"`
+	ERC20Retention  *OVMERC20RetentionEvidence `json:"erc20_retention,omitempty"`
 }
 
 // UnmarshalJSON retains strict fields and distinguishes absent alloc from null.
@@ -75,8 +81,8 @@ func (r *OVMVerificationReport) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	for key, raw := range fields {
-		if strings.EqualFold(key, "genesis_alloc") && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			return errors.New("OVM genesis_alloc evidence must not be null")
+		if (strings.EqualFold(key, "genesis_alloc") || strings.EqualFold(key, "erc20_retention")) && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			return fmt.Errorf("OVM %s evidence must not be null", key)
 		}
 	}
 	*r = OVMVerificationReport(decoded)
@@ -89,6 +95,7 @@ func newOVMReport(source bundle.SourceEvidence, original, final StateResult, che
 		Scheme: scheme, DBEngine: target.engine, StateLayout: target.layout, ToolVersion: version.ToolVersion, GethVersion: version.GethVersion,
 		Source: source, Original: OVMStateEvidence(original), Target: OVMStateEvidence(final), Checkpoint: checkpoint,
 		WrappedCodeHash: cryptoCodeHash(inputs), CodeFileSHA256: inputs.codeFileDigest, WitnessSHA256: inputs.witnessDigest, History: history, Balances: balances,
+		ERC20Retention: inputs.retention,
 	}
 }
 
@@ -120,6 +127,9 @@ func (r OVMVerificationReport) Validate() error {
 	}
 	if err := r.Target.Counts.Validate(); err != nil {
 		return err
+	}
+	if r.ERC20Retention != nil && r.ERC20Retention.FileSHA256 == (common.Hash{}) {
+		return errors.New("OVM ERC20 retention file digest is missing")
 	}
 	if r.GenesisAlloc != nil {
 		if r.GenesisAlloc.FileSHA256 == (common.Hash{}) || r.GenesisAlloc.Converted.Root == (common.Hash{}) || r.GenesisAlloc.Converted.Counts.Accounts == 0 {

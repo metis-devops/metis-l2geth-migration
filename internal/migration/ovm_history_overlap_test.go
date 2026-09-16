@@ -216,7 +216,7 @@ func testOVMReceiptOverlapRejectsCorruption(t *testing.T, tempMode TempDBMode) {
 	}
 	writeOVMFixtureAncients(t, f)
 	editOVMSource(t, f, func(db ethdb.Database) { putOVMTest(t, db, ovmReceiptKey(f.head), nil) })
-	opts := f.options(t, "pebble", "hash", 2)
+	opts := f.options(t, DBEnginePebble, "hash", 2)
 	opts.TempDB = tempMode
 	if _, err := Migrate(t.Context(), opts); err == nil {
 		t.Fatal("empty hot receipt was mistaken for a missing copy")

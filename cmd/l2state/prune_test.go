@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	gethleveldb "github.com/ethereum/go-ethereum/ethdb/leveldb"
+	"github.com/metis-devops/metis-l2geth-migration/internal/migration"
 )
 
 func TestCLIPrune(t *testing.T) {
@@ -61,7 +62,7 @@ func TestCLIPrune(t *testing.T) {
 func TestCLIPruneValidation(t *testing.T) {
 	for _, args := range [][]string{
 		{"prune"}, {"prune", "positional"}, {"prune", "--state-layout", "legacy-l2geth"},
-		{"prune", "--dry-run", "--compact"}, {"prune", "--db-engine", "leveldb"}, {"prune", "--scheme", "hash"},
+		{"prune", "--dry-run", "--compact"}, {"prune", "--db-engine", migration.DBEngineLevelDB}, {"prune", "--scheme", "hash"},
 		{"prune", "--workers", "17"},
 	} {
 		var stdout, stderr bytes.Buffer

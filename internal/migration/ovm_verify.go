@@ -66,9 +66,12 @@ func VerifyOVM(ctx context.Context, opts OVMVerifyOptions) (report OVMVerificati
 	if err := confirmOVMAllocEvidence(ctx, opts.OVM.GenesisAlloc, stored.GenesisAlloc); err != nil {
 		return report, err
 	}
+	if err := confirmOVMRetentionEvidence(ctx, opts.OVM.ERC20RetainList, stored.ERC20Retention); err != nil {
+		return report, err
+	}
 	migrate := MigrateOptions{TempDB: opts.TempDB, SourceChaindata: opts.SourceChaindata, Scheme: stored.Scheme, DBEngine: stored.DBEngine, CacheMB: opts.CacheMB, Handles: opts.Handles, Workers: opts.Workers, OVM: opts.OVM, Progress: opts.Progress}
-	if migrate.DBEngine == "pebble-v2" {
-		migrate.DBEngine = "pebble"
+	if migrate.DBEngine == DBEnginePebbleV2 {
+		migrate.DBEngine = DBEnginePebble
 	}
 	if err := validateOVMResources(migrate); err != nil {
 		return report, err

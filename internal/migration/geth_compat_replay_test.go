@@ -41,7 +41,7 @@ func writeCompatDatabase(t *testing.T, path string, entries []compatKV, target t
 	if syncErr != nil || closeErr != nil {
 		t.Fatalf("close restored baseline: %v %v", syncErr, closeErr)
 	}
-	if target.engine == "leveldb" {
+	if target.engine == DBEngineLevelDB {
 		if err := syncLevelDBFiles(t.Context(), path, syncFile); err != nil {
 			t.Fatal(err)
 		}
@@ -204,8 +204,8 @@ func replayGethCompatibility(t *testing.T, expected *compatCapture) {
 	}
 }
 func compatCLIEngine(target targetConfig) string {
-	if target.engine == "pebble-v2" {
-		return "pebble"
+	if target.engine == DBEnginePebbleV2 {
+		return DBEnginePebble
 	}
 	return target.engine
 }

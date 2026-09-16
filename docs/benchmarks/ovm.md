@@ -11,7 +11,66 @@ Consolidated on 2026-09-16. [Dataset index and raw-file checksums](README.md).
 - Heap and file lengths are sampled every 20 ms and can miss peaks. Heap excludes some native allocations; memory-file lengths exclude allocation capacity. Temporary disk excludes the final artifact. Neither cache allowances nor these samples bound total memory or disk requirements.
 - No production throughput, long-history, cold-disk, LevelDB or path-scheme performance claim follows from these fixtures. Historical results below have not been rerun on the latest source.
 
-## Latest 10k-holder comparison
+## Latest manual ERC20 retention comparison
+
+Raw evidence: [manual retention pairs](raw/ovm-retention-2026-09-16.txt), 96 fresh-process observations, three per configuration. This source passed `make ci`, `make test-race` and `git diff --check` before measurement; no CI or other benchmark ran concurrently.
+
+The measured fingerprint is `93558a23a849d24ca277cdf1853174e9e8b17b459265238ed0df5e04d876f758`.
+After measurement, a separate working-tree edit changed `BenchmarkOVMAncientRead`
+from `b.N` to `b.Loop`. That unmeasured benchmark is outside this dataset. An
+in-memory comparison accounting for only that edit reproduces the recorded
+fingerprint exactly; the retention implementation and measured cases are unchanged.
+Do not treat these logs as measurements of that later source revision.
+
+Both absent/present-list cases use the same modified 10k-holder source fixture: the first 1000 existing holder accounts have code. Retain cases list those contracts; no-list cases use only nonzero Transfer-from history. The list therefore changes the retained balances and final trie inventory as well as adding input/eligibility checks. These are whole-feature costs, not an isolated lookup benchmark or an old/new revision speedup. No samples are pooled with the historical fixtures below.
+
+Reproduce with `python3 scripts/benchmark-ovm.py --holders 10000 --temp-dbs disk memory --with-retain-list --with-alloc --with-verify --count 3 --out /absolute/new/file`.
+
+| Operation | Workers | Temp DB | No list ms | With list ms | Time change | No list RSS MiB | With list RSS MiB |
+|---|---:|---|---:|---:|---:|---:|---:|
+| Migrate | 2 | disk | 873.4 | 865.3 | -0.9% | 82.7 | 81.6 |
+| Migrate | 2 | memory | 541.2 | 565.5 | +4.5% | 100.2 | 100.9 |
+| Migrate | 8 | disk | 735.2 | 773.9 | +5.3% | 80.7 | 82.6 |
+| Migrate | 8 | memory | 436.6 | 481.2 | +10.2% | 105.0 | 100.1 |
+| Migrate + alloc | 2 | disk | 951.5 | 961.4 | +1.0% | 86.8 | 86.1 |
+| Migrate + alloc | 2 | memory | 652.4 | 666.2 | +2.1% | 116.4 | 118.0 |
+| Migrate + alloc | 8 | disk | 831.2 | 847.7 | +2.0% | 89.6 | 89.9 |
+| Migrate + alloc | 8 | memory | 546.0 | 557.5 | +2.1% | 120.1 | 122.3 |
+| Verify | 2 | disk | 790.5 | 817.5 | +3.4% | 88.5 | 92.3 |
+| Verify | 2 | memory | 482.0 | 520.3 | +7.9% | 106.5 | 115.0 |
+| Verify | 8 | disk | 675.8 | 698.6 | +3.4% | 91.3 | 93.2 |
+| Verify | 8 | memory | 360.9 | 379.6 | +5.2% | 110.2 | 115.2 |
+| Verify + alloc | 2 | disk | 903.5 | 897.9 | -0.6% | 95.6 | 94.6 |
+| Verify + alloc | 2 | memory | 534.8 | 546.7 | +2.2% | 126.0 | 120.4 |
+| Verify + alloc | 8 | disk | 746.1 | 773.5 | +3.7% | 101.5 | 103.9 |
+| Verify + alloc | 8 | memory | 473.2 | 502.0 | +6.1% | 132.2 | 131.0 |
+
+Median elapsed changes range from -0.9% to +10.2%; positive values are measured regressions in the list-enabled configuration. Three short samples do not establish a persistent trend. In particular, this two-block, hash/Pebble fixture does not establish production throughput, long-history costs, or LevelDB/path performance.
+
+### List-enabled setup and resource detail
+
+RSS includes setup; the following operation samples use the same limitations described above.
+
+| Operation | Workers | Temp DB | Setup ms | Allocated MiB/op | Heap MiB | Temp disk MiB | Memory files MiB |
+|---|---:|---|---:|---:|---:|---:|---:|
+| Migrate | 2 | disk | 146.8 | 165.3 | 25.3 | 13.0 | 0.0 |
+| Migrate | 2 | memory | 150.1 | 237.7 | 41.6 | 0.0 | 7.9 |
+| Migrate | 8 | disk | 142.9 | 163.3 | 27.3 | 8.0 | 0.0 |
+| Migrate | 8 | memory | 154.7 | 236.7 | 39.0 | 0.0 | 7.9 |
+| Migrate + alloc | 2 | disk | 151.3 | 202.4 | 25.8 | 13.1 | 0.0 |
+| Migrate + alloc | 2 | memory | 155.0 | 322.2 | 48.7 | 0.0 | 13.3 |
+| Migrate + alloc | 8 | disk | 157.3 | 208.8 | 27.8 | 16.7 | 0.0 |
+| Migrate + alloc | 8 | memory | 152.1 | 326.3 | 48.6 | 0.0 | 12.3 |
+| Verify | 2 | disk | 1078.0 | 159.1 | 25.0 | 12.1 | 0.0 |
+| Verify | 2 | memory | 1066.0 | 231.8 | 36.4 | 0.0 | 7.9 |
+| Verify | 8 | disk | 942.5 | 157.4 | 27.0 | 8.0 | 0.0 |
+| Verify | 8 | memory | 905.0 | 229.7 | 37.6 | 0.0 | 7.9 |
+| Verify + alloc | 2 | disk | 1075.0 | 195.0 | 25.3 | 13.2 | 0.0 |
+| Verify + alloc | 2 | memory | 1104.0 | 317.6 | 47.9 | 0.0 | 11.3 |
+| Verify + alloc | 8 | disk | 1007.0 | 199.4 | 27.7 | 16.5 | 0.0 |
+| Verify + alloc | 8 | memory | 1017.0 | 319.5 | 50.2 | 0.0 | 12.3 |
+
+## Historical 10k-holder nonzero-Transfer comparison
 
 Raw evidence: [zero-transfer pairs](raw/ovm-zero-transfer-2026-09-16.txt), 96 samples.
 The baseline is isolated `c3c52d5` production code. Its test fixture was changed to use amount 1 for the qualifying contract Transfer, matching the final fixture. Both sides therefore use the same input and expected conversion result. This measures the added eligibility check, not the benefit of filtering a zero-heavy history.
@@ -38,7 +97,7 @@ The final source passed `make ci`, `make test-race` and `git diff --check`; zero
 
 Median time changes range from -3.8% to +5.2%; RSS changes range from -5.5% to +3.7%. Positive changes are measured regressions. In particular, disk verification with alloc increased 4.5%/5.2% at 2/8 workers. Three short samples do not establish a persistent trend.
 
-### Latest setup and resource detail
+### Historical nonzero-Transfer setup and resource detail
 
 Final-source medians only. Allocated bytes are cumulative per operation; heap/files are sampled peaks. Baseline values and individual samples remain in the raw log.
 

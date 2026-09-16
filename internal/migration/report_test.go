@@ -131,7 +131,7 @@ func TestVerificationReportRejectsInvalidSemanticEvidence(t *testing.T) {
 			report.RecomputedRoot = common.Hash{}
 		}},
 		{name: "bundle database engine", mutate: func(report *VerificationReport) {
-			report.DBEngine = "pebble-v2"
+			report.DBEngine = DBEnginePebbleV2
 		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {

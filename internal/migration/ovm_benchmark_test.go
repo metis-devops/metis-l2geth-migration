@@ -14,19 +14,23 @@ import (
 )
 
 func BenchmarkOVMMigration(b *testing.B) {
-	benchmarkOVMMigration(b, false)
+	benchmarkOVMMigration(b, false, false)
 }
 
 func BenchmarkOVMMigrationAlloc(b *testing.B) {
-	benchmarkOVMMigration(b, true)
+	benchmarkOVMMigration(b, true, false)
 }
 
-func benchmarkOVMMigration(b *testing.B, withAlloc bool) {
+func benchmarkOVMMigration(b *testing.B, withAlloc, withRetention bool) {
 	count, mode := ovmBenchmarkSettings(b)
 	for _, workers := range []int{2, 8} {
 		b.Run(fmt.Sprintf("workers=%d", workers), func(b *testing.B) {
 			setup := time.Now()
-			f := newOVMFixtureSized(b, count, nil)
+			f := ovmBenchmarkFixture(b, count, withRetention)
+			retainList := ""
+			if withRetention {
+				retainList = writeOVMBenchmarkRetainList(b, f)
+			}
 			var alloc string
 			if withAlloc {
 				alloc = writeOVMBenchmarkAlloc(b, f)
@@ -37,7 +41,7 @@ func benchmarkOVMMigration(b *testing.B, withAlloc bool) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for n := range b.N {
-				opts := MigrateOptions{TempDB: mode, SourceChaindata: f.source, Output: filepath.Join(root, fmt.Sprint(n)), Scheme: "hash", DBEngine: "pebble", CacheMB: 128, Handles: 128, Workers: workers, OVM: OVMOptions{Enabled: true, WrappedEtherCode: f.code, StateWitness: f.witness, GenesisAlloc: alloc}}
+				opts := MigrateOptions{TempDB: mode, SourceChaindata: f.source, Output: filepath.Join(root, fmt.Sprint(n)), Scheme: "hash", DBEngine: DBEnginePebble, CacheMB: 128, Handles: 128, Workers: workers, OVM: OVMOptions{Enabled: true, WrappedEtherCode: f.code, StateWitness: f.witness, GenesisAlloc: alloc, ERC20RetainList: retainList}}
 				if _, err := Migrate(ctx, opts); err != nil {
 					b.Fatal(err)
 				}
@@ -102,3 +106,6 @@ func TestWriteOVMFixtureCandidate(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func BenchmarkOVMMigrationRetain(b *testing.B)      { benchmarkOVMMigration(b, false, true) }
+func BenchmarkOVMMigrationAllocRetain(b *testing.B) { benchmarkOVMMigration(b, true, true) }

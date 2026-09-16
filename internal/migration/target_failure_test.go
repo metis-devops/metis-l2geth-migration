@@ -24,7 +24,7 @@ func testTargetTamperingRejected(t *testing.T, mode TempDBMode) {
 	fixture := buildLegacyFixture(t)
 	for _, tc := range targetTestCases() {
 		for _, damage := range []string{"missing-code", "extra-code", "extra-node", "mixed-code", "engine", "layout", "corrupt-current"} {
-			if damage == "corrupt-current" && tc.engine != "leveldb" {
+			if damage == "corrupt-current" && tc.engine != DBEngineLevelDB {
 				continue
 			}
 			t.Run(tc.name()+"/"+damage, func(t *testing.T) {
@@ -36,10 +36,10 @@ func testTargetTamperingRejected(t *testing.T, mode TempDBMode) {
 				dbPath := filepath.Join(artifact, "chaindata")
 				switch damage {
 				case "engine":
-					if tc.engine == "leveldb" {
-						result.Report.DBEngine = "pebble-v2"
+					if tc.engine == DBEngineLevelDB {
+						result.Report.DBEngine = DBEnginePebbleV2
 					} else {
-						result.Report.DBEngine = "leveldb"
+						result.Report.DBEngine = DBEngineLevelDB
 					}
 					writeUncheckedDirectReport(t, artifact, result.Report)
 				case "layout":
@@ -145,11 +145,11 @@ func TestSourceCodeMatchingTrieNode(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			direct, err := Migrate(context.Background(), MigrateOptions{SourceChaindata: fixture.chaindata, Output: filepath.Join(root, "direct"), Scheme: "hash", DBEngine: "leveldb", CacheMB: 16, Handles: 16})
+			direct, err := Migrate(context.Background(), MigrateOptions{SourceChaindata: fixture.chaindata, Output: filepath.Join(root, "direct"), Scheme: "hash", DBEngine: DBEngineLevelDB, CacheMB: 16, Handles: 16})
 			if err != nil {
 				t.Fatal(err)
 			}
-			imported, err := Import(context.Background(), ImportOptions{Bundle: bundlePath, Output: filepath.Join(root, "import"), Scheme: "hash", DBEngine: "leveldb", CacheMB: 16, Handles: 16})
+			imported, err := Import(context.Background(), ImportOptions{Bundle: bundlePath, Output: filepath.Join(root, "import"), Scheme: "hash", DBEngine: DBEngineLevelDB, CacheMB: 16, Handles: 16})
 			if err != nil {
 				t.Fatal(err)
 			}

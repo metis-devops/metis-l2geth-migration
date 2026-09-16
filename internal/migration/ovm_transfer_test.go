@@ -122,7 +122,7 @@ func TestOVMZeroTransferConvertsAllTargets(t *testing.T) {
 	})
 	oldRoot := ovmReferenceRoot(t, f)
 	for _, mode := range []TempDBMode{TempDBDisk, TempDBMemory} {
-		for _, engine := range []string{"pebble", "leveldb"} {
+		for _, engine := range []string{DBEnginePebble, DBEngineLevelDB} {
 			for _, scheme := range []string{"hash", "path"} {
 				t.Run(string(mode)+"/"+engine+"/"+scheme, func(t *testing.T) {
 					opts := f.options(t, engine, scheme, 4)

@@ -75,6 +75,12 @@ func (b *ovmBalanceBatch) inspect(job *ovmBalanceJob) error {
 	if !job.contract {
 		return nil // EOAs always convert, regardless of Transfer-from history.
 	}
+	if b.transformer.inputs.retention != nil {
+		_, job.retain, err = b.transformer.index.get(ovmERC20RetainPrefix, job.address[:])
+		if err != nil || job.retain {
+			return err
+		}
+	}
 	_, job.retain, err = b.transformer.index.get('f', job.address[:])
 	return err
 }

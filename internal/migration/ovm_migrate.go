@@ -191,6 +191,13 @@ func (w *ovmWork) prepare() error {
 		return err
 	}
 	w.index = newOVMIndex(w.indexDB)
+	if w.opts.OVM.ERC20RetainList != "" {
+		digest, err := loadOVMERC20RetainList(w.ctx, w.opts.OVM.ERC20RetainList, w.index)
+		if err != nil {
+			return err
+		}
+		w.inputs.retention = &OVMERC20RetentionEvidence{FileSHA256: digest}
+	}
 	if w.opts.OVM.GenesisAlloc != "" {
 		w.inputs.allocDigest, err = loadOVMGenesisAlloc(w.ctx, w.opts.OVM.GenesisAlloc, w.index)
 		if err != nil {
@@ -257,7 +264,7 @@ func (w *ovmWork) migrateOriginalAndHistory() error {
 
 func (w *ovmWork) reopenOriginal() (retErr error) {
 	cache, handles := w.opts.CacheMB/4, w.opts.Handles/4
-	config := targetConfig{engine: "pebble-v2", layout: LayoutGeth}
+	config := targetConfig{engine: DBEnginePebbleV2, layout: LayoutGeth}
 	path := filepath.Join(w.path, "base")
 	if w.storage.fs == nil {
 		_, closed, err := finalizeAndVerifyTarget(w.ctx, w.base, path, "hash", config, w.sourceEvidence(), w.original, cache, handles, w.reporter, w.opts.TempDB)

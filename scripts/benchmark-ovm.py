@@ -27,8 +27,12 @@ def configurations(args, repetition):
             if repetition % 2:
                 operations.reverse()
             for operation in operations:
-                name = f"BenchmarkOVM{operation}" + ("Alloc" if alloc else "")
-                yield name, workers, alloc
+                retention_modes = [False, True] if args.with_retain_list else [False]
+                if repetition % 2:
+                    retention_modes.reverse()
+                for retention in retention_modes:
+                    name = f"BenchmarkOVM{operation}" + ("Alloc" if alloc else "") + ("Retain" if retention else "")
+                    yield name, workers, alloc
     if args.with_ancient:
         yield "BenchmarkOVMAncientRead", None, False
 
@@ -55,6 +59,8 @@ def main():
     parser.add_argument("--count", type=int, default=3)
     parser.add_argument("--with-alloc", action="store_true",
                         help="pair ordinary conversion with 1000 GenesisAlloc account overrides")
+    parser.add_argument("--with-retain-list", action="store_true",
+                        help="pair absent/present manual retention lists on the same source-contract fixture")
     parser.add_argument("--with-verify", action="store_true", help="also measure standalone verification")
     parser.add_argument("--with-ancient", action="store_true", help="also measure 60000 sequential ancient record reads")
     parser.add_argument("--holders", type=int, nargs="+", default=[10000],
@@ -101,6 +107,8 @@ def main():
             output.write(f"# Synthetic holders={args.holders}, two-block history, hash/Pebble; temp-dbs={args.temp_dbs}.\n")
             if args.with_alloc:
                 output.write("# Alloc: first 1000 holders receive code, balance and one storage override.\n")
+            if args.with_retain_list:
+                output.write("# Retention fixture: first up-to-1000 existing holders have source code in every paired case; Retain benchmarks list those contracts.\n")
             if args.with_ancient:
                 output.write("# Ancient microbenchmark: 20000 synthetic blocks, 3 tables, 4 files/table.\n")
             output.write("# Fresh processes; OS caches not flushed; setup excluded from ns/op.\n")
@@ -124,7 +132,8 @@ def main():
                                 output.write(f"# {message}\n")
                                 output.flush()
                                 env = dict(os.environ, L2STATE_BENCH_HOLDERS=str(holders),
-                                           L2STATE_BENCH_TEMP_DB=mode)
+                                           L2STATE_BENCH_TEMP_DB=mode,
+                                           L2STATE_BENCH_RETAIN_FIXTURE="1" if args.with_retain_list else "0")
                                 subprocess.run(timed_command(binaries[label], name, workers), env=env,
                                                cwd=sources[label] / "internal/migration", stdout=output,
                                                stderr=subprocess.STDOUT, check=True)

@@ -207,7 +207,7 @@ func testOVMMigrateAllTargets(t *testing.T, tempMode TempDBMode) {
 	f := newOVMFixture(t, nil)
 	before := directoryContentDigest(t, f.source)
 	expected := ovmReferenceRoot(t, f)
-	for _, engine := range []string{"pebble", "leveldb"} {
+	for _, engine := range []string{DBEnginePebble, DBEngineLevelDB} {
 		for _, scheme := range []string{"hash", "path"} {
 			t.Run(engine+"/"+scheme, func(t *testing.T) {
 				opts := f.options(t, engine, scheme, 4)
@@ -333,7 +333,7 @@ func TestOVMRejectInvalidState(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			f := newOVMFixture(t, test.change)
-			opts := f.options(t, "pebble", "hash", 2)
+			opts := f.options(t, DBEnginePebble, "hash", 2)
 			_, err := Migrate(t.Context(), opts)
 			if err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("error %v, want %q", err, test.want)
@@ -427,7 +427,7 @@ func TestOVMAncientAndWorkers(t *testing.T) {
 	var expected common.Hash
 	for workers := 2; workers <= 16; workers++ {
 		t.Run(fmt.Sprint(workers), func(t *testing.T) {
-			r, err := Migrate(t.Context(), f.options(t, "pebble", "hash", workers))
+			r, err := Migrate(t.Context(), f.options(t, DBEnginePebble, "hash", workers))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -478,7 +478,7 @@ func TestOVMHistoryFailures(t *testing.T) {
 			f := newOVMFixture(t, nil)
 			test.mutate(t, f)
 			before := directoryContentDigest(t, f.source)
-			_, err := Migrate(t.Context(), f.options(t, "pebble", "hash", 2))
+			_, err := Migrate(t.Context(), f.options(t, DBEnginePebble, "hash", 2))
 			if err == nil {
 				t.Fatal("bad history accepted")
 			}
@@ -506,7 +506,7 @@ func TestOVMCancellation(t *testing.T) {
 	f := newOVMFixture(t, nil)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	opts := f.options(t, "pebble", "path", 16)
+	opts := f.options(t, DBEnginePebble, "path", 16)
 	if _, err := Migrate(ctx, opts); err == nil {
 		t.Fatal("cancelled migration succeeded")
 	}

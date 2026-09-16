@@ -10,7 +10,8 @@ source fingerprints. A recent date alone does not make a dataset current.
 
 | Dataset | Status and purpose | Coverage | Observations |
 |---|---|---|---:|
-| [OVM zero-transfer pairs](raw/ovm-zero-transfer-2026-09-16.txt) | Latest measured OVM source; nonzero-Transfer rule versus `c3c52d5` with the same adjusted fixture | 10k holders; disk/memory; 2/8 workers; migrate/verify; alloc/no alloc | 96 |
+| [Manual ERC20 retention pairs](raw/ovm-retention-2026-09-16.txt) | Latest measured retention snapshot; predates the unmeasured AncientRead loop edit; no list versus manual retention on the same source-contract fixture | 10k holders; 1000 listed contracts; disk/memory; 2/8 workers; migrate/verify; alloc/no alloc | 96 |
+| [OVM zero-transfer pairs](raw/ovm-zero-transfer-2026-09-16.txt) | Historical; nonzero-Transfer rule versus `c3c52d5` with the same adjusted fixture | 10k holders; disk/memory; 2/8 workers; migrate/verify; alloc/no alloc | 96 |
 | [Temporary database modes](raw/temp-db-2026-09-16.txt) | Historical; preserves distinct 100k and component evidence, before the nonzero-Transfer rule | 10k/100k holders; disk/memory; 10k/100k/1m component records | 231 |
 | [OVM optimization pairs](raw/ovm-optimization-2026-09-16.txt) | Historical; preserves the `8bd08d4` baseline and ancient-reader evidence | 10k holders; disk; migrate/verify; alloc/no alloc; ancient reads | 54 |
 | [Prune serial/parallel](raw/prune-2026-09-12.txt) | Historical; predates dry-run LOCK and Bloom-filter fixes | 8 workloads; serial and 2/4/8/16 workers; 5 phases | 1,000 |
@@ -18,7 +19,7 @@ source fingerprints. A recent date alone does not make a dataset current.
 OVM runs have three samples per configuration. Prune has five repetitions per
 workload/mode, each in a fresh process executing five separately timed phases.
 The prune run used macOS 26.6.2; the OVM runs used macOS 27.0. They are not pooled.
-No new benchmark was run as part of this documentation cleanup.
+The retention dataset was added after the manual-policy implementation; earlier datasets remain historical.
 
 ## Reproduction
 
@@ -26,6 +27,11 @@ Run correctness checks to completion first. Do not run CI or other benchmarks
 concurrently. Every output must be a new absolute path; keep raw logs intact.
 
 ```bash
+# Manual ERC20 retention versus automatic-only classification on the same fixture.
+python3 scripts/benchmark-ovm.py --out /absolute/new/ovm-retention.txt \
+  --count 3 --holders 10000 --temp-dbs disk memory \
+  --with-retain-list --with-alloc --with-verify
+
 # Old/new OVM code with an isolated baseline and the same harness/fixture.
 python3 scripts/benchmark-ovm.py --out /absolute/new/ovm-pairs.txt \
   --count 3 --holders 10000 --temp-dbs disk memory \

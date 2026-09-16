@@ -41,6 +41,9 @@ func hashOVMInputReader(ctx context.Context, r io.Reader) (digest common.Hash, e
 }
 
 func confirmOVMInputs(ctx context.Context, opts OVMOptions, inputs ovmInputs) error {
+	if err := confirmOVMRetentionEvidence(ctx, opts.ERC20RetainList, inputs.retention); err != nil {
+		return err
+	}
 	for _, input := range []struct {
 		path, label string
 		digest      common.Hash
@@ -67,7 +70,7 @@ func confirmOVMReportInputs(ctx context.Context, opts OVMOptions, report OVMVeri
 	if (report.GenesisAlloc != nil) != (opts.GenesisAlloc != "") {
 		return errors.New("OVM verification requires the original --ovm-genesis-alloc input exactly when recorded")
 	}
-	inputs := ovmInputs{codeFileDigest: report.CodeFileSHA256, witnessDigest: report.WitnessSHA256}
+	inputs := ovmInputs{codeFileDigest: report.CodeFileSHA256, witnessDigest: report.WitnessSHA256, retention: report.ERC20Retention}
 	if report.GenesisAlloc != nil {
 		inputs.allocDigest = report.GenesisAlloc.FileSHA256
 	}

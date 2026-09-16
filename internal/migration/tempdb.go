@@ -57,7 +57,7 @@ func (s *temporaryStorage) open(path string, cache, handles int, readonly bool) 
 		}
 		return rawdb.NewDatabase(kv), nil
 	}
-	kv, err := (targetConfig{engine: "pebble-v2", layout: LayoutGeth}).open(path, cache, handles, readonly)
+	kv, err := (targetConfig{engine: DBEnginePebbleV2, layout: LayoutGeth}).open(path, cache, handles, readonly)
 	if err != nil {
 		return nil, err
 	}

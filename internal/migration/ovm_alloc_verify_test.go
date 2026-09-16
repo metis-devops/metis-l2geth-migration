@@ -28,7 +28,7 @@ func TestOVMGenesisAllocVerificationTampering(t *testing.T) {
 
 func testOVMGenesisAllocVerificationTampering(t *testing.T, tempMode TempDBMode) {
 	f := newOVMFixture(t, nil)
-	opts := f.options(t, "pebble", "hash", 4)
+	opts := f.options(t, DBEnginePebble, "hash", 4)
 	opts.TempDB = tempMode
 	opts.OVM.GenesisAlloc = writeAllocFile(t, fmt.Sprintf(`{"%s":{"balance":123}}`, f.holders[0]))
 	result, err := Migrate(t.Context(), opts)
@@ -100,7 +100,7 @@ func testOVMGenesisAllocVerificationTampering(t *testing.T, tempMode TempDBMode)
 		t.Fatal("orphan target code accepted")
 	}
 
-	plain := f.options(t, "pebble", "hash", 2)
+	plain := f.options(t, DBEnginePebble, "hash", 2)
 	plain.TempDB = tempMode
 	if _, err := Migrate(t.Context(), plain); err != nil {
 		t.Fatal(err)
@@ -123,7 +123,7 @@ func testOVMGenesisAllocCancellationAndMutationCleanup(t *testing.T, tempMode Te
 			t.Run(fmt.Sprintf("%s/mutate=%t", phase, mutation), func(t *testing.T) {
 				f := newOVMFixture(t, nil)
 				before := directoryContentDigest(t, f.source)
-				opts := f.options(t, "leveldb", "path", 16)
+				opts := f.options(t, DBEngineLevelDB, "path", 16)
 				opts.TempDB = tempMode
 				data := fmt.Sprintf(`{"%s":{"nonce":42}}`, f.holders[0])
 				opts.OVM.GenesisAlloc = writeAllocFile(t, data)
@@ -182,7 +182,7 @@ func testOVMGenesisAllocDoesNotRepairSource(t *testing.T, tempMode TempDBMode) {
 					a[0].storage[ovmBalanceSlot(common.Address{0xfe})] = common.HexToHash("0x01")
 				}
 			})
-			opts := f.options(t, "pebble", "hash", 2)
+			opts := f.options(t, DBEnginePebble, "hash", 2)
 			opts.TempDB = tempMode
 			opts.OVM.GenesisAlloc = writeAllocFile(t, fmt.Sprintf(`{"%s":{"balance":0},"%s":{"balance":0}}`, f.holders[0], common.Address{0xfe}))
 			if _, err := Migrate(t.Context(), opts); err == nil {
@@ -287,7 +287,7 @@ func (w *allocDatabasePhaseWriter) Write(p []byte) (int, error) {
 
 func TestOVMGenesisAllocMutationDuringActualArtifactVerification(t *testing.T) {
 	f := newOVMFixture(t, nil)
-	opts := f.options(t, "pebble", "hash", 2)
+	opts := f.options(t, DBEnginePebble, "hash", 2)
 	opts.OVM.GenesisAlloc = writeAllocFile(t, `{}`)
 	if _, err := Migrate(t.Context(), opts); err != nil {
 		t.Fatal(err)

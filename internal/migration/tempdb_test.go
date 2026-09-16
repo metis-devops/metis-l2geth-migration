@@ -215,7 +215,7 @@ func TestOVMMemoryScratchAndCancellation(t *testing.T) {
 	for _, cancelAtPhase := range []bool{false, true} {
 		t.Run(map[bool]string{false: "complete", true: "cancel"}[cancelAtPhase], func(t *testing.T) {
 			f := newOVMFixture(t, nil)
-			opts := f.options(t, "pebble", "hash", 4)
+			opts := f.options(t, DBEnginePebble, "hash", 4)
 			opts.TempDB = TempDBMemory
 			before := directoryContentDigest(t, f.source)
 			ctx, cancel := context.WithCancel(t.Context())
@@ -276,7 +276,7 @@ func TestMemoryOriginalIndependentReopenRejectsCorruption(t *testing.T) {
 	for _, kind := range []string{"missing-root", "corrupt-root", "orphan", "missing-code"} {
 		t.Run(kind, func(t *testing.T) {
 			f := newOVMFixture(t, nil)
-			opts := f.options(t, "pebble", "hash", 2)
+			opts := f.options(t, DBEnginePebble, "hash", 2)
 			opts.TempDB = TempDBMemory
 			w := ovmWork{ctx: t.Context(), opts: opts, path: filepath.Join(t.TempDir(), "scratch"), storage: newTemporaryStorage(TempDBMemory), reporter: newProgressReporter("test", ProgressOptions{}), limiter: newMigrateWorkLimiter(2)}
 			t.Cleanup(func() {

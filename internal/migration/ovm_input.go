@@ -29,6 +29,7 @@ type OVMOptions struct {
 	SourceAncient    string
 	StateWitness     string
 	GenesisAlloc     string
+	ERC20RetainList  string
 }
 
 type ovmInputs struct {
@@ -36,11 +37,12 @@ type ovmInputs struct {
 	codeFileDigest common.Hash
 	witnessDigest  common.Hash
 	allocDigest    common.Hash
+	retention      *OVMERC20RetentionEvidence
 }
 
 func validateOVMOptions(o OVMOptions) error {
 	if !o.Enabled {
-		if o.WrappedEtherCode != "" || o.SourceAncient != "" || o.StateWitness != "" || o.GenesisAlloc != "" {
+		if o.WrappedEtherCode != "" || o.SourceAncient != "" || o.StateWitness != "" || o.GenesisAlloc != "" || o.ERC20RetainList != "" {
 			return errors.New("OVM input flags require --migrate-ovm-eth")
 		}
 		return nil

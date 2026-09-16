@@ -382,7 +382,8 @@ name/symbol, is preserved.
 
 Every source account's native balance must be zero. At the selected head,
 addresses with empty code (including balance holders without an account leaf)
-convert their entire OVM balance to native. Contracts do the same unless the
+convert their entire OVM balance to native. Without a manual retention list,
+contracts do the same unless the
 complete canonical history contains an OVM_ETH `Transfer` with that contract as
 `from` and an amount greater than zero. Such contracts retain their ERC20 balance
 and zero native balance. Nonzero transferFrom and burns count; zero-value events
@@ -399,6 +400,58 @@ Source balances must sum exactly to the original totalSupply. Any discrepancy,
 nonzero source native balance, or uint256 overflow fails the operation; l2state
 never repairs the source accounting. The old canary has inconsistent synthetic
 supply and is not an eligible conversion snapshot.
+
+### Manual ERC20 retention
+
+Add `--ovm-erc20-retain-list /inputs/retain.txt` to OVM `migrate` to retain the
+ERC20 balances of explicitly selected contracts, including newly funded pools
+or vaults with no outgoing Transfer history. Supply the same flag and original
+file to OVM `verify`. Ordinary migration, bundle workflows and prune do not
+accept this policy input. Omitting the file preserves automatic classification.
+
+The file contains one `0x`-prefixed, 40-hex-digit address per line:
+
+```text
+0x1000000000000000000000000000000000000001
+0x2000000000000000000000000000000000000002
+```
+
+Leading/trailing whitespace, CRLF and an unterminated final line are allowed.
+Each line is limited to 4095 bytes before LF. Blank lines, comments, malformed
+addresses and normalized duplicates (including case aliases) fail. The file
+must be regular and not a symlink. An empty file is valid, has no balance effect,
+and still requires matching input presence and bytes during verification.
+
+Every listed address must have code at the original canonical LastBlock,
+including zero-balance entries. Missing accounts, EOAs, destroyed contracts and
+OVM_ETH itself are rejected. OVM_ETH's self-held tokens already have their own
+retention rule. GenesisAlloc code overrides cannot make an originally invalid
+list entry eligible.
+
+After validating the original migrated state and complete history, conversion
+retains a contract's ERC20 balance if it is listed **or** has authenticated
+nonzero Transfer-from history. Listed contracts keep zero native balance during
+conversion. Addresses satisfying both criteria are counted once. EOAs always
+convert, zero-value events never grant automatic eligibility, and the original
+supply/accounting checks remain mandatory.
+
+List addresses also identify their balance slots, so they need not be repeated
+in the witness file. Eligibility uses a separate index: witness/alloc entries
+never grant it and manual entries never fabricate historical events. Lists are
+streamed into temporary Pebble with bounded batches and duplicate detection;
+both disk and explicit memory temporary modes are supported.
+
+OVM report v1 adds `erc20_retention.file_sha256` only when a list was supplied;
+explicit null is rejected. The digest covers raw bytes, including whitespace
+and address spelling. The file is rehashed before publication and verification
+success. Standalone verification validates the source contracts and replays the
+policy before independently checking the actual artifact; it does not create a
+second final artifact. Existing retained-contract counts include manual and
+automatic retention; history counts/digests continue to describe actual events.
+
+GenesisAlloc still applies afterward. Its converted-state evidence includes
+manual retention, and explicit native overrides can change the later total.
+It still cannot modify OVM_ETH or repair invalid source state.
 
 ### GenesisAlloc account overrides
 

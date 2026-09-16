@@ -13,16 +13,19 @@ import (
 	"github.com/golang/snappy"
 )
 
-func BenchmarkOVMVerification(b *testing.B)      { benchmarkOVMVerification(b, false) }
-func BenchmarkOVMVerificationAlloc(b *testing.B) { benchmarkOVMVerification(b, true) }
+func BenchmarkOVMVerification(b *testing.B)      { benchmarkOVMVerification(b, false, false) }
+func BenchmarkOVMVerificationAlloc(b *testing.B) { benchmarkOVMVerification(b, true, false) }
 
-func benchmarkOVMVerification(b *testing.B, withAlloc bool) {
+func benchmarkOVMVerification(b *testing.B, withAlloc, withRetention bool) {
 	count, mode := ovmBenchmarkSettings(b)
 	for _, workers := range []int{2, 8} {
 		b.Run(fmt.Sprintf("workers=%d", workers), func(b *testing.B) {
 			setup := time.Now()
-			f := newOVMFixtureSized(b, count, nil)
-			opts := MigrateOptions{SourceChaindata: f.source, Output: filepath.Join(b.TempDir(), "artifact"), Scheme: "hash", DBEngine: "pebble", CacheMB: 128, Handles: 128, Workers: workers, OVM: OVMOptions{Enabled: true, WrappedEtherCode: f.code, StateWitness: f.witness}}
+			f := ovmBenchmarkFixture(b, count, withRetention)
+			opts := MigrateOptions{SourceChaindata: f.source, Output: filepath.Join(b.TempDir(), "artifact"), Scheme: "hash", DBEngine: DBEnginePebble, CacheMB: 128, Handles: 128, Workers: workers, OVM: OVMOptions{Enabled: true, WrappedEtherCode: f.code, StateWitness: f.witness}}
+			if withRetention {
+				opts.OVM.ERC20RetainList = writeOVMBenchmarkRetainList(b, f)
+			}
 			if withAlloc {
 				opts.OVM.GenesisAlloc = writeOVMBenchmarkAlloc(b, f)
 			}
@@ -64,8 +67,8 @@ func BenchmarkOVMAncientRead(b *testing.B) {
 	const count = 20000
 	path := writeOVMAncientReadFixture(b, count, 5000)
 	b.ReportAllocs()
-	b.ResetTimer()
-	for range b.N {
+
+	for b.Loop() {
 		ancient, err := openLegacyAncient(path, true)
 		if err != nil {
 			b.Fatal(err)
@@ -116,4 +119,25 @@ func writeOVMAncientReadFixture(t testing.TB, count, perFile int) string {
 		}
 	}
 	return path
+}
+
+func BenchmarkOVMVerificationRetain(b *testing.B)      { benchmarkOVMVerification(b, false, true) }
+func BenchmarkOVMVerificationAllocRetain(b *testing.B) { benchmarkOVMVerification(b, true, true) }
+
+func ovmBenchmarkFixture(b *testing.B, count int, withRetention bool) ovmFixture {
+	if !withRetention && os.Getenv("L2STATE_BENCH_RETAIN_FIXTURE") != "1" {
+		return newOVMFixtureSized(b, count, nil)
+	}
+	return newOVMFixtureSized(b, count, func(accounts []fixtureAccount) {
+		for n := 1; n <= min(1000, len(accounts)-1); n++ {
+			accounts[n].code = []byte{0x00}
+		}
+	})
+}
+func writeOVMBenchmarkRetainList(b *testing.B, f ovmFixture) string {
+	var data strings.Builder
+	for _, account := range f.accounts[1:min(1001, len(f.accounts))] {
+		fmt.Fprintln(&data, account.address.Hex())
+	}
+	return writeRetainList(b, data.String())
 }

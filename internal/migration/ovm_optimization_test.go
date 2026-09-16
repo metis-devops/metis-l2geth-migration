@@ -35,7 +35,7 @@ func testOVMLateInputMutation(t *testing.T, tempMode TempDBMode) {
 		for _, input := range []string{"code", "witness"} {
 			t.Run(mode+"/"+input, func(t *testing.T) {
 				f := newOVMFixture(t, nil)
-				opts := f.options(t, "pebble", "hash", 2)
+				opts := f.options(t, DBEnginePebble, "hash", 2)
 				opts.TempDB = tempMode
 				changed := false
 				act := func() {

@@ -22,8 +22,8 @@ type targetTestCase struct{ engine, layout, scheme string }
 
 func targetTestCases() []targetTestCase {
 	return []targetTestCase{
-		{"pebble", "geth", "hash"}, {"pebble", "geth", "path"},
-		{"leveldb", "geth", "hash"}, {"leveldb", "geth", "path"},
+		{DBEnginePebble, "geth", "hash"}, {DBEnginePebble, "geth", "path"},
+		{DBEngineLevelDB, "geth", "hash"}, {DBEngineLevelDB, "geth", "path"},
 	}
 }
 
@@ -101,7 +101,7 @@ func testLevelDBGethContinuation(t *testing.T, tempMode TempDBMode) {
 	fixture := buildLegacyFixture(t)
 	for _, scheme := range []string{"hash", "path"} {
 		t.Run(scheme, func(t *testing.T) {
-			result, err := Migrate(context.Background(), MigrateOptions{TempDB: tempMode, SourceChaindata: fixture.chaindata, Output: filepath.Join(t.TempDir(), "artifact"), Scheme: scheme, DBEngine: "leveldb", CacheMB: 16, Handles: 16})
+			result, err := Migrate(context.Background(), MigrateOptions{TempDB: tempMode, SourceChaindata: fixture.chaindata, Output: filepath.Join(t.TempDir(), "artifact"), Scheme: scheme, DBEngine: DBEngineLevelDB, CacheMB: 16, Handles: 16})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -113,7 +113,7 @@ func testLevelDBGethContinuation(t *testing.T, tempMode TempDBMode) {
 }
 
 func TestTargetOptionsFailBeforeIO(t *testing.T) {
-	for _, tc := range []targetTestCase{{"bogus", "geth", "hash"}, {"pebble-v2", "geth", "hash"}, {"pebble", "geth", "invalid"}} {
+	for _, tc := range []targetTestCase{{"bogus", "geth", "hash"}, {DBEnginePebbleV2, "geth", "hash"}, {DBEnginePebble, "geth", "invalid"}} {
 		t.Run(tc.name(), func(t *testing.T) {
 			out := filepath.Join(t.TempDir(), "absent-parent", "artifact")
 			_, err := Migrate(context.Background(), MigrateOptions{SourceChaindata: "missing-source", Output: out, Scheme: tc.scheme, DBEngine: tc.engine})
@@ -144,7 +144,7 @@ func TestStateLayoutReportStrictness(t *testing.T) {
 			t.Fatal(err)
 		}
 		wire["scheme"] = json.RawMessage(`"hash"`)
-		wire["db_engine"] = json.RawMessage(`"leveldb"`)
+		wire["db_engine"] = json.RawMessage(`"` + DBEngineLevelDB + `"`)
 		for _, value := range []string{"omitted", `"geth"`, `"legacy-l2geth"`, `""`, `null`, `"bogus"`, `42`} {
 			delete(wire, "state_layout")
 			if value != "omitted" {

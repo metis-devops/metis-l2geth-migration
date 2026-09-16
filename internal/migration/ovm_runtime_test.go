@@ -31,7 +31,7 @@ func TestOVMWrappedRuntimeAndContinuation(t *testing.T) {
 
 func testOVMWrappedRuntimeAndContinuation(t *testing.T, tempMode TempDBMode) {
 	f := newOVMFixture(t, nil)
-	for _, engine := range []string{"pebble", "leveldb"} {
+	for _, engine := range []string{DBEnginePebble, DBEngineLevelDB} {
 		for _, scheme := range []string{"hash", "path"} {
 			t.Run(engine+"/"+scheme, func(t *testing.T) {
 				opts := f.options(t, engine, scheme, 2)
@@ -116,7 +116,7 @@ func commitOVMContinuation(t *testing.T, opts MigrateOptions, root common.Hash, 
 
 func TestOVMReportStrictness(t *testing.T) {
 	f := newOVMFixture(t, nil)
-	result, err := Migrate(t.Context(), f.options(t, "pebble", "hash", 2))
+	result, err := Migrate(t.Context(), f.options(t, DBEnginePebble, "hash", 2))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +180,7 @@ func TestOVMVerifyRejectsTampering(t *testing.T) {
 	for _, kind := range []string{"code_input", "witness_input", "body", "orphan_code", "orphan_node", "report_supply", "extra_file"} {
 		t.Run(kind, func(t *testing.T) {
 			f := newOVMFixture(t, nil)
-			opts := f.options(t, "pebble", "hash", 2)
+			opts := f.options(t, DBEnginePebble, "hash", 2)
 			result, err := Migrate(t.Context(), opts)
 			if err != nil {
 				t.Fatal(err)
@@ -250,7 +250,7 @@ func TestOVMZeroSupply(t *testing.T) {
 			delete(a[0].storage, key)
 		}
 	})
-	r, err := Migrate(t.Context(), f.options(t, "pebble", "path", 2))
+	r, err := Migrate(t.Context(), f.options(t, DBEnginePebble, "path", 2))
 	if err != nil {
 		t.Fatal(err)
 	}

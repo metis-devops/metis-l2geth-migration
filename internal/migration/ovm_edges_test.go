@@ -50,7 +50,7 @@ func TestOVMOversizeHistoryAndPreimages(t *testing.T) {
 			putOVMTest(t, db, key, address[:])
 		}
 	})
-	opts := f.options(t, "pebble", "hash", 2)
+	opts := f.options(t, DBEnginePebble, "hash", 2)
 	opts.OVM.StateWitness = ""
 	r, err := Migrate(t.Context(), opts)
 	if err != nil {
@@ -71,7 +71,7 @@ func TestOVMHistoricalBurnAndDestroyedSender(t *testing.T) {
 		ovmTestEvent(ovmTransferTopic, f.holders[5], f.holders[3], 1),
 		ovmTestEvent(ovmApprovalTopic, f.holders[1], f.holders[3], 0x1234),
 	})
-	r, err := Migrate(t.Context(), f.options(t, "pebble", "hash", 2))
+	r, err := Migrate(t.Context(), f.options(t, DBEnginePebble, "hash", 2))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +103,7 @@ func testOVMCancellationAtStageBoundaries(t *testing.T, tempMode TempDBMode) {
 	for _, phase := range []string{"scan_ovm_history", "convert_ovm_balances", "build_converted_state", "publish_artifact"} {
 		t.Run(phase, func(t *testing.T) {
 			f := newOVMFixture(t, nil)
-			opts := f.options(t, "pebble", "path", 16)
+			opts := f.options(t, DBEnginePebble, "path", 16)
 			opts.TempDB = tempMode
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
@@ -126,7 +126,7 @@ func testOVMCancellationAtStageBoundaries(t *testing.T, tempMode TempDBMode) {
 
 func TestOVMLevelDBSyncFailure(t *testing.T) {
 	f := newOVMFixture(t, nil)
-	opts := f.options(t, "leveldb", "hash", 2)
+	opts := f.options(t, DBEngineLevelDB, "hash", 2)
 	var injected bool
 	writer := ovmPhaseWriter{phase: "build_converted_state", act: func() {
 		partials, err := filepath.Glob(filepath.Join(filepath.Dir(opts.Output), ".artifact.partial-*"))
@@ -151,7 +151,7 @@ func TestOVMLevelDBSyncFailure(t *testing.T) {
 func TestOVMOutputOutsideAncient(t *testing.T) {
 	f := newOVMFixture(t, nil)
 	ancient := t.TempDir()
-	opts := f.options(t, "pebble", "hash", 2)
+	opts := f.options(t, DBEnginePebble, "hash", 2)
 	opts.OVM.SourceAncient = ancient
 	opts.Output = filepath.Join(ancient, "nested", "artifact")
 	_, err := Migrate(t.Context(), opts)
@@ -171,7 +171,7 @@ func TestOVMLongSparseStringPreserved(t *testing.T) {
 		clear(accounts[0].storage)
 		accounts[0].storage[common.HexToHash("0x03")] = common.HexToHash("0x0801")
 	})
-	opts := f.options(t, "pebble", "path", 2)
+	opts := f.options(t, DBEnginePebble, "path", 2)
 	r, err := Migrate(t.Context(), opts)
 	if err != nil {
 		t.Fatal(err)
