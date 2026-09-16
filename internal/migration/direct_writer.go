@@ -58,6 +58,9 @@ func newDirectStateWriterWithFlushLimit(db ethdb.Database, scheme string, flushA
 }
 
 func (w *directStateWriter) Account(hash common.Hash, account *types.StateAccount, _ []byte) error {
+	if w.scheme == rawdb.HashScheme {
+		return nil
+	}
 	return w.writeFlatAccount(hash, types.SlimAccountRLP(*account))
 }
 

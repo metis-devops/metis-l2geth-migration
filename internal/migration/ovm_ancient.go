@@ -26,6 +26,9 @@ type legacyAncientTable struct {
 	compressed bool
 	count      uint64
 	indexInfo  os.FileInfo
+	data       *os.File
+	dataInfo   os.FileInfo
+	dataNumber uint16
 }
 
 func openLegacyAncient(path string, explicit bool) (a *legacyAncient, retErr error) {
@@ -93,7 +96,7 @@ func openLegacyAncientTable(path, name string, compressed bool) (*legacyAncientT
 	return &legacyAncientTable{index: f, name: name, compressed: compressed, count: uint64(info.Size()/6 - 1), indexInfo: info}, nil
 }
 
-func (a *legacyAncient) read(table int, number uint64) (blob []byte, retErr error) {
+func (a *legacyAncient) read(table int, number uint64) ([]byte, error) {
 	if a == nil || number >= a.count {
 		return nil, nil
 	}
@@ -113,23 +116,14 @@ func (a *legacyAncient) read(table int, number uint64) (blob []byte, retErr erro
 	if end < start {
 		return nil, errors.New("ancient offsets are reversed")
 	}
-	ext := ".rdat"
-	if t.compressed {
-		ext = ".cdat"
-	}
-	f, err := openOVMInput(filepath.Join(a.path, fmt.Sprintf("%s.%04d%s", t.name, endFile, ext)))
+	f, err := t.dataFile(a.path, endFile)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { retErr = errors.Join(retErr, f.Close()) }()
-	info, err := f.Stat()
-	if err != nil {
-		return nil, err
-	}
-	if int64(end) > info.Size() {
+	if int64(end) > t.dataInfo.Size() {
 		return nil, errors.New("ancient data file is truncated")
 	}
-	blob = make([]byte, int(end-start))
+	blob := make([]byte, int(end-start))
 	if _, err = f.ReadAt(blob, int64(start)); err != nil && (!errors.Is(err, io.EOF) || len(blob) != 0) {
 		return nil, err
 	}
@@ -142,21 +136,73 @@ func (a *legacyAncient) read(table int, number uint64) (blob []byte, retErr erro
 	return blob, nil
 }
 
+// History reads are serial. Each table holds only its current data file (three
+// data handles total), checking identity and metadata on rotation and close.
+func (t *legacyAncientTable) dataFile(path string, number uint16) (*os.File, error) {
+	if t.data != nil && t.dataNumber == number {
+		return t.data, nil
+	}
+	if err := t.closeData(); err != nil {
+		return nil, err
+	}
+	ext := ".rdat"
+	if t.compressed {
+		ext = ".cdat"
+	}
+	f, err := openOVMInput(filepath.Join(path, fmt.Sprintf("%s.%04d%s", t.name, number, ext)))
+	if err != nil {
+		return nil, err
+	}
+	info, err := f.Stat()
+	if err != nil {
+		return nil, errors.Join(err, f.Close())
+	}
+	t.data, t.dataInfo, t.dataNumber = f, info, number
+	return f, nil
+}
+
+func (t *legacyAncientTable) closeData() error {
+	if t.data == nil {
+		return nil
+	}
+	err := confirmAncientFile(t.data, t.dataInfo)
+	err = errors.Join(err, t.data.Close())
+	t.data, t.dataInfo = nil, nil
+	return err
+}
+
+func confirmAncientFile(f *os.File, before os.FileInfo) error {
+	info, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	if info.Size() != before.Size() || !info.ModTime().Equal(before.ModTime()) {
+		return fmt.Errorf("ancient file changed during migration: %s", f.Name())
+	}
+	current, err := os.Lstat(f.Name())
+	if err != nil {
+		return err
+	}
+	if !current.Mode().IsRegular() || !os.SameFile(before, current) {
+		return fmt.Errorf("ancient file replaced during migration: %s", f.Name())
+	}
+	return nil
+}
+
 func (a *legacyAncient) Close() error {
 	if a == nil {
 		return nil
 	}
 	var result error
 	for _, t := range a.tables {
-		if t == nil || t.index == nil {
+		if t == nil {
 			continue
 		}
-		info, err := t.index.Stat()
-		if err == nil && (info.Size() != t.indexInfo.Size() || !info.ModTime().Equal(t.indexInfo.ModTime())) {
-			err = errors.New("ancient index changed during migration")
+		result = errors.Join(result, t.closeData())
+		if t.index != nil {
+			result = errors.Join(result, confirmAncientFile(t.index, t.indexInfo), t.index.Close())
+			t.index = nil
 		}
-		result = errors.Join(result, err, t.index.Close())
-		t.index = nil
 	}
 	return result
 }

@@ -340,18 +340,8 @@ func (l *ovmAllocLoader) unique(key, value []byte) error {
 	return nil
 }
 
-func hashOVMGenesisAlloc(ctx context.Context, path string) (digest common.Hash, retErr error) {
-	f, err := openOVMInput(path)
-	if err != nil {
-		return digest, err
-	}
-	defer func() { retErr = errors.Join(retErr, f.Close()) }()
-	h := sha256.New()
-	if _, err := io.Copy(io.Discard, &ovmAllocReader{ctx: ctx, r: io.TeeReader(f, h)}); err != nil {
-		return digest, err
-	}
-	copy(digest[:], h.Sum(nil))
-	return digest, ctx.Err()
+func hashOVMGenesisAlloc(ctx context.Context, path string) (common.Hash, error) {
+	return hashOVMInput(ctx, path)
 }
 
 func confirmOVMAllocEvidence(ctx context.Context, path string, evidence *OVMGenesisAllocEvidence) error {

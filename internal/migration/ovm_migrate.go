@@ -37,7 +37,7 @@ func migrateOVM(ctx context.Context, opts MigrateOptions) (result MigrateResult,
 	if err := rejectOVMOutputs(opts, output.Path()); err != nil {
 		return result, err
 	}
-	report, err := buildOVMTarget(ctx, opts, output.Path(), reporter)
+	report, err := replayOVMState(ctx, opts, output.Path(), reporter, true)
 	if err != nil {
 		return result, err
 	}
@@ -59,7 +59,7 @@ func migrateOVM(ctx context.Context, opts MigrateOptions) (result MigrateResult,
 	if err := ctx.Err(); err != nil {
 		return result, err
 	}
-	if err := confirmOVMAllocEvidence(ctx, opts.OVM.GenesisAlloc, report.GenesisAlloc); err != nil {
+	if err := confirmOVMReportInputs(ctx, opts.OVM, report); err != nil {
 		return result, err
 	}
 	if err := output.Commit(); err != nil {
@@ -102,7 +102,7 @@ type ovmWork struct {
 	limiter  *migrateWorkLimiter
 }
 
-func buildOVMTarget(ctx context.Context, opts MigrateOptions, root string, reporter *progressReporter) (report OVMVerificationReport, retErr error) {
+func replayOVMState(ctx context.Context, opts MigrateOptions, root string, reporter *progressReporter, persistTarget bool) (report OVMVerificationReport, retErr error) {
 	w := ovmWork{ctx: ctx, opts: opts, path: filepath.Join(root, ".ovm-work"), reporter: reporter, limiter: newMigrateWorkLimiter(opts.Workers)}
 	if err := os.Mkdir(w.path, 0700); err != nil {
 		return report, err
@@ -129,7 +129,7 @@ func buildOVMTarget(ctx context.Context, opts MigrateOptions, root string, repor
 	if err != nil {
 		return report, err
 	}
-	final, target, err := w.finalTarget(root, newRoot, checkpoint)
+	final, target, err := w.finishState(root, newRoot, checkpoint, persistTarget)
 	if err != nil {
 		return report, err
 	}
@@ -286,6 +286,23 @@ func runOVMPartitioned(ctx context.Context, source, target ethdb.Database, root 
 	return result, writer.CloseContext(ctx)
 }
 
+// Verification needs replayed root/counts, not a second final artifact. The
+// original migrated database is still independently reopened and verified, and
+// the supplied artifact receives the full engine/scheme inventory verification.
+func (w *ovmWork) finishState(root string, newRoot common.Hash, checkpoint bundle.SourceEvidence, persistTarget bool) (StateResult, targetConfig, error) {
+	if persistTarget {
+		return w.finalTarget(root, newRoot, checkpoint)
+	}
+	target, err := targetOptions(w.opts.DBEngine, w.opts.Scheme)
+	if err != nil {
+		return StateResult{}, target, err
+	}
+	phase := w.reporter.StartPhase("replay_converted_state", nil, "root", newRoot)
+	state, err := runOVMPartitioned(w.ctx, w.base, nil, newRoot, "hash", w.opts.Workers, w.limiter, target.readCode, false)
+	phase.Finish(err)
+	return state, target, err
+}
+
 func (w *ovmWork) finalTarget(root string, newRoot common.Hash, checkpoint bundle.SourceEvidence) (final StateResult, target targetConfig, retErr error) {
 	target, err := targetOptions(w.opts.DBEngine, w.opts.Scheme)
 	if err != nil {
@@ -340,29 +357,5 @@ func (w *ovmWork) finalTarget(root string, newRoot common.Hash, checkpoint bundl
 }
 
 func (w *ovmWork) confirmInputs() error {
-	if w.opts.OVM.GenesisAlloc != "" {
-		digest, err := hashOVMGenesisAlloc(w.ctx, w.opts.OVM.GenesisAlloc)
-		if err != nil {
-			return err
-		}
-		if digest != w.inputs.allocDigest {
-			return errors.New("GenesisAlloc input changed during migration")
-		}
-	}
-	_, digest, err := readWrappedCode(w.ctx, w.opts.OVM.WrappedEtherCode)
-	if err != nil {
-		return err
-	}
-	if digest != w.inputs.codeFileDigest {
-		return errors.New("wrapped code input changed during migration")
-	}
-	// Re-read through the strict parser; idempotent evidence writes are private.
-	witness, err := loadOVMWitness(w.ctx, w.opts.OVM.StateWitness, w.index)
-	if err != nil {
-		return err
-	}
-	if witness != w.inputs.witnessDigest {
-		return errors.New("OVM witness input changed during migration")
-	}
-	return w.ctx.Err()
+	return confirmOVMInputs(w.ctx, w.opts.OVM, w.inputs)
 }

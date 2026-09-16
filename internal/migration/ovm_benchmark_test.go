@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -30,16 +29,7 @@ func benchmarkOVMMigration(b *testing.B, withAlloc bool) {
 			f := newOVMFixtureSized(b, 10000, nil)
 			var alloc string
 			if withAlloc {
-				var data strings.Builder
-				data.WriteByte('{')
-				for n, address := range f.holders[:1000] {
-					if n > 0 {
-						data.WriteByte(',')
-					}
-					fmt.Fprintf(&data, `"%s":{"code":"0x6001600055","balance":"0x0a","storage":{"01":"01"}}`, address)
-				}
-				data.WriteByte('}')
-				alloc = writeAllocFile(b, data.String())
+				alloc = writeOVMBenchmarkAlloc(b, f)
 			}
 			root := b.TempDir()
 			b.ReportAllocs()

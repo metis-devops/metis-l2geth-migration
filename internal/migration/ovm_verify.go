@@ -83,7 +83,7 @@ func VerifyOVM(ctx context.Context, opts OVMVerifyOptions) (report OVMVerificati
 		return report, err
 	}
 	defer func() { retErr = errors.Join(retErr, os.RemoveAll(scratch)) }()
-	recomputed, err := buildOVMTarget(ctx, migrate, scratch, reporter)
+	recomputed, err := replayOVMState(ctx, migrate, scratch, reporter, false)
 	if err != nil {
 		return report, err
 	}
@@ -110,7 +110,7 @@ func VerifyOVM(ctx context.Context, opts OVMVerifyOptions) (report OVMVerificati
 	if !sameOVMReport(stored, after) {
 		return report, errors.New("OVM report changed during verification")
 	}
-	if err := confirmOVMAllocEvidence(ctx, opts.OVM.GenesisAlloc, stored.GenesisAlloc); err != nil {
+	if err := confirmOVMReportInputs(ctx, opts.OVM, stored); err != nil {
 		return report, err
 	}
 	return recomputed, nil

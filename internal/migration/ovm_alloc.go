@@ -21,6 +21,7 @@ func applyOVMGenesisAlloc(ctx context.Context, db ethdb.Database, root common.Ha
 	defer accounts.Release()
 	writer := newDirectStateWriter(db, "hash")
 	defer writer.Abort()
+	reader := ovmAccountReader{db: tdb, root: root}
 	for accounts.Next() {
 		if err := ctx.Err(); err != nil {
 			return newRoot, err
@@ -33,7 +34,7 @@ func applyOVMGenesisAlloc(ctx context.Context, db ethdb.Database, root common.Ha
 		if err := rlp.DecodeBytes(accounts.Value(), &patch); err != nil {
 			return newRoot, fmt.Errorf("decode GenesisAlloc account patch: %w", err)
 		}
-		if err := t.applyAllocAccount(owner, &patch, writer); err != nil {
+		if err := t.applyAllocAccount(owner, &patch, writer, &reader); err != nil {
 			return newRoot, fmt.Errorf("apply GenesisAlloc account %s: %w", owner, err)
 		}
 	}
@@ -53,11 +54,11 @@ func applyOVMGenesisAlloc(ctx context.Context, db ethdb.Database, root common.Ha
 	return t.rebuildPatchedTrie(common.Hash{}, it, ovmAllocPatchedPrefix)
 }
 
-func (t *ovmTransformer) applyAllocAccount(owner common.Hash, patch *ovmAllocAccount, writer *directStateWriter) error {
+func (t *ovmTransformer) applyAllocAccount(owner common.Hash, patch *ovmAllocAccount, writer *directStateWriter, reader *ovmAccountReader) error {
 	if patch.Fields == 0 {
 		return nil
 	}
-	account, err := readOVMAccount(t.trieDB, t.root, owner)
+	account, err := reader.read(owner)
 	if err != nil {
 		return err
 	}

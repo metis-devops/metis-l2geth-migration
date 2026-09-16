@@ -93,14 +93,7 @@ func TestOVMGoldenSupplyMismatch(t *testing.T) {
 			t.Error(err)
 		}
 	}()
-	indexDB := rawdb.NewMemoryDatabase()
-	defer func() {
-		if err := indexDB.Close(); err != nil {
-			t.Error(err)
-		}
-	}()
-	idx := newOVMIndex(indexDB)
-	defer idx.batch.Close()
+	idx := testAllocIndex(t)
 	for _, a := range []common.Address{ovmETHAddress, common.HexToAddress("0x1000000000000000000000000000000000000001"), common.HexToAddress("0x2000000000000000000000000000000000000002"), common.HexToAddress("0x3000000000000000000000000000000000000003"), common.HexToAddress("0x4000000000000000000000000000000000000004")} {
 		if err := idx.address(a); err != nil {
 			t.Fatal(err)

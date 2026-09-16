@@ -29,6 +29,7 @@ type ovmBalanceBatch struct {
 	jobs        sync.WaitGroup
 	queue       []*ovmBalanceJob
 	failure     migrateRunFailure
+	readers     chan *ovmAccountReader
 }
 
 func (b *ovmBalanceBatch) submit(address common.Address, slot common.Hash, value *uint256.Int) error {
@@ -60,7 +61,9 @@ func (b *ovmBalanceBatch) inspect(job *ovmBalanceJob) error {
 	if job.address == ovmETHAddress || job.value.IsZero() {
 		return nil
 	}
-	account, err := readOVMAccount(b.transformer.trieDB, b.transformer.root, job.hash)
+	reader := b.borrowReader()
+	account, err := reader.read(job.hash)
+	b.returnReader(reader)
 	if err != nil {
 		return err
 	}
@@ -69,8 +72,30 @@ func (b *ovmBalanceBatch) inspect(job *ovmBalanceJob) error {
 	}
 	job.account = account
 	job.contract = !bytes.Equal(account.CodeHash, types.EmptyCodeHash[:])
+	if !job.contract {
+		return nil // EOAs always convert, regardless of Transfer-from history.
+	}
 	_, job.retain, err = b.transformer.index.get('f', job.address[:])
 	return err
+}
+
+// Readers are borrowed only while holding a worker lease, so active plus idle
+// readers cannot exceed the normalized worker count. The bounded channel also
+// permits direct serial inspection without a pool in focused tests.
+func (b *ovmBalanceBatch) borrowReader() *ovmAccountReader {
+	select {
+	case r := <-b.readers:
+		return r
+	default:
+		return &ovmAccountReader{db: b.transformer.trieDB, root: b.transformer.root}
+	}
+}
+
+func (b *ovmBalanceBatch) returnReader(r *ovmAccountReader) {
+	select {
+	case b.readers <- r:
+	default:
+	}
 }
 
 func (b *ovmBalanceBatch) drain() error {

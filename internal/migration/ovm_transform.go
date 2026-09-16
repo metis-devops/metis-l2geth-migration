@@ -43,11 +43,34 @@ type ovmTransformer struct {
 }
 
 func readOVMAccount(db *triedb.Database, root, hash common.Hash) (*types.StateAccount, error) {
-	t, err := trie.New(trie.StateTrieID(root), db)
-	if err != nil {
-		return nil, err
+	r := ovmAccountReader{db: db, root: root}
+	return r.read(hash)
+}
+
+// Trie.Get retains decoded nodes and prevalue traces. Reuse within a fixed
+// window only, never for the entire state, and never concurrently.
+const ovmAccountReadWindow = 32
+
+type ovmAccountReader struct {
+	db    *triedb.Database
+	root  common.Hash
+	trie  *trie.Trie
+	reads int
+}
+
+func (r *ovmAccountReader) read(hash common.Hash) (*types.StateAccount, error) {
+	if r.trie == nil {
+		var err error
+		r.trie, err = trie.New(trie.StateTrieID(r.root), r.db)
+		if err != nil {
+			return nil, err
+		}
 	}
-	blob, err := t.Get(hash[:])
+	blob, err := r.trie.Get(hash[:])
+	r.reads++
+	if r.reads == ovmAccountReadWindow || err != nil {
+		r.trie, r.reads = nil, 0
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +248,7 @@ func (t *ovmTransformer) recognizeString(slot common.Hash) error {
 
 func (t *ovmTransformer) classifyStorage() (retErr error) {
 	ctx, cancel := context.WithCancel(t.ctx)
-	batch := ovmBalanceBatch{ctx: ctx, transformer: t, cancel: cancel}
+	batch := ovmBalanceBatch{ctx: ctx, transformer: t, cancel: cancel, readers: make(chan *ovmAccountReader, normalizeMigrateWorkers(t.workers))}
 	defer func() { cancel(); batch.jobs.Wait(); retErr = errors.Join(retErr, batch.failure.load()) }()
 	owner := crypto.Keccak256Hash(ovmETHAddress[:])
 	it, err := ovmIterator(t.trieDB, trie.StorageTrieID(t.root, owner, t.account.Root))

@@ -12,6 +12,7 @@ import (
 	"os"
 	"strings"
 
+	cpebble "github.com/cockroachdb/pebble/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -219,12 +220,13 @@ func (i *ovmIndex) flush() error {
 
 func (i *ovmIndex) get(prefix byte, key []byte) ([]byte, bool, error) {
 	k := prefixedKey([]byte{prefix}, key)
-	ok, err := i.db.Has(k)
-	if err != nil || !ok {
-		return nil, ok, err
-	}
 	v, err := i.db.Get(k)
-	return v, true, err
+	// The operation-local evidence database always uses Pebble. Only its
+	// not-found sentinel is absence; corruption and I/O errors must propagate.
+	if errors.Is(err, cpebble.ErrNotFound) {
+		return nil, false, nil
+	}
+	return v, err == nil, err
 }
 
 func ovmBalanceSlot(address common.Address) common.Hash {

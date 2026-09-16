@@ -189,6 +189,22 @@ not widen migration artifact contracts or restore legacy target generation.
 - Keep `metis-l2state-ovm-verification` v1 independent of ordinary reports.
   Standalone OVM verification replays source/history/operator inputs before
   checking the actual target's full inventory. Never relax ordinary root equality.
+- Verification replay must independently reopen/verify the original migrated
+  state, then compute final root/counts with validation-only partitioned output;
+  do not materialize a second final artifact. Preserve the actual artifact's
+  independent engine/scheme/inventory verification and scratch cleanup.
+- Account readers may reuse decoded trie paths for at most 32 reads before
+  dropping the trie. Balance readers are exclusive to a worker lease, with no
+  more than the worker count retained; alloc uses one bounded reader. Never
+  share a mutable trie concurrently or retain an operation-wide decoded trie.
+- The Pebble evidence index uses single Get lookups and treats only its
+  not-found sentinel as absence. EOA conversion does not query Transfer-from
+  membership. Input confirmation hashes bounded raw-byte chunks without
+  reparsing or rewriting evidence, and rechecks all supplied runtime/witness/
+  alloc inputs immediately before publication or verification success.
+- Ancient readers retain at most one current read-only data handle per table
+  (three total), verify file identity/size/mtime on rotation and close, and
+  propagate validation/close errors. Do not introduce freezer constructors.
 - `--ovm-genesis-alloc` is an optional OVM-only post-conversion overlay. Accept a
   GenesisAlloc address map with geth v1.17.5 field encodings, additionally allowing
   omitted balance. Preserve omitted fields, merge storage by slot (zero deletes),
@@ -228,6 +244,9 @@ not widen migration artifact contracts or restore legacy target generation.
   batches, original-head classification, reference StateDB/GenerateTrie inventory,
   runtime execution/continuation, input/report tampering and cancellation/cleanup.
   Use `scripts/benchmark-ovm.py --with-alloc` for paired conversion/overlay costs.
+  Optimization measurements can add `--baseline-root /absolute/isolated/checkout`
+  (same benchmark harness), `--with-verify` and `--with-ancient`; alternate
+  baseline/current in fresh processes without concurrent CI or benchmarks.
 
 ### Offline prune
 

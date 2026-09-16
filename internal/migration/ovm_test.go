@@ -280,6 +280,10 @@ func ovmReferenceWithAllocDB(t testing.TB, f ovmFixture, apply func(*state.State
 		s.SetBalance(f.holders[n], uint256.NewInt(uint64((n+1)*11)), tracing.BalanceChangeUnspecified)
 		s.SetState(ovmETHAddress, ovmBalanceSlot(f.holders[n]), common.Hash{})
 	}
+	for _, address := range f.holders[8:] {
+		s.SetBalance(address, uint256.NewInt(1), tracing.BalanceChangeUnspecified)
+		s.SetState(ovmETHAddress, ovmBalanceSlot(address), common.Hash{})
+	}
 	s.SetBalance(ovmETHAddress, uint256.NewInt(99), tracing.BalanceChangeUnspecified)
 	s.SetState(ovmETHAddress, common.HexToHash("0x02"), common.HexToHash("0x63"))
 	runtime, err := os.ReadFile(f.code)

@@ -524,17 +524,29 @@ Account/storage work, history reading/decoding and balance classification share
 the global 2–16 worker limiter. Account and balance queues hold at most twice the
 worker count. History queues also cap encoded bytes at cache/8 (1–16 MiB); an
 oversize atomic source record drains the queue and is processed synchronously.
+Balance readers reuse decoded account-trie paths for at most 32 account reads
+per reader, with at most one reader per worker; alloc uses one such bounded
+reader. Ancient scanning keeps only the current data-file handle for each of
+its three tables and checks file identity/metadata on rotation and close.
 These are working-queue limits, not a total RSS or maximum source-record size.
 Evidence and patches are disk-backed. Cache and handles must each be at least 64;
 four concurrent database allowances each receive one quarter. Independent node
 inventory checks also use the existing bounded temporary index.
 
 Allow disk space for the original state, conversion scratch nodes, evidence and
-final target simultaneously. Standalone verification independently reconstructs
-the expected target in a temporary sibling directory, so it needs comparable
-extra disk space and source access. It compares fresh evidence and inventories
-the actual artifact, rather than trusting the report. The original code/witness
-file digests are checked again before completion.
+final target simultaneously. Standalone verification independently replays the
+original state and conversion in a temporary sibling directory, but does not
+write another final artifact. Its `replay_converted_state` phase recomputes the
+expected root and counts before the actual artifact receives full state and
+inventory verification. Source access and scratch space for original state,
+conversion nodes, evidence and inventory indexes are still required. All supplied
+code, witness and alloc file digests are confirmed over raw bytes immediately
+before publication or verification success; confirmation neither reparses the
+inputs nor rewrites their evidence index.
+
+See [optimization validation and paired measurements](docs/ovm-optimization-performance.md)
+for the baseline comparison, including standalone verification and the separate
+ancient-read microbenchmark.
 
 The checkpoint has height `LastBlock+1`, parent hash equal to LastBlock, the new
 state root and timestamp `parent+1`. Its gas limit is inherited; difficulty,
