@@ -14,6 +14,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--count", type=int, default=3)
+    parser.add_argument("--with-alloc", action="store_true",
+                        help="pair ordinary conversion with 1000 GenesisAlloc account overrides")
     args = parser.parse_args()
     if args.count < 2:
         parser.error("count must be at least 2 for paired measurements")
@@ -29,22 +31,29 @@ def main():
             output.write(f"# {platform.platform()} CPUs={os.cpu_count()}\n")
             output.write(f"# source-sha256={digest.hexdigest()} cache-mb=128 handles=128\n")
             output.write("# Synthetic 10000 holder state, two-block history, hash/Pebble.\n")
+            if args.with_alloc:
+                output.write("# Alloc: first 1000 holders receive code, balance and one storage override.\n")
             output.write("# Fresh process; OS caches not flushed; setup excluded from ns/op.\n")
             output.write("# RSS includes fixture setup; disk peak sampled at 20 ms includes scratch and target.\n")
             for repetition in range(args.count):
                 for workers in ([2, 8] if repetition % 2 == 0 else [8, 2]):
-                    print(f"sample {repetition + 1}/{args.count}: workers={workers}", flush=True)
-                    output.write(f"# sample={repetition + 1} workers={workers}\n")
-                    output.flush()
-                    command = [str(binary), "-test.run=^$",
-                               f"-test.bench=^BenchmarkOVMMigration$/^workers={workers}$",
-                               "-test.benchtime=1x", "-test.count=1", "-test.timeout=10m"]
-                    if platform.system() == "Darwin":
-                        command = ["/usr/bin/time", "-l"] + command
-                    elif Path("/usr/bin/time").exists():
-                        command = ["/usr/bin/time", "-v"] + command
-                    subprocess.run(command, cwd=root / "internal/migration", stdout=output,
-                                   stderr=subprocess.STDOUT, check=True)
+                    modes = [False, True] if args.with_alloc else [False]
+                    if repetition % 2:
+                        modes.reverse()
+                    for alloc in modes:
+                        print(f"sample {repetition + 1}/{args.count}: workers={workers} alloc={alloc}", flush=True)
+                        output.write(f"# sample={repetition + 1} workers={workers} alloc={alloc}\n")
+                        output.flush()
+                        name = "BenchmarkOVMMigrationAlloc" if alloc else "BenchmarkOVMMigration"
+                        command = [str(binary), "-test.run=^$",
+                                   f"-test.bench=^{name}$/^workers={workers}$",
+                                   "-test.benchtime=1x", "-test.count=1", "-test.timeout=10m"]
+                        if platform.system() == "Darwin":
+                            command = ["/usr/bin/time", "-l"] + command
+                        elif Path("/usr/bin/time").exists():
+                            command = ["/usr/bin/time", "-v"] + command
+                        subprocess.run(command, cwd=root / "internal/migration", stdout=output,
+                                       stderr=subprocess.STDOUT, check=True)
 
 
 if __name__ == "__main__":

@@ -27,17 +27,19 @@ type OVMOptions struct {
 	WrappedEtherCode string
 	SourceAncient    string
 	StateWitness     string
+	GenesisAlloc     string
 }
 
 type ovmInputs struct {
 	code           []byte
 	codeFileDigest common.Hash
 	witnessDigest  common.Hash
+	allocDigest    common.Hash
 }
 
 func validateOVMOptions(o OVMOptions) error {
 	if !o.Enabled {
-		if o.WrappedEtherCode != "" || o.SourceAncient != "" || o.StateWitness != "" {
+		if o.WrappedEtherCode != "" || o.SourceAncient != "" || o.StateWitness != "" || o.GenesisAlloc != "" {
 			return errors.New("OVM input flags require --migrate-ovm-eth")
 		}
 		return nil

@@ -189,6 +189,33 @@ not widen migration artifact contracts or restore legacy target generation.
 - Keep `metis-l2state-ovm-verification` v1 independent of ordinary reports.
   Standalone OVM verification replays source/history/operator inputs before
   checking the actual target's full inventory. Never relax ordinary root equality.
+- `--ovm-genesis-alloc` is an optional OVM-only post-conversion overlay. Accept a
+  GenesisAlloc address map with geth v1.17.5 field encodings, additionally allowing
+  omitted balance. Preserve omitted fields, merge storage by slot (zero deletes),
+  apply explicit code/balance/nonce including empty code and zero, and reject
+  OVM_ETH even for empty entries. Empty account/storage objects do nothing;
+  explicit scalar fields or storage entries create absent accounts even when the
+  result is empty. No whole-account deletion or storage replacement is supported.
+  Never use alloc addresses as witnesses or classify by overridden code. Finish
+  all original-state/history/accounting validation and conversion before applying
+  alloc; overrides cannot repair invalid source state.
+- Stream alloc and its normalized duplicate detection into the operation-local
+  disk index with bounded batches/tokens and independent patch namespaces. Do not
+  retain a full GenesisAlloc map or whole-account storage in memory. Limit each
+  runtime to 1 MiB. Reject null, unknown/duplicate fields, address/slot aliases,
+  malformed/overflow values, trailing data and symlink/non-regular inputs. Hash
+  the original file and compare it again before publication or verification
+  success. Explicit native balance overrides may change the final currency total.
+  Consume whitespace outside JSON strings with bounded memory, preserving token
+  separation and all string bytes; compute both initial and confirmation digests
+  over raw input before any whitespace folding. Cover long leading/inter-token/
+  trailing whitespace, cross-read escapes, read errors and cancellation.
+- When alloc is used, OVM report v1 includes `genesis_alloc.file_sha256` and
+  `genesis_alloc.converted_state` (root/counts before overrides); `balances` remains
+  conversion-stage evidence and `target_state`/checkpoint describe the final
+  overlay. Omit `genesis_alloc` when unused and reject explicit null. Verification
+  requires matching input presence and bytes, replays both stages and inventories
+  the actual artifact. Keep ordinary report and bundle schemas unchanged.
 - Exercise four target combinations, independent serial state conversion,
   legacy-module receipt/state reading, wrapped runtime execution, continuation,
   history failures, input/report tampering, source immutability, concurrency and
@@ -196,6 +223,11 @@ not widen migration artifact contracts or restore legacy target generation.
   The old canary's inconsistent synthetic supply must fail conversion validation.
   Finish with `make ci`, `make test-race`, and paired OVM measurements in isolated
   processes; report synthetic measurement limits and any regressions.
+  Alloc changes additionally cover geth JSON interoperability, sparse/zero
+  fields, new/empty accounts, large storage and normalized duplicates across
+  batches, original-head classification, reference StateDB/GenerateTrie inventory,
+  runtime execution/continuation, input/report tampering and cancellation/cleanup.
+  Use `scripts/benchmark-ovm.py --with-alloc` for paired conversion/overlay costs.
 
 ### Offline prune
 

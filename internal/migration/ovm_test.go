@@ -245,6 +245,14 @@ func TestOVMMigrateAllTargets(t *testing.T) {
 }
 
 func ovmReferenceRoot(t testing.TB, f ovmFixture) common.Hash {
+	return ovmReferenceWithAlloc(t, f, nil)
+}
+
+func ovmReferenceWithAlloc(t testing.TB, f ovmFixture, apply func(*state.StateDB)) common.Hash {
+	return ovmReferenceWithAllocDB(t, f, apply, nil)
+}
+
+func ovmReferenceWithAllocDB(t testing.TB, f ovmFixture, apply func(*state.StateDB), visit func(ethdb.Database, common.Hash)) common.Hash {
 	t.Helper()
 	db := rawdb.NewMemoryDatabase()
 	defer func() {
@@ -283,9 +291,18 @@ func ovmReferenceRoot(t testing.TB, f ovmFixture) common.Hash {
 		t.Fatal(err)
 	}
 	s.SetCode(ovmETHAddress, code, tracing.CodeChangeUnspecified)
+	if apply != nil {
+		apply(s)
+	}
 	root, err = s.Commit(2, false, false)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if visit != nil {
+		if err := tdb.Commit(root, false); err != nil {
+			t.Fatal(err)
+		}
+		visit(db, root)
 	}
 	return root
 }

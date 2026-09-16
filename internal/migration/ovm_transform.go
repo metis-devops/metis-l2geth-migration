@@ -358,7 +358,11 @@ func (t *ovmTransformer) rebuildAccounts() (common.Hash, error) {
 }
 
 func (t *ovmTransformer) rebuildPatchedTrie(owner common.Hash, original *trie.Iterator, prefix byte) (common.Hash, error) {
-	patches := t.index.db.NewIterator([]byte{prefix}, nil)
+	return t.rebuildPatchedTriePrefix(owner, original, []byte{prefix})
+}
+
+func (t *ovmTransformer) rebuildPatchedTriePrefix(owner common.Hash, original *trie.Iterator, prefix []byte) (common.Hash, error) {
+	patches := t.index.db.NewIterator(prefix, nil)
 	defer patches.Release()
 	writer := newDirectStateWriter(t.db, "hash")
 	defer writer.Abort()
@@ -374,9 +378,9 @@ func (t *ovmTransformer) rebuildPatchedTrie(owner common.Hash, original *trie.It
 			return common.Hash{}, err
 		}
 		var key, value []byte
-		usePatch := b && (!a || bytes.Compare(patches.Key()[1:], original.Key) <= 0)
+		usePatch := b && (!a || bytes.Compare(patches.Key()[len(prefix):], original.Key) <= 0)
 		if usePatch {
-			key, value = patches.Key()[1:], patches.Value()
+			key, value = patches.Key()[len(prefix):], patches.Value()
 		} else {
 			key, value = original.Key, original.Value
 		}

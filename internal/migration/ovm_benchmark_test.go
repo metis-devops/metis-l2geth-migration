@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -16,15 +17,36 @@ import (
 )
 
 func BenchmarkOVMMigration(b *testing.B) {
+	benchmarkOVMMigration(b, false)
+}
+
+func BenchmarkOVMMigrationAlloc(b *testing.B) {
+	benchmarkOVMMigration(b, true)
+}
+
+func benchmarkOVMMigration(b *testing.B, withAlloc bool) {
 	for _, workers := range []int{2, 8} {
 		b.Run(fmt.Sprintf("workers=%d", workers), func(b *testing.B) {
 			f := newOVMFixtureSized(b, 10000, nil)
+			var alloc string
+			if withAlloc {
+				var data strings.Builder
+				data.WriteByte('{')
+				for n, address := range f.holders[:1000] {
+					if n > 0 {
+						data.WriteByte(',')
+					}
+					fmt.Fprintf(&data, `"%s":{"code":"0x6001600055","balance":"0x0a","storage":{"01":"01"}}`, address)
+				}
+				data.WriteByte('}')
+				alloc = writeAllocFile(b, data.String())
+			}
 			root := b.TempDir()
 			b.ReportAllocs()
 			b.ResetTimer()
 			var peak int64
 			for n := range b.N {
-				opts := MigrateOptions{SourceChaindata: f.source, Output: filepath.Join(root, fmt.Sprint(n)), Scheme: "hash", DBEngine: "pebble", CacheMB: 128, Handles: 128, Workers: workers, OVM: OVMOptions{Enabled: true, WrappedEtherCode: f.code, StateWitness: f.witness}}
+				opts := MigrateOptions{SourceChaindata: f.source, Output: filepath.Join(root, fmt.Sprint(n)), Scheme: "hash", DBEngine: "pebble", CacheMB: 128, Handles: 128, Workers: workers, OVM: OVMOptions{Enabled: true, WrappedEtherCode: f.code, StateWitness: f.witness, GenesisAlloc: alloc}}
 				ctx, cancel := context.WithCancel(b.Context())
 				var wg sync.WaitGroup
 				wg.Go(func() {

@@ -59,6 +59,9 @@ func migrateOVM(ctx context.Context, opts MigrateOptions) (result MigrateResult,
 	if err := ctx.Err(); err != nil {
 		return result, err
 	}
+	if err := confirmOVMAllocEvidence(ctx, opts.OVM.GenesisAlloc, report.GenesisAlloc); err != nil {
+		return result, err
+	}
 	if err := output.Commit(); err != nil {
 		return result, err
 	}
@@ -117,6 +120,10 @@ func buildOVMTarget(ctx context.Context, opts MigrateOptions, root string, repor
 	if err != nil {
 		return report, err
 	}
+	newRoot, allocEvidence, err := w.applyGenesisAlloc(newRoot)
+	if err != nil {
+		return report, err
+	}
 	provisional := w.sourceEvidence()
 	checkpoint, err := ovmCheckpoint(provisional, newRoot)
 	if err != nil {
@@ -134,6 +141,7 @@ func buildOVMTarget(ctx context.Context, opts MigrateOptions, root string, repor
 		return report, err
 	}
 	report = newOVMReport(sourceEvidence, w.original, final, checkpoint, w.inputs, w.history, balances, target, opts.Scheme)
+	report.GenesisAlloc = allocEvidence
 	return report, report.Validate()
 }
 
@@ -182,6 +190,12 @@ func (w *ovmWork) prepare() error {
 		return err
 	}
 	w.index = newOVMIndex(w.indexDB)
+	if w.opts.OVM.GenesisAlloc != "" {
+		w.inputs.allocDigest, err = loadOVMGenesisAlloc(w.ctx, w.opts.OVM.GenesisAlloc, w.index)
+		if err != nil {
+			return err
+		}
+	}
 	if err := w.index.address(ovmETHAddress); err != nil {
 		return err
 	}
@@ -259,6 +273,9 @@ func runOVMPartitioned(ctx context.Context, source, target ethdb.Database, root 
 	tdb := triedb.NewDatabase(source, triedb.HashDefaults)
 	defer func() { retErr = errors.Join(retErr, tdb.Close()) }()
 	m := partitionedStateMigrator{ctx: ctx, source: source, trieDB: tdb, target: target, scheme: scheme, root: root, limiter: limiter, accounts: newMigrateAccountWindow(workers), codeHashes: newConcurrentHashSet(), readCode: readCode, requireZeroNative: zeroNative}
+	if target == nil {
+		m.outputFactory = func(bool) partitionStateOutput { return validationStateOutput{} }
+	}
 	result, writer, err := m.run()
 	if writer != nil {
 		defer writer.Abort()
@@ -323,6 +340,15 @@ func (w *ovmWork) finalTarget(root string, newRoot common.Hash, checkpoint bundl
 }
 
 func (w *ovmWork) confirmInputs() error {
+	if w.opts.OVM.GenesisAlloc != "" {
+		digest, err := hashOVMGenesisAlloc(w.ctx, w.opts.OVM.GenesisAlloc)
+		if err != nil {
+			return err
+		}
+		if digest != w.inputs.allocDigest {
+			return errors.New("GenesisAlloc input changed during migration")
+		}
+	}
 	_, digest, err := readWrappedCode(w.ctx, w.opts.OVM.WrappedEtherCode)
 	if err != nil {
 		return err

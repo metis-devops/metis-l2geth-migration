@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -20,6 +21,7 @@ import (
 	"github.com/holiman/uint256"
 	"github.com/metis-devops/metis-l2geth-migration/internal/bundle"
 	"github.com/metis-devops/metis-l2geth-migration/internal/formatversion"
+	"github.com/metis-devops/metis-l2geth-migration/internal/strictio"
 	"github.com/metis-devops/metis-l2geth-migration/internal/version"
 )
 
@@ -32,26 +34,53 @@ type OVMStateEvidence struct {
 	Counts bundle.Counts `json:"counts"`
 }
 
+// OVMGenesisAllocEvidence separates balance conversion from operator overrides.
+type OVMGenesisAllocEvidence struct {
+	FileSHA256 common.Hash      `json:"file_sha256"`
+	Converted  OVMStateEvidence `json:"converted_state"`
+}
+
 // OVMVerificationReport is independent of root-preserving direct reports.
 type OVMVerificationReport struct {
-	Format          string                `json:"format"`
-	Version         uint64                `json:"version"`
-	VerifiedAt      time.Time             `json:"verified_at"`
-	Verified        bool                  `json:"verified"`
-	Scheme          string                `json:"scheme"`
-	DBEngine        string                `json:"db_engine"`
-	StateLayout     StateLayout           `json:"state_layout"`
-	ToolVersion     string                `json:"tool_version"`
-	GethVersion     string                `json:"geth_version"`
-	Source          bundle.SourceEvidence `json:"source"`
-	Original        OVMStateEvidence      `json:"original_state"`
-	Target          OVMStateEvidence      `json:"target_state"`
-	Checkpoint      bundle.SourceEvidence `json:"checkpoint"`
-	WrappedCodeHash common.Hash           `json:"wrapped_code_hash"`
-	CodeFileSHA256  common.Hash           `json:"code_file_sha256"`
-	WitnessSHA256   common.Hash           `json:"witness_sha256"`
-	History         OVMHistoryEvidence    `json:"history"`
-	Balances        OVMBalanceEvidence    `json:"balances"`
+	Format          string                   `json:"format"`
+	Version         uint64                   `json:"version"`
+	VerifiedAt      time.Time                `json:"verified_at"`
+	Verified        bool                     `json:"verified"`
+	Scheme          string                   `json:"scheme"`
+	DBEngine        string                   `json:"db_engine"`
+	StateLayout     StateLayout              `json:"state_layout"`
+	ToolVersion     string                   `json:"tool_version"`
+	GethVersion     string                   `json:"geth_version"`
+	Source          bundle.SourceEvidence    `json:"source"`
+	Original        OVMStateEvidence         `json:"original_state"`
+	Target          OVMStateEvidence         `json:"target_state"`
+	Checkpoint      bundle.SourceEvidence    `json:"checkpoint"`
+	WrappedCodeHash common.Hash              `json:"wrapped_code_hash"`
+	CodeFileSHA256  common.Hash              `json:"code_file_sha256"`
+	WitnessSHA256   common.Hash              `json:"witness_sha256"`
+	History         OVMHistoryEvidence       `json:"history"`
+	Balances        OVMBalanceEvidence       `json:"balances"`
+	GenesisAlloc    *OVMGenesisAllocEvidence `json:"genesis_alloc,omitempty"`
+}
+
+// UnmarshalJSON retains strict fields and distinguishes absent alloc from null.
+func (r *OVMVerificationReport) UnmarshalJSON(data []byte) error {
+	type reportJSON OVMVerificationReport
+	decoded, err := strictio.DecodeJSON[reportJSON](data, "OVM verification report")
+	if err != nil {
+		return err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	for key, raw := range fields {
+		if strings.EqualFold(key, "genesis_alloc") && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			return errors.New("OVM genesis_alloc evidence must not be null")
+		}
+	}
+	*r = OVMVerificationReport(decoded)
+	return nil
 }
 
 func newOVMReport(source bundle.SourceEvidence, original, final StateResult, checkpoint bundle.SourceEvidence, inputs ovmInputs, history OVMHistoryEvidence, balances OVMBalanceEvidence, target targetConfig, scheme string) OVMVerificationReport {
@@ -91,6 +120,14 @@ func (r OVMVerificationReport) Validate() error {
 	}
 	if err := r.Target.Counts.Validate(); err != nil {
 		return err
+	}
+	if r.GenesisAlloc != nil {
+		if r.GenesisAlloc.FileSHA256 == (common.Hash{}) || r.GenesisAlloc.Converted.Root == (common.Hash{}) || r.GenesisAlloc.Converted.Counts.Accounts == 0 {
+			return errors.New("OVM GenesisAlloc evidence is incomplete")
+		}
+		if err := r.GenesisAlloc.Converted.Counts.Validate(); err != nil {
+			return fmt.Errorf("OVM converted state counts: %w", err)
+		}
 	}
 	expected, err := ovmCheckpoint(r.Source, r.Target.Root)
 	if err != nil {

@@ -363,6 +363,9 @@ portable bundle's account payload uses the reversible slim representation.
 `--migrate-ovm-eth` defaults to false. Its input flags are rejected without that
 option. Verification selects the independent OVM report automatically and
 requires the original code file and, if used, the original witness file.
+When migration used `--ovm-genesis-alloc`, verification also requires that exact
+original JSON file with the same flag; supplying it for an artifact that did not
+use alloc overrides is rejected.
 `--source-ancient /snapshot/ancient` overrides the default `source-chaindata/ancient`.
 Keep the source, including any separate ancient directory, stopped or frozen for
 the entire operation. Outputs must be outside both source directories.
@@ -392,6 +395,86 @@ Source balances must sum exactly to the original totalSupply. Any discrepancy,
 nonzero source native balance, or uint256 overflow fails the operation; l2state
 never repairs the source accounting. The old canary has inconsistent synthetic
 supply and is not an eligible conversion snapshot.
+
+### GenesisAlloc account overrides
+
+Optionally add `--ovm-genesis-alloc /inputs/alloc.json` to the OVM `migrate`
+command and its subsequent `verify` command. The file is a geth
+`core/types.GenesisAlloc` address-to-account JSON object, **not** a complete
+genesis document with an `alloc` wrapper:
+
+```json
+{
+  "0x1000000000000000000000000000000000000001": {
+    "code": "0x602a60005260206000f3",
+    "storage": {"0x01": "0x2a", "0x02": "0x00"}
+  },
+  "2000000000000000000000000000000000000002": {
+    "balance": "0x1234",
+    "nonce": 1
+  }
+}
+```
+
+The source and authenticated history are fully validated first. OVM balance
+conversion uses code at the original selected head and must pass all existing
+ownership, zero-native-balance and supply checks. Overrides are then merged into
+the converted state, before building the final artifact and checkpoint. Alloc
+addresses do not serve as ownership witnesses or grant retention eligibility.
+
+| Account input | Effect after OVM conversion |
+| --- | --- |
+| Omitted field | Keep its converted value |
+| `code` | Install these runtime bytes without executing a constructor; `"0x"` clears code |
+| `balance` | Set the final native balance, including zero; nonnegative uint256 |
+| `nonce` | Set the final nonce, including zero; uint64 |
+| `storage` | Merge listed slots; zero deletes a slot, omitted slots remain |
+| `storage: {}` or an empty account object | No changes from that input |
+
+For new addresses the starting values are zero balance/nonce, empty code and
+empty storage. Applying an explicit scalar field or a storage entry creates an
+account leaf, even if all resulting values are zero; empty objects alone do not
+create accounts. There is no whole-account deletion or whole-storage replacement.
+Unlike geth's genesis decoder, this overlay permits omitting `balance`, so code
+and storage can be changed without overwriting a converted balance. Other field
+encodings follow pinned geth v1.17.5: 20-byte addresses with or without `0x`,
+`0x`-prefixed even-length code hex, hexadecimal or decimal balance/nonce, and
+even-length storage hex of at most 32 bytes, optionally prefixed with lowercase
+`0x` and left-padded to 32 bytes. Storage JSON fields must be strings.
+
+The OVM_ETH address `0xDeadDeAddeAddEAddeadDEaDDEAdDeaDDeAD0000` is forbidden in
+alloc, even with an empty object. Its code continues to come from the required
+`--wrapped-ether-code` file; conversion alone determines its backing and supply.
+Overriding other accounts' native balances can increase or decrease the final
+native currency total. The report's `balances` describes the **conversion stage**,
+not the native totals after operator overrides.
+
+The alloc file must be a regular non-symlink file and remain byte-for-byte
+unchanged throughout migration or verification. Reject nulls, unknown/repeated
+fields, duplicate addresses or storage slots (including equivalent hex spellings),
+malformed/out-of-range values and trailing JSON. Each account's code is limited
+to 1 MiB. Accounts and storage are streamed to a private disk index, with bounded
+batches and JSON tokens; total file size and storage slot count are not capped.
+JSON token bounds admit the maximum code size even with JSON Unicode escapes.
+Runs of whitespace outside strings are streamed to the decoder as one separator,
+so padding cannot grow its buffer with the file size. File digests still cover
+every original byte, including whitespace; whitespace-only changes are rejected.
+
+OVM verification remains version 1. With overrides, `genesis_alloc` records
+`file_sha256` and `converted_state` (the root and counts before overrides).
+`target_state` and `checkpoint` describe the final overridden state. Without
+overrides, `genesis_alloc` is omitted; explicit null is invalid. Independent
+verification replays both stages using the original inputs and then verifies the
+actual target's complete inventory. The extra evidence and temporary index are
+exclusive to OVM conversion; ordinary migrate, portable workflows and prune do
+not accept the new option.
+
+To measure the additional cost on the synthetic OVM fixture, run
+`python3 scripts/benchmark-ovm.py --out /absolute/new/results.txt --with-alloc`.
+This pairs ordinary conversion with 1,000 account overrides in fresh processes,
+alternating order across samples. Run it separately from CI or other benchmarks.
+See [validation and local measurements](docs/ovm-genesis-alloc-performance.md)
+for the measured overhead and synthetic-fixture limits.
 
 ### History and storage ownership
 

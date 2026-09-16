@@ -68,7 +68,7 @@ func (b *ovmBalanceBatch) inspect(job *ovmBalanceJob) error {
 		return errors.New("OVM conversion encountered nonzero source native balance")
 	}
 	job.account = account
-	job.contract = bytes.Equal(account.CodeHash, types.EmptyCodeHash[:])
+	job.contract = !bytes.Equal(account.CodeHash, types.EmptyCodeHash[:])
 	_, job.retain, err = b.transformer.index.get('f', job.address[:])
 	return err
 }
