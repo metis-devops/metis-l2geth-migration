@@ -45,7 +45,7 @@ func newDirectVerificationReport(source bundle.SourceEvidence, state StateResult
 		VerifiedAt:     time.Now().UTC(),
 		Verified:       true,
 		Scheme:         scheme,
-		DBEngine:       DBEnginePebbleV2,
+		DBEngine:       DBEnginePebble,
 		StateLayout:    LayoutGeth,
 		ToolVersion:    version.ToolVersion,
 		GethVersion:    version.GethVersion,

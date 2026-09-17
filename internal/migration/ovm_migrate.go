@@ -264,7 +264,7 @@ func (w *ovmWork) migrateOriginalAndHistory() error {
 
 func (w *ovmWork) reopenOriginal() (retErr error) {
 	cache, handles := w.opts.CacheMB/4, w.opts.Handles/4
-	config := targetConfig{engine: DBEnginePebbleV2, layout: LayoutGeth}
+	config := targetConfig{engine: DBEnginePebble, layout: LayoutGeth}
 	path := filepath.Join(w.path, "base")
 	if w.storage.fs == nil {
 		_, closed, err := finalizeAndVerifyTarget(w.ctx, w.base, path, "hash", config, w.sourceEvidence(), w.original, cache, handles, w.reporter, w.opts.TempDB)

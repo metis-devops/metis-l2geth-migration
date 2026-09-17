@@ -220,6 +220,14 @@ func testOVMMigrateAllTargets(t *testing.T, tempMode TempDBMode) {
 				if r == nil || r.Target.Root != expected || r.Target.Root == f.root {
 					t.Fatalf("unexpected root/report: %+v expected %s", r, expected)
 				}
+				if r.DBEngine != engine {
+					t.Fatalf("unexpected engine %q", r.DBEngine)
+				}
+				retired := *r
+				retired.DBEngine = "pebble-v2"
+				if err := retired.Validate(); err == nil || !strings.Contains(err.Error(), "invalid database engine") {
+					t.Fatalf("retired engine accepted: %v", err)
+				}
 				if r.Balances.MigratedNative.Uint64() != 209 || r.Balances.RemainingSupply.Uint64() != 99 || r.Balances.EOAs != 3 || r.Balances.ConvertedContracts != 2 || r.Balances.RetainedContracts != 1 {
 					t.Fatalf("balances: %+v", r.Balances)
 				}

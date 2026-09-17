@@ -66,6 +66,9 @@ func testTargetMatrixGoldenCanary(t *testing.T, tempMode TempDBMode) {
 				if err != nil {
 					t.Fatal(err)
 				}
+				if imported.Report.DBEngine != tc.engine || direct.Report.DBEngine != tc.engine {
+					t.Fatalf("unexpected engines: %q / %q", imported.Report.DBEngine, direct.Report.DBEngine)
+				}
 				if imported.Report.Counts != direct.Report.Counts || direct.Report.RecomputedRoot != exported.Manifest.Source.HeadBefore.StateRoot || string(direct.Report.StateLayout) != tc.layout {
 					t.Fatalf("reports disagree: %+v %+v", imported.Report, direct.Report)
 				}
@@ -113,7 +116,7 @@ func testLevelDBGethContinuation(t *testing.T, tempMode TempDBMode) {
 }
 
 func TestTargetOptionsFailBeforeIO(t *testing.T) {
-	for _, tc := range []targetTestCase{{"bogus", "geth", "hash"}, {DBEnginePebbleV2, "geth", "hash"}, {DBEnginePebble, "geth", "invalid"}} {
+	for _, tc := range []targetTestCase{{"bogus", "geth", "hash"}, {"pebble-v2", "geth", "hash"}, {DBEnginePebble, "geth", "invalid"}} {
 		t.Run(tc.name(), func(t *testing.T) {
 			out := filepath.Join(t.TempDir(), "absent-parent", "artifact")
 			_, err := Migrate(context.Background(), MigrateOptions{SourceChaindata: "missing-source", Output: out, Scheme: tc.scheme, DBEngine: tc.engine})
@@ -281,6 +284,36 @@ func TestOldArtifactReportsDefaultToGethLayout(t *testing.T) {
 			}
 			if directoryContentDigest(t, artifact) != before {
 				t.Fatal("rejected artifact was modified")
+			}
+		}
+	}
+}
+
+func TestUnifiedDatabaseEngine(t *testing.T) {
+	for _, scheme := range []string{"hash", "path"} {
+		for _, engine := range []string{"", DBEnginePebble, DBEngineLevelDB} {
+			want := engine
+			if want == "" {
+				want = DBEnginePebble
+			}
+			target, err := targetOptions(engine, scheme)
+			if err != nil || target.engine != want {
+				t.Fatalf("options %q/%s: %+v, %v", engine, scheme, target, err)
+			}
+			portable := validTestVerificationReport()
+			portable.Scheme, portable.DBEngine, portable.StateLayout = scheme, want, LayoutGeth
+			direct := validDirectVerificationReport(t)
+			direct.Scheme, direct.DBEngine = scheme, want
+			for _, report := range []interface{ Validate() error }{portable, direct} {
+				if err := report.Validate(); err != nil {
+					t.Fatal(err)
+				}
+			}
+			portable.DBEngine, direct.DBEngine = "pebble-v2", "pebble-v2"
+			for _, report := range []interface{ Validate() error }{portable, direct} {
+				if err := report.Validate(); err == nil || !strings.Contains(err.Error(), "invalid database engine") {
+					t.Fatalf("retired engine accepted: %v", err)
+				}
 			}
 		}
 	}

@@ -20,10 +20,8 @@ import (
 )
 
 const (
-	// DBEnginePebble is the Pebble engine name accepted by CLI and Go options.
+	// DBEnginePebble identifies Pebble v2 in options, internal configuration and reports.
 	DBEnginePebble = "pebble"
-	// DBEnginePebbleV2 is the Pebble engine identifier stored in artifact reports.
-	DBEnginePebbleV2 = "pebble-v2"
 	// DBEngineLevelDB is the LevelDB engine name used in options and reports.
 	DBEngineLevelDB = "leveldb"
 )
@@ -58,9 +56,7 @@ func targetOptions(engine, scheme string) (targetConfig, error) {
 	if engine == "" {
 		engine = DBEnginePebble
 	}
-	if engine == DBEnginePebble {
-		engine = DBEnginePebbleV2
-	} else if engine != DBEngineLevelDB {
+	if engine != DBEnginePebble && engine != DBEngineLevelDB {
 		return targetConfig{}, fmt.Errorf("db-engine must be %s or %s: %q", DBEnginePebble, DBEngineLevelDB, engine)
 	}
 	return reportTarget(engine, LayoutGeth, scheme)
@@ -70,7 +66,7 @@ func reportTarget(engine string, layout StateLayout, scheme string) (targetConfi
 	if layout == "" {
 		layout = LayoutGeth // Existing reports predate this field and always used geth layout.
 	}
-	if engine != DBEnginePebbleV2 && engine != DBEngineLevelDB {
+	if engine != DBEnginePebble && engine != DBEngineLevelDB {
 		return targetConfig{}, fmt.Errorf("invalid database engine %q", engine)
 	}
 	if layout != LayoutGeth {

@@ -37,7 +37,7 @@ func testTargetTamperingRejected(t *testing.T, mode TempDBMode) {
 				switch damage {
 				case "engine":
 					if tc.engine == DBEngineLevelDB {
-						result.Report.DBEngine = DBEnginePebbleV2
+						result.Report.DBEngine = DBEnginePebble
 					} else {
 						result.Report.DBEngine = DBEngineLevelDB
 					}

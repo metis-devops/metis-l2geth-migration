@@ -155,7 +155,7 @@ func validDirectVerificationReport(t *testing.T) DirectVerificationReport {
 		VerifiedAt:  time.Unix(1, 0).UTC(),
 		Verified:    true,
 		Scheme:      rawdb.HashScheme,
-		DBEngine:    DBEnginePebbleV2,
+		DBEngine:    DBEnginePebble,
 		ToolVersion: version.ToolVersion,
 		GethVersion: version.GethVersion,
 		Source: bundle.SourceEvidence{

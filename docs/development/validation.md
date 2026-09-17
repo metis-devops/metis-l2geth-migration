@@ -22,6 +22,11 @@
   Exclude only the 21 explicitly retired legacy-target cases from expected
   baselines in memory before comparison/replay; never filter actual output,
   rewrite frozen files, or hide missing/changed geth cases.
+- The Pebble engine identifier is uniformly `pebble` in options and reports.
+  Keep current report versions at v1 for this intentional identifier replacement;
+  runtime readers reject the retired identifier. Only expected frozen artifact
+  reports translate the retired identifier to `pebble` in memory before comparison
+  and replay. Never normalize current output or change other report/database evidence.
 - Treat accepted version files as immutable. Ordinary tests never regenerate
   them. `make geth-compat-candidate OUT=/absolute/new/path` only exports an
   unapproved candidate outside the corpus; review differences before adding a

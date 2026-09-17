@@ -56,9 +56,9 @@
 - Support `--db-engine pebble|leveldb` (default Pebble) with explicit `hash`
   and `path` schemes using pinned geth v1.17.5. The target layout is always geth.
   Do not restore the removed `--state-layout` flag or legacy target generation.
-- Reports record `db_engine` as `pebble-v2|leveldb` and new artifact reports
-  explicitly record `state_layout` as `geth`. An omitted layout in an old report
-  means geth; explicit legacy-l2geth/empty/null/unknown values fail.
+- Reports record `db_engine` as `pebble|leveldb` (where `pebble` means Pebble v2).
+  Reject the retired engine identifier. New artifact reports explicitly record
+  `state_layout` as `geth`. An omitted layout in an old report means geth; explicit legacy-l2geth/empty/null/unknown values fail.
   Keep existing versions and bundle encoding. Pure bundle verification carries
   neither target field. Verification uses the declared engine without fallback
   and opens LevelDB with the strict, recovery-disabled read-only adapter.

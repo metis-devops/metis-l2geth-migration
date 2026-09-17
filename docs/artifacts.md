@@ -40,8 +40,9 @@ database directory is synced before independent read-only verification and
 atomic publication. This explicitly supplies durability because the pinned
 geth LevelDB adapter's `SyncKeyValue` does not sync data.
 
-Artifact reports record `db_engine` as `pebble-v2` or `leveldb` and explicitly
-record `state_layout` as `geth`. Old reports omitting `state_layout` mean `geth`;
+Artifact reports record `db_engine` as `pebble` (Pebble v2) or `leveldb` and explicitly
+record `state_layout` as `geth`. Reports using the retired engine identifier
+are rejected; recreate those artifacts. Old reports omitting `state_layout` mean `geth`;
 explicit `legacy-l2geth`, empty, null, and unknown values fail validation. Direct and bundle-backed reports use v1.
 Pure bundle verification has neither target field; target engine and layout
 choices do not alter the portable bundle format.

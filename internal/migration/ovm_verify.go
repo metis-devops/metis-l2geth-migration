@@ -70,9 +70,6 @@ func VerifyOVM(ctx context.Context, opts OVMVerifyOptions) (report OVMVerificati
 		return report, err
 	}
 	migrate := MigrateOptions{TempDB: opts.TempDB, SourceChaindata: opts.SourceChaindata, Scheme: stored.Scheme, DBEngine: stored.DBEngine, CacheMB: opts.CacheMB, Handles: opts.Handles, Workers: opts.Workers, OVM: opts.OVM, Progress: opts.Progress}
-	if migrate.DBEngine == DBEnginePebbleV2 {
-		migrate.DBEngine = DBEnginePebble
-	}
 	if err := validateOVMResources(migrate); err != nil {
 		return report, err
 	}

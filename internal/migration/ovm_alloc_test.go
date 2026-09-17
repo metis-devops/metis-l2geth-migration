@@ -42,7 +42,7 @@ func writeAllocFile(t testing.TB, data string) string {
 
 func testAllocIndex(t testing.TB) *ovmIndex {
 	t.Helper()
-	db, err := openOVMDatabase(targetConfig{engine: DBEnginePebbleV2}, filepath.Join(t.TempDir(), "index"), 16, 16)
+	db, err := openOVMDatabase(targetConfig{engine: DBEnginePebble}, filepath.Join(t.TempDir(), "index"), 16, 16)
 	if err != nil {
 		t.Fatal(err)
 	}
