@@ -215,7 +215,7 @@ func testOVMBalanceClassifiesCodeAtOriginalHead(t *testing.T, tempMode TempDBMod
 			t.Error(err)
 		}
 	}()
-	transformer := ovmTransformer{trieDB: tdb, root: f.root, index: testAllocIndex(t), limiter: newMigrateWorkLimiter(2)}
+	transformer := ovmTransformer{trieDB: tdb, root: f.root, index: testRetentionIndex(t, tempMode), limiter: newMigrateWorkLimiter(2)}
 	batch := ovmBalanceBatch{ctx: t.Context(), transformer: &transformer}
 	for n, contract := range map[int]bool{0: false, 1: true, 2: true, 4: false, 7: true} {
 		job := ovmBalanceJob{address: f.holders[n], hash: crypto.Keccak256Hash(f.holders[n][:]), value: *uint256.NewInt(1)}
