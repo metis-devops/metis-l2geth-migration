@@ -292,7 +292,8 @@ func compatValue(value any) string {
 	return fmt.Sprintf("json_bytes=%d sha256=%x prefix=%s...", len(b), sum, strings.TrimSuffix(string(b[:64]), `"`))
 }
 
-// normalizeCompatBaseline transforms only in-memory historical provenance.
+// normalizeCompatBaseline transforms only expected in-memory historical provenance
+// and the retired Pebble report identifier.
 // Dependent report digests use the same normalized manifest bytes as new output;
 // records, consensus evidence and database entries remain untouched.
 func normalizeCompatBaseline(t *testing.T, capture *compatCapture) {
@@ -333,7 +334,7 @@ func normalizeCompatBaseline(t *testing.T, capture *compatCapture) {
 			if err := json.Unmarshal(data, &frozen); err != nil {
 				t.Fatal(err)
 			}
-			frozen.Report = normalizeCompatJSON(t, frozen.Report, manifest)
+			frozen.Report = normalizeCompatPebbleReport(t, normalizeCompatJSON(t, frozen.Report, manifest))
 			contract.Cases[name] = compatJSON(t, frozen)
 		}
 	}
@@ -349,4 +350,19 @@ func excludeRetiredCompatTargets(capture *compatCapture) {
 			delete(capture.Contracts["verification"].Cases, scenario+"/"+compression+"/leveldb/legacy-l2geth/hash")
 		}
 	}
+}
+
+// normalizeCompatPebbleReport applies only to frozen expected artifact reports.
+// Never call it on current output: an old engine identifier must remain a failure.
+func normalizeCompatPebbleReport(t testing.TB, report json.RawMessage) json.RawMessage {
+	t.Helper()
+	var wire map[string]json.RawMessage
+	if err := json.Unmarshal(report, &wire); err != nil {
+		t.Fatal(err)
+	}
+	var engine string
+	if raw, ok := wire["db_engine"]; ok && json.Unmarshal(raw, &engine) == nil && engine == "pebble-v2" {
+		wire["db_engine"] = compatJSON(t, DBEnginePebble)
+	}
+	return compatJSON(t, wire)
 }

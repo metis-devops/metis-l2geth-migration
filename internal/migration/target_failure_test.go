@@ -16,25 +16,30 @@ import (
 )
 
 func TestTargetTamperingRejected(t *testing.T) {
+	for _, mode := range []TempDBMode{TempDBDisk, TempDBMemory} {
+		t.Run(string(mode), func(t *testing.T) { testTargetTamperingRejected(t, mode) })
+	}
+}
+func testTargetTamperingRejected(t *testing.T, mode TempDBMode) {
 	fixture := buildLegacyFixture(t)
 	for _, tc := range targetTestCases() {
 		for _, damage := range []string{"missing-code", "extra-code", "extra-node", "mixed-code", "engine", "layout", "corrupt-current"} {
-			if damage == "corrupt-current" && tc.engine != "leveldb" {
+			if damage == "corrupt-current" && tc.engine != DBEngineLevelDB {
 				continue
 			}
 			t.Run(tc.name()+"/"+damage, func(t *testing.T) {
 				artifact := filepath.Join(t.TempDir(), "artifact")
-				result, err := Migrate(context.Background(), MigrateOptions{SourceChaindata: fixture.chaindata, Output: artifact, Scheme: tc.scheme, DBEngine: tc.engine, CacheMB: 16, Handles: 16})
+				result, err := Migrate(context.Background(), MigrateOptions{TempDB: mode, SourceChaindata: fixture.chaindata, Output: artifact, Scheme: tc.scheme, DBEngine: tc.engine, CacheMB: 16, Handles: 16})
 				if err != nil {
 					t.Fatal(err)
 				}
 				dbPath := filepath.Join(artifact, "chaindata")
 				switch damage {
 				case "engine":
-					if tc.engine == "leveldb" {
-						result.Report.DBEngine = "pebble-v2"
+					if tc.engine == DBEngineLevelDB {
+						result.Report.DBEngine = DBEnginePebble
 					} else {
-						result.Report.DBEngine = "leveldb"
+						result.Report.DBEngine = DBEngineLevelDB
 					}
 					writeUncheckedDirectReport(t, artifact, result.Report)
 				case "layout":
@@ -55,7 +60,7 @@ func TestTargetTamperingRejected(t *testing.T) {
 					}
 				}
 				before := directoryContentDigest(t, artifact)
-				if _, err := VerifyDirect(context.Background(), DirectVerifyOptions{SourceChaindata: fixture.chaindata, Artifact: artifact, CacheMB: 16, Handles: 16}); err == nil {
+				if _, err := VerifyDirect(context.Background(), DirectVerifyOptions{TempDB: mode, SourceChaindata: fixture.chaindata, Artifact: artifact, CacheMB: 16, Handles: 16}); err == nil {
 					t.Fatal("tampered artifact accepted")
 				}
 				if after := directoryContentDigest(t, artifact); after != before {
@@ -140,11 +145,11 @@ func TestSourceCodeMatchingTrieNode(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			direct, err := Migrate(context.Background(), MigrateOptions{SourceChaindata: fixture.chaindata, Output: filepath.Join(root, "direct"), Scheme: "hash", DBEngine: "leveldb", CacheMB: 16, Handles: 16})
+			direct, err := Migrate(context.Background(), MigrateOptions{SourceChaindata: fixture.chaindata, Output: filepath.Join(root, "direct"), Scheme: "hash", DBEngine: DBEngineLevelDB, CacheMB: 16, Handles: 16})
 			if err != nil {
 				t.Fatal(err)
 			}
-			imported, err := Import(context.Background(), ImportOptions{Bundle: bundlePath, Output: filepath.Join(root, "import"), Scheme: "hash", DBEngine: "leveldb", CacheMB: 16, Handles: 16})
+			imported, err := Import(context.Background(), ImportOptions{Bundle: bundlePath, Output: filepath.Join(root, "import"), Scheme: "hash", DBEngine: DBEngineLevelDB, CacheMB: 16, Handles: 16})
 			if err != nil {
 				t.Fatal(err)
 			}

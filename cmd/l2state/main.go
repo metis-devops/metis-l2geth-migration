@@ -24,6 +24,7 @@ const (
 )
 
 type artifactFlags struct {
+	tempDB  *string
 	output  *string
 	scheme  *string
 	engine  *string
@@ -88,10 +89,17 @@ func runMigrate(ctx context.Context, args []string, stdout, stderr io.Writer) er
 	source := flags.String("source-chaindata", "", "stopped l2geth LevelDB chaindata directory")
 	target := addArtifactFlags(flags)
 	workers := flags.Int("workers", defaultMigrateWorkers(), "global account/storage workers; values below 2 are raised to 2, maximum 16")
+	ovmEnabled := flags.Bool("migrate-ovm-eth", false, "convert OVM ETH balances and create a migration checkpoint")
+	wrappedCode := flags.String("wrapped-ether-code", "", "storage-compatible wrappedEther runtime bytecode hex file")
+	ancient := flags.String("source-ancient", "", "legacy ancient directory (default: source-chaindata/ancient)")
+	witness := flags.String("ovm-state-witness", "", "OVM address/allowance ownership JSONL file")
+	alloc := flags.String("ovm-genesis-alloc", "", "GenesisAlloc JSON overrides applied after OVM balance conversion")
+	retainList := flags.String("ovm-erc20-retain-list", "", "file listing source contracts whose OVM ERC20 balances must be retained")
 	if err := parseFlags(flags, args, "migrate"); err != nil {
 		return err
 	}
 	result, err := migration.Migrate(ctx, migration.MigrateOptions{
+		TempDB:          migration.TempDBMode(*target.tempDB),
 		SourceChaindata: *source,
 		Output:          *target.output,
 		Scheme:          *target.scheme,
@@ -100,6 +108,7 @@ func runMigrate(ctx context.Context, args []string, stdout, stderr io.Writer) er
 		Handles:         *target.handles,
 		Workers:         *workers,
 		Progress:        newProgressOptions(stderr, *target.quiet),
+		OVM:             migration.OVMOptions{Enabled: *ovmEnabled, WrappedEtherCode: *wrappedCode, SourceAncient: *ancient, StateWitness: *witness, GenesisAlloc: *alloc, ERC20RetainList: *retainList},
 	})
 	if err != nil {
 		return err
@@ -169,6 +178,7 @@ func runImport(ctx context.Context, args []string, stdout, stderr io.Writer) err
 		return err
 	}
 	result, err := migration.Import(ctx, migration.ImportOptions{
+		TempDB:   migration.TempDBMode(*target.tempDB),
 		Bundle:   *bundlePath,
 		Output:   *target.output,
 		Scheme:   *target.scheme,
@@ -186,13 +196,20 @@ func runImport(ctx context.Context, args []string, stdout, stderr io.Writer) err
 func runVerify(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	flags := flag.NewFlagSet("verify", flag.ContinueOnError)
 	flags.SetOutput(stderr)
+	tempDB := flags.String("temp-db", "disk", "temporary database storage: disk or memory (RAM grows with data size)")
 	bundlePath := flags.String("bundle", "", "export bundle directory")
 	source := flags.String("source-chaindata", "", "stopped l2geth LevelDB chaindata directory")
 	artifact := flags.String("artifact", "", "state artifact directory; optional with --bundle")
 	cache := flags.Int("cache-mb", defaultCacheMB, "database cache allowance in MiB")
 	handles := flags.Int("handles", defaultHandles, "database file handle allowance")
 	quiet := flags.Bool("quiet", false, "disable progress logs on stderr")
-	if err := flags.Parse(args); err != nil {
+	wrappedCode := flags.String("wrapped-ether-code", "", "original wrappedEther runtime bytecode hex file for OVM verification")
+	ancient := flags.String("source-ancient", "", "legacy ancient directory for OVM verification")
+	witness := flags.String("ovm-state-witness", "", "original OVM ownership JSONL file")
+	alloc := flags.String("ovm-genesis-alloc", "", "original GenesisAlloc JSON overrides for OVM verification")
+	retainList := flags.String("ovm-erc20-retain-list", "", "original manual ERC20 retention address file")
+	workers := flags.Int("workers", defaultMigrateWorkers(), "global workers for OVM verification, maximum 16")
+	if err := parseFlags(flags, args, "verify"); err != nil {
 		return err
 	}
 	if flags.NArg() != 0 {
@@ -205,7 +222,22 @@ func runVerify(ctx context.Context, args []string, stdout, stderr io.Writer) err
 		if *artifact == "" {
 			return errors.New("--artifact is required with --source-chaindata")
 		}
-		report, err := migration.VerifyDirect(ctx, migration.DirectVerifyOptions{
+		format, err := migration.ArtifactVerificationFormat(*artifact)
+		if err != nil {
+			return err
+		}
+		if format == migration.OVMVerificationFormat {
+			report, err := migration.VerifyOVM(ctx, migration.OVMVerifyOptions{TempDB: migration.TempDBMode(*tempDB), SourceChaindata: *source, Artifact: *artifact, CacheMB: *cache, Handles: *handles, Workers: *workers,
+				OVM: migration.OVMOptions{Enabled: true, WrappedEtherCode: *wrappedCode, SourceAncient: *ancient, StateWitness: *witness, GenesisAlloc: *alloc, ERC20RetainList: *retainList}, Progress: newProgressOptions(stderr, *quiet)})
+			if err != nil {
+				return err
+			}
+			return writeJSON(stdout, report)
+		}
+		if *wrappedCode != "" || *ancient != "" || *witness != "" || *alloc != "" || *retainList != "" {
+			return errors.New("OVM input flags require an OVM artifact")
+		}
+		report, err := migration.VerifyDirect(ctx, migration.DirectVerifyOptions{TempDB: migration.TempDBMode(*tempDB),
 			SourceChaindata: *source,
 			Artifact:        *artifact,
 			CacheMB:         *cache,
@@ -217,7 +249,10 @@ func runVerify(ctx context.Context, args []string, stdout, stderr io.Writer) err
 		}
 		return writeJSON(stdout, report)
 	}
-	report, err := migration.Verify(ctx, migration.VerifyOptions{
+	if *wrappedCode != "" || *ancient != "" || *witness != "" || *alloc != "" || *retainList != "" {
+		return errors.New("OVM input flags cannot be used with --bundle")
+	}
+	report, err := migration.Verify(ctx, migration.VerifyOptions{TempDB: migration.TempDBMode(*tempDB),
 		Bundle:   *bundlePath,
 		Artifact: *artifact,
 		CacheMB:  *cache,
@@ -238,8 +273,9 @@ func writeJSON(w io.Writer, value any) error {
 
 func addArtifactFlags(flags *flag.FlagSet) artifactFlags {
 	return artifactFlags{
+		tempDB:  flags.String("temp-db", "disk", "temporary database storage: disk or memory (RAM grows with data size)"),
 		output:  flags.String("out", "", "new state artifact directory"),
-		engine:  flags.String("db-engine", "pebble", "target database engine: pebble or leveldb"),
+		engine:  flags.String("db-engine", migration.DBEnginePebble, fmt.Sprintf("target database engine: %s or %s", migration.DBEnginePebble, migration.DBEngineLevelDB)),
 		scheme:  flags.String("scheme", "", "target state scheme: hash or path"),
 		cache:   flags.Int("cache-mb", defaultCacheMB, "database cache allowance in MiB"),
 		handles: flags.Int("handles", defaultHandles, "database file handle allowance"),
@@ -258,10 +294,13 @@ func parseFlags(flags *flag.FlagSet, args []string, command string) error {
 	if flags.NArg() != 0 {
 		return fmt.Errorf("%s does not accept positional arguments", command)
 	}
-	for _, name := range []string{"db-engine"} {
+	for _, name := range []string{"db-engine", "temp-db"} {
 		if option := flags.Lookup(name); option != nil && option.Value.String() == "" {
 			return fmt.Errorf("--%s must not be empty", name)
 		}
+	}
+	if option := flags.Lookup("temp-db"); option != nil && option.Value.String() != "disk" && option.Value.String() != "memory" {
+		return errors.New("--temp-db must be disk or memory")
 	}
 	return nil
 }
@@ -288,6 +327,8 @@ func printUsage(w io.Writer) error {
 The source must be a stopped l2geth LevelDB or a consistent filesystem copy.
 Outputs must not already exist. Artifacts contain chaindata/ and verification.json.
 Artifacts contain state only and are not bootable geth chaindata.
+Migrate, import and verify accept --temp-db disk|memory (default: disk).
+Memory mode retains temporary Pebble files in RAM; --cache-mb is not an RSS limit.
 Prune is an offline in-place operation for legacy full-node LevelDB only.
 It retains latest executed state plus the genesis root node and all non-state records.
 LES service databases are unsupported. Default pruning does not manually compact.

@@ -75,6 +75,7 @@ func traverseState(
 		if err != nil {
 			return StateResult{}, stateInventory{}, err
 		}
+		observeTemporaryStorage(ctx, nodeIndex.storage)
 		defer func() {
 			if err := nodeIndex.Close(); err != nil {
 				retErr = errors.Join(retErr, err)

@@ -15,18 +15,19 @@ import (
 	"testing"
 
 	gethleveldb "github.com/ethereum/go-ethereum/ethdb/leveldb"
+	"github.com/metis-devops/metis-l2geth-migration/internal/migration"
 	"github.com/metis-devops/metis-l2geth-migration/internal/version"
 )
 
 func TestCLIEndToEnd(t *testing.T) {
-	for _, tc := range []struct{ engine, scheme string }{
-		{"pebble", "hash"}, {"pebble", "path"}, {"leveldb", "hash"}, {"leveldb", "path"},
-	} {
-		t.Run(tc.engine+"/"+tc.scheme, func(t *testing.T) { runCLIEndToEnd(t, tc.engine, tc.scheme) })
+	for _, mode := range []string{"disk", "memory"} {
+		for _, tc := range []struct{ engine, scheme string }{{migration.DBEnginePebble, "hash"}, {migration.DBEnginePebble, "path"}, {migration.DBEngineLevelDB, "hash"}, {migration.DBEngineLevelDB, "path"}} {
+			t.Run(mode+"/"+tc.engine+"/"+tc.scheme, func(t *testing.T) { runCLIEndToEnd(t, tc.engine, tc.scheme, mode) })
+		}
 	}
 }
 
-func runCLIEndToEnd(t *testing.T, engine, scheme string) {
+func runCLIEndToEnd(t *testing.T, engine, scheme, mode string) {
 	source := loadGoldenSource(t)
 	root := t.TempDir()
 	bundlePath := filepath.Join(root, "bundle")
@@ -47,7 +48,7 @@ func runCLIEndToEnd(t *testing.T, engine, scheme string) {
 	stdout.Reset()
 	stderr.Reset()
 	if err := run(context.Background(), []string{
-		"import", "--bundle", bundlePath, "--out", artifactPath, "--scheme", scheme, "--db-engine", engine,
+		"import", "--temp-db", mode, "--bundle", bundlePath, "--out", artifactPath, "--scheme", scheme, "--db-engine", engine,
 		"--cache-mb", "16", "--handles", "16",
 	}, &stdout, &stderr); err != nil {
 		t.Fatalf("import command: %v stderr=%s", err, stderr.String())
@@ -65,7 +66,7 @@ func runCLIEndToEnd(t *testing.T, engine, scheme string) {
 	stdout.Reset()
 	stderr.Reset()
 	if err := run(context.Background(), []string{
-		"verify", "--bundle", bundlePath, "--artifact", artifactPath,
+		"verify", "--temp-db", mode, "--bundle", bundlePath, "--artifact", artifactPath,
 		"--cache-mb", "16", "--handles", "16",
 	}, &stdout, &stderr); err != nil {
 		t.Fatalf("verify command: %v stderr=%s", err, stderr.String())
@@ -82,7 +83,7 @@ func runCLIEndToEnd(t *testing.T, engine, scheme string) {
 	stdout.Reset()
 	stderr.Reset()
 	if err := run(context.Background(), []string{
-		"migrate", "--source-chaindata", source, "--out", directArtifactPath, "--scheme", scheme, "--db-engine", engine,
+		"migrate", "--temp-db", mode, "--source-chaindata", source, "--out", directArtifactPath, "--scheme", scheme, "--db-engine", engine,
 		"--cache-mb", "16", "--handles", "16", "--workers", "1",
 	}, &stdout, &stderr); err != nil {
 		t.Fatalf("migrate command: %v stderr=%s", err, stderr.String())
@@ -105,7 +106,7 @@ func runCLIEndToEnd(t *testing.T, engine, scheme string) {
 	stdout.Reset()
 	stderr.Reset()
 	if err := run(context.Background(), []string{
-		"verify", "--source-chaindata", source, "--artifact", directArtifactPath,
+		"verify", "--temp-db", mode, "--source-chaindata", source, "--artifact", directArtifactPath,
 		"--cache-mb", "16", "--handles", "16",
 	}, &stdout, &stderr); err != nil {
 		t.Fatalf("direct verify command: %v stderr=%s", err, stderr.String())
@@ -368,7 +369,7 @@ func loadGoldenSource(t *testing.T) string {
 
 func TestCLITargetOptions(t *testing.T) {
 	for _, command := range []string{"migrate", "import"} {
-		for _, options := range [][]string{{"--db-engine", ""}, {"--db-engine", "invalid"}, {"--state-layout", ""}, {"--state-layout", "invalid"}, {"--state-layout", "geth"}, {"--state-layout=geth"}, {"--state-layout", "legacy-l2geth"}, {"--db-engine", "leveldb", "--state-layout", "legacy-l2geth", "--scheme", "path"}} {
+		for _, options := range [][]string{{"--db-engine", ""}, {"--db-engine", "invalid"}, {"--state-layout", ""}, {"--state-layout", "invalid"}, {"--state-layout", "geth"}, {"--state-layout=geth"}, {"--state-layout", "legacy-l2geth"}, {"--db-engine", migration.DBEngineLevelDB, "--state-layout", "legacy-l2geth", "--scheme", "path"}} {
 			var stdout, stderr bytes.Buffer
 			output := filepath.Join(t.TempDir(), "artifact")
 			input := []string{"--source-chaindata", "missing"}
@@ -394,7 +395,7 @@ func TestCLITargetOptions(t *testing.T) {
 	}
 	source := loadGoldenSource(t)
 	var stdout, stderr bytes.Buffer
-	args := []string{"migrate", "--source-chaindata", source, "--out", filepath.Join(t.TempDir(), "artifact"), "--db-engine", "leveldb", "--scheme", "hash", "--quiet", "--cache-mb", "16", "--handles", "16"}
+	args := []string{"migrate", "--source-chaindata", source, "--out", filepath.Join(t.TempDir(), "artifact"), "--db-engine", migration.DBEngineLevelDB, "--scheme", "hash", "--quiet", "--cache-mb", "16", "--handles", "16"}
 	if err := run(context.Background(), args, &stdout, &stderr); err != nil {
 		t.Fatal(err)
 	}
@@ -411,7 +412,25 @@ func TestCLITargetOptions(t *testing.T) {
 	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
-	if result.Verification.DBEngine != "leveldb" || result.Verification.StateLayout != "geth" {
+	if result.Verification.DBEngine != migration.DBEngineLevelDB || result.Verification.StateLayout != "geth" {
 		t.Fatalf("wrong target report: %s", stdout.String())
+	}
+}
+
+func TestTempDBFlags(t *testing.T) {
+	for _, command := range []string{"migrate", "import", "verify"} {
+		for _, mode := range []string{"", "geth", "MEMORY"} {
+			var stdout, stderr bytes.Buffer
+			err := run(t.Context(), []string{command, "--temp-db=" + mode}, &stdout, &stderr)
+			if err == nil || !strings.Contains(err.Error(), "temp-db") || stdout.Len() != 0 {
+				t.Fatalf("%s %q: %v %s", command, mode, err, stdout.String())
+			}
+		}
+	}
+	for _, command := range []string{"export", "prune"} {
+		var stdout, stderr bytes.Buffer
+		if err := run(t.Context(), []string{command, "--temp-db=memory"}, &stdout, &stderr); err == nil {
+			t.Fatalf("%s accepted memory flag", command)
+		}
 	}
 }

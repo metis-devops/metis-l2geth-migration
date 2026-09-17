@@ -195,3 +195,68 @@ func TestGethCompatibilityRetiredTargets(t *testing.T) {
 		t.Fatal("unknown case hidden")
 	}
 }
+
+func TestGethCompatibilityPebbleBaselineNormalization(t *testing.T) {
+	// Current-output normalization must preserve the retired identifier.
+	current := normalizeCompatJSON(t, map[string]string{"db_engine": "pebble-v2"}, nil)
+	var wire map[string]string
+	if err := json.Unmarshal(current, &wire); err != nil {
+		t.Fatal(err)
+	}
+	if wire["db_engine"] != "pebble-v2" {
+		t.Fatal("current-output normalization hid retired engine")
+	}
+	load := func() *compatCapture {
+		capture := newCompatCapture()
+		for kind, contract := range capture.Contracts {
+			loaded, err := readCompatContract(gethCompatRoot, kind, contract.Version)
+			if err != nil {
+				t.Fatal(err)
+			}
+			capture.Contracts[kind] = loaded
+		}
+		excludeRetiredCompatTargets(capture)
+		return capture
+	}
+	expected := load()
+	normalizeCompatBaseline(t, expected)
+	for _, kind := range []string{"direct", "verification"} {
+		for _, field := range []string{"db_engine", "recomputed_state_root", "database"} {
+			t.Run(kind+"/"+field, func(t *testing.T) {
+				actual := load()
+				normalizeCompatBaseline(t, actual)
+				name := "canary/pebble/geth/hash"
+				if kind == "verification" {
+					name = "canary/none/pebble/geth/hash"
+				}
+				var artifact compatArtifact
+				if err := json.Unmarshal(actual.Contracts[kind].Cases[name], &artifact); err != nil {
+					t.Fatal(err)
+				}
+				var report map[string]json.RawMessage
+				if err := json.Unmarshal(artifact.Report, &report); err != nil {
+					t.Fatal(err)
+				}
+				if string(report["db_engine"]) != `"pebble"` {
+					t.Fatalf("engine not normalized: %s", report["db_engine"])
+				}
+				switch field {
+				case "db_engine":
+					report[field] = json.RawMessage(`"pebble-v2"`)
+				case "recomputed_state_root":
+					report[field] = json.RawMessage(`"0x01"`)
+				case "database":
+					entries := append([]compatKV(nil), actual.Contracts[kind].Databases[artifact.Database]...)
+					entries[0].Value = hexutil.Bytes{0xff}
+					artifact.Database = compatDatabaseID(entries)
+					actual.Contracts[kind].Databases[artifact.Database] = entries
+				}
+				artifact.Report = compatJSON(t, report)
+				actual.Contracts[kind].Cases[name] = compatJSON(t, artifact)
+				if err := compareCompatContracts(expected.Contracts[kind], actual.Contracts[kind]); err == nil || !strings.Contains(err.Error(), field) {
+					t.Fatalf("drift hidden or wrong diagnostic: %v", err)
+				}
+			})
+		}
+	}
+}

@@ -2,6 +2,7 @@ package migration
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -12,6 +13,7 @@ import (
 
 // MigrateOptions configures direct migration from legacy l2geth state.
 type MigrateOptions struct {
+	TempDB          TempDBMode
 	SourceChaindata string
 	Output          string
 	Scheme          string
@@ -20,18 +22,41 @@ type MigrateOptions struct {
 	Handles         int
 	Workers         int
 	Progress        ProgressOptions
+	OVM             OVMOptions
 }
 
 // MigrateResult identifies a directly migrated artifact and its verification report.
 type MigrateResult struct {
 	ArtifactPath string                   `json:"artifact"`
 	Report       DirectVerificationReport `json:"verification"`
+	OVMReport    *OVMVerificationReport   `json:"-"`
+}
+
+// MarshalJSON preserves the ordinary result shape while selecting the independent OVM report.
+func (r MigrateResult) MarshalJSON() ([]byte, error) {
+	var report any = r.Report
+	if r.OVMReport != nil {
+		report = r.OVMReport
+	}
+	return json.Marshal(struct {
+		Artifact     string `json:"artifact"`
+		Verification any    `json:"verification"`
+	}{r.ArtifactPath, report})
 }
 
 // Migrate directly rebuilds and verifies a state database without creating a bundle.
 func Migrate(ctx context.Context, opts MigrateOptions) (result MigrateResult, retErr error) {
+	if err := opts.TempDB.validate(); err != nil {
+		return result, err
+	}
+	if err := validateOVMOptions(opts.OVM); err != nil {
+		return result, err
+	}
+	if opts.OVM.Enabled {
+		return migrateOVM(ctx, opts)
+	}
 	workers := normalizeMigrateWorkers(opts.Workers)
-	reporter := newProgressReporter("migrate", opts.Progress,
+	reporter := newProgressReporter("migrate", opts.Progress, "temp_db", opts.TempDB.normalized(),
 		"source", opts.SourceChaindata,
 		"output", opts.Output,
 		"scheme", opts.Scheme, "db_engine", opts.DBEngine, "state_layout", LayoutGeth,
@@ -134,7 +159,7 @@ func Migrate(ctx context.Context, opts MigrateOptions) (result MigrateResult, re
 		return MigrateResult{}, err
 	}
 
-	dbState, closed, err := finalizeAndVerifyTarget(ctx, disk, dbPath, opts.Scheme, target, sourceEvidence, stateResult, opts.CacheMB, opts.Handles, reporter)
+	dbState, closed, err := finalizeAndVerifyTarget(ctx, disk, dbPath, opts.Scheme, target, sourceEvidence, stateResult, opts.CacheMB, opts.Handles, reporter, opts.TempDB)
 	diskClosed = closed
 	if err != nil {
 		return MigrateResult{}, err

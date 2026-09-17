@@ -17,6 +17,7 @@ import (
 
 // ImportOptions configures a bundle import into a hash- or path-scheme database.
 type ImportOptions struct {
+	TempDB   TempDBMode
 	Bundle   string
 	Output   string
 	Scheme   string
@@ -34,7 +35,10 @@ type ImportResult struct {
 
 // Import rebuilds and verifies a state database from a bundle.
 func Import(ctx context.Context, opts ImportOptions) (result ImportResult, retErr error) {
-	reporter := newProgressReporter("import", opts.Progress, "bundle", opts.Bundle, "output", opts.Output, "scheme", opts.Scheme)
+	if err := opts.TempDB.validate(); err != nil {
+		return result, err
+	}
+	reporter := newProgressReporter("import", opts.Progress, "temp_db", opts.TempDB.normalized(), "bundle", opts.Bundle, "output", opts.Output, "scheme", opts.Scheme)
 	defer func() {
 		attrs := []any{"artifact", result.ArtifactPath}
 		if result.ArtifactPath != "" {
@@ -94,7 +98,7 @@ func Import(ctx context.Context, opts ImportOptions) (result ImportResult, retEr
 	}
 	flushPhase.Finish(nil)
 
-	dbState, closed, err := finalizeAndVerifyTarget(ctx, disk, dbPath, opts.Scheme, target, bundleResult.Manifest.Source, bundleResult.State, opts.CacheMB, opts.Handles, reporter)
+	dbState, closed, err := finalizeAndVerifyTarget(ctx, disk, dbPath, opts.Scheme, target, bundleResult.Manifest.Source, bundleResult.State, opts.CacheMB, opts.Handles, reporter, opts.TempDB)
 	diskClosed = closed
 	if err != nil {
 		return ImportResult{}, err
@@ -165,6 +169,7 @@ func finalizeAndVerifyTarget(
 	expected StateResult,
 	cacheMB, handles int,
 	reporter *progressReporter,
+	tempDB TempDBMode,
 ) (StateResult, bool, error) {
 	if err := adoptPathState(ctx, disk, scheme, expected.Root, reporter); err != nil {
 		return StateResult{}, false, err
@@ -176,7 +181,7 @@ func finalizeAndVerifyTarget(
 	if err != nil {
 		return StateResult{}, diskClosed, err
 	}
-	state, err := verifyTargetDatabase(ctx, dbPath, scheme, target, source, expected, cacheMB, handles, reporter, filepath.Dir(dbPath))
+	state, err := verifyTargetDatabase(ctx, dbPath, scheme, target, source, expected, cacheMB, handles, reporter, trieNodeIndexOptions{Mode: tempDB, Parent: filepath.Dir(dbPath), CacheMB: cacheMB, Handles: handles})
 	if err != nil {
 		return StateResult{}, diskClosed, err
 	}
@@ -245,7 +250,7 @@ func finalizeTargetDatabase(ctx context.Context, disk ethdb.Database, dbPath str
 		return false, fmt.Errorf("close target database: %w", err)
 	}
 	closed = true
-	if target.engine == "leveldb" {
+	if target.engine == DBEngineLevelDB {
 		if err := syncLevelDBFiles(ctx, dbPath, syncFile); err != nil {
 			return true, err
 		}

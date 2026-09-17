@@ -41,7 +41,7 @@ func writeCompatDatabase(t *testing.T, path string, entries []compatKV, target t
 	if syncErr != nil || closeErr != nil {
 		t.Fatalf("close restored baseline: %v %v", syncErr, closeErr)
 	}
-	if target.engine == "leveldb" {
+	if target.engine == DBEngineLevelDB {
 		if err := syncLevelDBFiles(t.Context(), path, syncFile); err != nil {
 			t.Fatal(err)
 		}
@@ -170,7 +170,7 @@ func replayGethCompatibility(t *testing.T, expected *compatCapture) {
 				if kind == "verification" {
 					bundleName := strings.Join(parts[:2], "/")
 					source = manifests[bundleName].Source
-					replayed, err := Import(t.Context(), ImportOptions{Bundle: bundles[bundleName], Output: filepath.Join(t.TempDir(), "import"), Scheme: scheme, DBEngine: compatCLIEngine(target), CacheMB: 16, Handles: 16})
+					replayed, err := Import(t.Context(), ImportOptions{Bundle: bundles[bundleName], Output: filepath.Join(t.TempDir(), "import"), Scheme: scheme, DBEngine: target.engine, CacheMB: 16, Handles: 16})
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -183,11 +183,11 @@ func replayGethCompatibility(t *testing.T, expected *compatCapture) {
 				dbPath := filepath.Join(t.TempDir(), "chaindata")
 				entries := contract.Databases[frozen.Database]
 				writeCompatDatabase(t, dbPath, entries, target)
-				if _, err := verifyTargetDatabase(t.Context(), dbPath, scheme, target, source, expectedState, 16, 16, nil, ""); err != nil {
+				if _, err := verifyTargetDatabase(t.Context(), dbPath, scheme, target, source, expectedState, 16, 16, nil, trieNodeIndexOptions{}); err != nil {
 					t.Fatalf("read frozen logical database %s: %v", name, err)
 				}
 				if len(frozen.Continuation) != 0 {
-					got := captureCompatContinuation(t, entries, targetTestCase{compatCLIEngine(target), string(target.layout), scheme}, expectedState.Root)
+					got := captureCompatContinuation(t, entries, targetTestCase{target.engine, string(target.layout), scheme}, expectedState.Root)
 					var left, right any
 					if err := json.Unmarshal(frozen.Continuation, &left); err != nil {
 						t.Fatal(err)
@@ -202,10 +202,4 @@ func replayGethCompatibility(t *testing.T, expected *compatCapture) {
 			})
 		}
 	}
-}
-func compatCLIEngine(target targetConfig) string {
-	if target.engine == "pebble-v2" {
-		return "pebble"
-	}
-	return target.engine
 }

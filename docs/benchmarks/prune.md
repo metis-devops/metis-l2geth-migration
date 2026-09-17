@@ -1,13 +1,16 @@
-# Prune performance measurements — 2026-09-12
+# Historical prune measurements — 2026-09-12
+
+These measurements describe the source fingerprint below, before the subsequent
+dry-run LOCK guard and legacy Bloom-filter restoration fixes. They have not been
+refreshed for those storage changes; use the runner below to measure current code.
+
+[Dataset index](README.md). This report is retained as the unique serial/parallel
+prune baseline; it is not a current-version performance result.
 
 The default 4-worker implementation reduced median end-to-end time in all eight
 synthetic workloads, by **20.8%–65.8%**
 (**1.26×–2.92×** the serial reference's throughput for identical work).
 This is a local, page-cache-warm comparison, not a production snapshot or disk-throughput guarantee.
-
-These measurements describe the source fingerprint below, before the subsequent
-dry-run LOCK guard and legacy Bloom-filter restoration fixes. They have not been
-refreshed for those storage changes; use the runner below to measure current code.
 
 ## Method
 
@@ -24,7 +27,7 @@ refreshed for those storage changes; use the runner below to measure current cod
   roots, counts, protected digests and final deletion results are compared in tests.
 - Original staged-diff SHA-256: `dbe170fca2be2d3fabee291149aba2db390455ea2f80f1b489a4d63071f2d5d8`.
 - Final measured Go-source/module fingerprint: `0a08ee26b1152ae244810e0f126cc570bb28a7514bc952dbf360bfe535d1c43b`.
-- [Raw results](benchmarks/prune-2026-09-12.txt): 200 groups × five samples = 1000 timed observations.
+- [Raw results](raw/prune-2026-09-12.txt): 200 fresh processes × five phases = 1,000 timed observations (40 workload/mode combinations, each repeated five times).
 
 ```bash
 python3 scripts/benchmark-prune.py --out /tmp/prune-bench.txt --count 5

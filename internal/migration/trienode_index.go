@@ -21,24 +21,34 @@ const (
 )
 
 type trieNodeIndexOptions struct {
+	Mode    TempDBMode
 	Parent  string
 	CacheMB int
 	Handles int
 }
 
 // temporaryTrieNodeIndex is an exact operation-local set of reachable
-// hash-scheme trie-node hashes. It is deliberately disk-backed so memory usage
-// does not grow with the number of reachable nodes.
+// hash-scheme trie-node hashes. Disk storage is the default; explicitly selected
+// memory storage retains Pebble files until the index is closed.
 type temporaryTrieNodeIndex struct {
 	db        *cpebble.DB
 	cache     *cpebble.Cache
 	nodeBatch *cpebble.Batch
 	path      string
 	closed    bool
+	storage   *temporaryStorage
 }
 
 func newTemporaryTrieNodeIndex(opts trieNodeIndexOptions) (*temporaryTrieNodeIndex, error) {
-	path, err := os.MkdirTemp(opts.Parent, trieNodeIndexTempPrefix)
+	if err := opts.Mode.validate(); err != nil {
+		return nil, err
+	}
+	storage := newTemporaryStorage(opts.Mode)
+	path := "/" + trieNodeIndexTempPrefix + "index"
+	var err error
+	if storage.fs == nil {
+		path, err = os.MkdirTemp(opts.Parent, trieNodeIndexTempPrefix)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("create temporary trie-node index: %w", err)
 	}
@@ -46,6 +56,7 @@ func newTemporaryTrieNodeIndex(opts trieNodeIndexOptions) (*temporaryTrieNodeInd
 	handles := boundedTrieNodeIndexResource(opts.Handles, trieNodeIndexMaxHandles)
 	cache := cpebble.NewCache(int64(cacheMB) * 1024 * 1024)
 	options := &cpebble.Options{
+		FS:                          storage.fs,
 		Cache:                       cache,
 		MaxOpenFiles:                handles,
 		MemTableSize:                uint64(cacheMB * 1024 * 1024 / 4),
@@ -70,12 +81,12 @@ func newTemporaryTrieNodeIndex(opts trieNodeIndexOptions) (*temporaryTrieNodeInd
 	if err != nil {
 		cache.Unref()
 		openErr := fmt.Errorf("open temporary trie-node index: %w", err)
-		if removeErr := removeTemporaryTrieNodeIndex(path); removeErr != nil {
+		if removeErr := storage.remove(path); removeErr != nil {
 			openErr = errors.Join(openErr, fmt.Errorf("remove unopened temporary trie-node index: %w", removeErr))
 		}
 		return nil, openErr
 	}
-	return &temporaryTrieNodeIndex{db: db, cache: cache, nodeBatch: db.NewBatch(), path: path}, nil
+	return &temporaryTrieNodeIndex{db: db, cache: cache, nodeBatch: db.NewBatch(), path: path, storage: storage}, nil
 }
 
 func boundedTrieNodeIndexResource(configured, limit int) int {
@@ -179,10 +190,17 @@ func (i *temporaryTrieNodeIndex) Close() error {
 		closeErr = errors.Join(closeErr, fmt.Errorf("close temporary trie-node index: %w", err))
 	}
 	i.cache.Unref()
-	if err := removeTemporaryTrieNodeIndex(i.path); err != nil {
+	if err := i.remove(); err != nil {
 		closeErr = errors.Join(closeErr, fmt.Errorf("remove temporary trie-node index: %w", err))
 	}
 	return closeErr
+}
+
+func (i *temporaryTrieNodeIndex) remove() error {
+	if i.storage.fs != nil {
+		return i.storage.remove(i.path)
+	}
+	return removeTemporaryTrieNodeIndex(i.path)
 }
 
 func removeTemporaryTrieNodeIndex(path string) error {

@@ -22,8 +22,8 @@ type targetTestCase struct{ engine, layout, scheme string }
 
 func targetTestCases() []targetTestCase {
 	return []targetTestCase{
-		{"pebble", "geth", "hash"}, {"pebble", "geth", "path"},
-		{"leveldb", "geth", "hash"}, {"leveldb", "geth", "path"},
+		{DBEnginePebble, "geth", "hash"}, {DBEnginePebble, "geth", "path"},
+		{DBEngineLevelDB, "geth", "hash"}, {DBEngineLevelDB, "geth", "path"},
 	}
 }
 
@@ -41,6 +41,12 @@ func openTestTargetKV(path string, cache, handles int, namespace string, readonl
 }
 
 func TestTargetMatrixGoldenCanary(t *testing.T) {
+	for _, mode := range []TempDBMode{TempDBDisk, TempDBMemory} {
+		t.Run(string(mode), func(t *testing.T) { testTargetMatrixGoldenCanary(t, mode) })
+	}
+}
+
+func testTargetMatrixGoldenCanary(t *testing.T, tempMode TempDBMode) {
 	source := loadGoldenLegacyKV(t)
 	before := directoryContentDigest(t, source)
 	for _, compression := range []string{bundle.CompressionNone, bundle.CompressionZstd} {
@@ -52,13 +58,16 @@ func TestTargetMatrixGoldenCanary(t *testing.T) {
 		for _, tc := range targetTestCases() {
 			t.Run(compression+"/"+tc.name(), func(t *testing.T) {
 				out := t.TempDir()
-				imported, err := Import(context.Background(), ImportOptions{Bundle: bundlePath, Output: filepath.Join(out, "import"), Scheme: tc.scheme, DBEngine: tc.engine, CacheMB: 16, Handles: 16})
+				imported, err := Import(context.Background(), ImportOptions{TempDB: tempMode, Bundle: bundlePath, Output: filepath.Join(out, "import"), Scheme: tc.scheme, DBEngine: tc.engine, CacheMB: 16, Handles: 16})
 				if err != nil {
 					t.Fatal(err)
 				}
-				direct, err := Migrate(context.Background(), MigrateOptions{SourceChaindata: source, Output: filepath.Join(out, "direct"), Scheme: tc.scheme, DBEngine: tc.engine, CacheMB: 16, Handles: 16, Workers: 2})
+				direct, err := Migrate(context.Background(), MigrateOptions{TempDB: tempMode, SourceChaindata: source, Output: filepath.Join(out, "direct"), Scheme: tc.scheme, DBEngine: tc.engine, CacheMB: 16, Handles: 16, Workers: 2})
 				if err != nil {
 					t.Fatal(err)
+				}
+				if imported.Report.DBEngine != tc.engine || direct.Report.DBEngine != tc.engine {
+					t.Fatalf("unexpected engines: %q / %q", imported.Report.DBEngine, direct.Report.DBEngine)
 				}
 				if imported.Report.Counts != direct.Report.Counts || direct.Report.RecomputedRoot != exported.Manifest.Source.HeadBefore.StateRoot || string(direct.Report.StateLayout) != tc.layout {
 					t.Fatalf("reports disagree: %+v %+v", imported.Report, direct.Report)
@@ -67,10 +76,10 @@ func TestTargetMatrixGoldenCanary(t *testing.T) {
 					assertArtifactHeadMetadata(t, artifact, exported.Manifest.Source)
 					assertNoTemporaryTrieNodeIndexes(t, artifact)
 				}
-				if _, err := Verify(context.Background(), VerifyOptions{Bundle: bundlePath, Artifact: imported.ArtifactPath, CacheMB: 16, Handles: 16}); err != nil {
+				if _, err := Verify(context.Background(), VerifyOptions{TempDB: oppositeTempMode(tempMode), Bundle: bundlePath, Artifact: imported.ArtifactPath, CacheMB: 16, Handles: 16}); err != nil {
 					t.Fatal(err)
 				}
-				if _, err := VerifyDirect(context.Background(), DirectVerifyOptions{SourceChaindata: source, Artifact: direct.ArtifactPath, CacheMB: 16, Handles: 16}); err != nil {
+				if _, err := VerifyDirect(context.Background(), DirectVerifyOptions{TempDB: oppositeTempMode(tempMode), SourceChaindata: source, Artifact: direct.ArtifactPath, CacheMB: 16, Handles: 16}); err != nil {
 					t.Fatal(err)
 				}
 				assertLogicalDatabaseEqual(t, filepath.Join(imported.ArtifactPath, "chaindata"), filepath.Join(direct.ArtifactPath, "chaindata"))
@@ -86,10 +95,16 @@ func TestTargetMatrixGoldenCanary(t *testing.T) {
 }
 
 func TestLevelDBGethContinuation(t *testing.T) {
+	for _, mode := range []TempDBMode{TempDBDisk, TempDBMemory} {
+		t.Run(string(mode), func(t *testing.T) { testLevelDBGethContinuation(t, mode) })
+	}
+}
+
+func testLevelDBGethContinuation(t *testing.T, tempMode TempDBMode) {
 	fixture := buildLegacyFixture(t)
 	for _, scheme := range []string{"hash", "path"} {
 		t.Run(scheme, func(t *testing.T) {
-			result, err := Migrate(context.Background(), MigrateOptions{SourceChaindata: fixture.chaindata, Output: filepath.Join(t.TempDir(), "artifact"), Scheme: scheme, DBEngine: "leveldb", CacheMB: 16, Handles: 16})
+			result, err := Migrate(context.Background(), MigrateOptions{TempDB: tempMode, SourceChaindata: fixture.chaindata, Output: filepath.Join(t.TempDir(), "artifact"), Scheme: scheme, DBEngine: DBEngineLevelDB, CacheMB: 16, Handles: 16})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -101,7 +116,7 @@ func TestLevelDBGethContinuation(t *testing.T) {
 }
 
 func TestTargetOptionsFailBeforeIO(t *testing.T) {
-	for _, tc := range []targetTestCase{{"bogus", "geth", "hash"}, {"pebble-v2", "geth", "hash"}, {"pebble", "geth", "invalid"}} {
+	for _, tc := range []targetTestCase{{"bogus", "geth", "hash"}, {"pebble-v2", "geth", "hash"}, {DBEnginePebble, "geth", "invalid"}} {
 		t.Run(tc.name(), func(t *testing.T) {
 			out := filepath.Join(t.TempDir(), "absent-parent", "artifact")
 			_, err := Migrate(context.Background(), MigrateOptions{SourceChaindata: "missing-source", Output: out, Scheme: tc.scheme, DBEngine: tc.engine})
@@ -132,7 +147,7 @@ func TestStateLayoutReportStrictness(t *testing.T) {
 			t.Fatal(err)
 		}
 		wire["scheme"] = json.RawMessage(`"hash"`)
-		wire["db_engine"] = json.RawMessage(`"leveldb"`)
+		wire["db_engine"] = json.RawMessage(`"` + DBEngineLevelDB + `"`)
 		for _, value := range []string{"omitted", `"geth"`, `"legacy-l2geth"`, `""`, `null`, `"bogus"`, `42`} {
 			delete(wire, "state_layout")
 			if value != "omitted" {
@@ -269,6 +284,36 @@ func TestOldArtifactReportsDefaultToGethLayout(t *testing.T) {
 			}
 			if directoryContentDigest(t, artifact) != before {
 				t.Fatal("rejected artifact was modified")
+			}
+		}
+	}
+}
+
+func TestUnifiedDatabaseEngine(t *testing.T) {
+	for _, scheme := range []string{"hash", "path"} {
+		for _, engine := range []string{"", DBEnginePebble, DBEngineLevelDB} {
+			want := engine
+			if want == "" {
+				want = DBEnginePebble
+			}
+			target, err := targetOptions(engine, scheme)
+			if err != nil || target.engine != want {
+				t.Fatalf("options %q/%s: %+v, %v", engine, scheme, target, err)
+			}
+			portable := validTestVerificationReport()
+			portable.Scheme, portable.DBEngine, portable.StateLayout = scheme, want, LayoutGeth
+			direct := validDirectVerificationReport(t)
+			direct.Scheme, direct.DBEngine = scheme, want
+			for _, report := range []interface{ Validate() error }{portable, direct} {
+				if err := report.Validate(); err != nil {
+					t.Fatal(err)
+				}
+			}
+			portable.DBEngine, direct.DBEngine = "pebble-v2", "pebble-v2"
+			for _, report := range []interface{ Validate() error }{portable, direct} {
+				if err := report.Validate(); err == nil || !strings.Contains(err.Error(), "invalid database engine") {
+					t.Fatalf("retired engine accepted: %v", err)
+				}
 			}
 		}
 	}
