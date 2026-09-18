@@ -52,6 +52,13 @@
   `--temp-db memory`) and reject unclassified storage slots.
 - Complete and independently reopen the original migrated state before applying
   balance changes. Build the final artifact afresh with the partitioned core.
+  Run original-state copying, preimage collection and canonical history scanning
+  concurrently. Evidence lanes share the database but own separate bounded
+  batches; only identical address entries may overlap. Preimage iteration,
+  hashing and writes borrow the global limiter and yield between records.
+  Preserve ordered history acceptance and digests. Cancel siblings on failure,
+  join all three lanes and require both evidence flushes before reopening the
+  original state or starting conversion; close each batch before its database.
   Share the worker limiter with history and balance workers; join all jobs on
   errors/cancellation. Preserve record/byte queue bounds and path state ID 0.
 - The synthetic checkpoint uses parent height/time +1, the new root, inherited

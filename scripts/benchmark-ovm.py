@@ -62,6 +62,8 @@ def main():
     parser.add_argument("--with-retain-list", action="store_true",
                         help="pair absent/present manual retention lists on the same source-contract fixture")
     parser.add_argument("--with-verify", action="store_true", help="also measure standalone verification")
+    parser.add_argument("--with-preimages", action="store_true",
+                        help="also store each holder's address preimage in the source fixture")
     parser.add_argument("--with-ancient", action="store_true", help="also measure 60000 sequential ancient record reads")
     parser.add_argument("--holders", type=int, nargs="+", default=[10000],
                         help="synthetic state sizes, e.g. 10000 100000")
@@ -90,6 +92,10 @@ def main():
         if args.with_components:
             required.add("BenchmarkTemporaryDB")
         for label, source in sources.items():
+            if args.with_preimages:
+                harness = source / "internal/migration/ovm_optimization_benchmark_test.go"
+                if "L2STATE_BENCH_PREIMAGES" not in harness.read_text():
+                    parser.error(f"{label} lacks the preimage fixture benchmark harness")
             if args.temp_dbs != ["disk"] or args.holders != [10000] or args.with_components:
                 harness = source / "internal/migration/tempdb_benchmark_test.go"
                 if not harness.exists() or "L2STATE_BENCH_TEMP_DB" not in harness.read_text():
@@ -105,6 +111,7 @@ def main():
             for label, source in sources.items():
                 output.write(f"# {label} source-sha256={source_digest(source)} cache-mb=128 handles=128\n")
             output.write(f"# Synthetic holders={args.holders}, two-block history, hash/Pebble; temp-dbs={args.temp_dbs}.\n")
+            output.write(f"# Holder address preimages: {args.with_preimages}.\n")
             if args.with_alloc:
                 output.write("# Alloc: first 1000 holders receive code, balance and one storage override.\n")
             if args.with_retain_list:
@@ -132,6 +139,7 @@ def main():
                                 output.write(f"# {message}\n")
                                 output.flush()
                                 env = dict(os.environ, L2STATE_BENCH_HOLDERS=str(holders),
+                                           L2STATE_BENCH_PREIMAGES="1" if args.with_preimages else "0",
                                            L2STATE_BENCH_TEMP_DB=mode,
                                            L2STATE_BENCH_RETAIN_FIXTURE="1" if args.with_retain_list else "0")
                                 subprocess.run(timed_command(binaries[label], name, workers), env=env,

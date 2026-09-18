@@ -255,13 +255,21 @@ func (i *ovmIndex) allowance(owner, spender common.Address) error {
 	return i.put('a', hash[:], append(bytes.Clone(owner[:]), spender[:]...))
 }
 
-func collectOVMPreimages(ctx context.Context, db ethdb.Database, index *ovmIndex) error {
+func collectOVMPreimages(ctx context.Context, db ethdb.Database, index *ovmIndex, limiter *migrateWorkLimiter) error {
+	lease := newMigrateWorkLease(limiter)
+	if err := lease.acquire(ctx); err != nil {
+		return err
+	}
+	defer lease.release()
 	prefix := []byte("secure-key-")
 	it := db.NewIterator(prefix, nil)
 	defer it.Release()
-	for it.Next() {
-		if err := ctx.Err(); err != nil {
+	for {
+		if err := lease.acquire(ctx); err != nil {
 			return err
+		}
+		if !it.Next() {
+			break
 		}
 		key, value := it.Key(), it.Value()
 		if len(key) != len(prefix)+32 || !bytes.Equal(crypto.Keccak256(value), key[len(prefix):]) {
@@ -272,9 +280,15 @@ func collectOVMPreimages(ctx context.Context, db ethdb.Database, index *ovmIndex
 				return err
 			}
 		}
+		// Yield between records so history and state work can use the shared
+		// allowance even when the preimage namespace is large.
+		lease.release()
 	}
 	if err := it.Error(); err != nil {
 		return fmt.Errorf("read legacy preimages: %w", err)
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	return index.flush()
 }

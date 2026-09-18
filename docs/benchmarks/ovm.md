@@ -1,17 +1,64 @@
 # OVM benchmark results
 
-Consolidated on 2026-09-16. [Dataset index and raw-file checksums](README.md).
+Updated on 2026-09-18. [Dataset index and raw-file checksums](README.md).
 
 ## Measurement boundaries
 
-- The latest measured source is the nonzero-Transfer eligibility change on top of `c3c52d5`. These are recorded measurements of identified source snapshots, not a claim that future HEAD has been benchmarked.
+- The latest measured source is the parallel preimage/history change on top of `67db0b4`. Earlier retention and optimization datasets remain separate historical snapshots; these measurements do not apply to arbitrary future HEAD.
 - All OVM end-to-end results use an Apple M3 Max (16 logical CPUs), macOS 27.0 arm64, a two-block synthetic history, Pebble/hash targets, 128 MiB cache allowance and 128 handles. Alloc adds code, native balance and one storage override to 1,000 holders.
 - Each configuration has three fresh-process samples with alternating order, after CI/race and without concurrent benchmarks. Tables are medians calculated from their named raw dataset. Samples from different runs or source versions are never pooled.
 - Operation time and allocation counters exclude setup. Process RSS includes setup and, for verification, the initial disk-mode migration. `setup-s` is separate. OS caches were not flushed.
 - Heap and file lengths are sampled every 20 ms and can miss peaks. Heap excludes some native allocations; memory-file lengths exclude allocation capacity. Temporary disk excludes the final artifact. Neither cache allowances nor these samples bound total memory or disk requirements.
 - No production throughput, long-history, cold-disk, LevelDB or path-scheme performance claim follows from these fixtures. Historical results below have not been rerun on the latest source.
 
-## Latest manual ERC20 retention comparison
+## Parallel evidence collection
+
+Raw evidence: [preimage/history concurrency pairs](raw/ovm-evidence-parallel-2026-09-18.txt),
+48 successful fresh-process observations on 2026-09-18, three per configuration.
+`make ci` and `make test-race` passed before measurement; no tests or other
+benchmarks ran concurrently. An earlier interrupted attempt was excluded entirely.
+
+The baseline is `67db0b4` with only the identical preimage benchmark harness and
+its `testing.TB` fixture helper adjustment copied in. It retains serial preimage
+then history collection. Current runs collect both concurrently with separate
+batches, and preimage scanning yields its shared worker lease between records.
+Both variants have 10,000 holder address preimages, the same witness, and the
+same two-block history. Alloc and manual retention are disabled. This compares
+the complete scheduling change, including per-record limiter overhead.
+
+Source fingerprints:
+
+- Baseline: `14fd1d6723f40f0d7609e6e7c9bccb61ea9d18bc8cb12c524f85d3a44b2ae8b2`
+- Current: `385a967cb254e781b93d381cf59e8f1510ae051bc0b2cc05fcc1b5ddfb9bec82`
+
+| Operation | Workers | Temp DB | Baseline ms | Parallel ms | Time change | Baseline RSS MiB | Parallel RSS MiB |
+|---|---:|---|---:|---:|---:|---:|---:|
+| Migration | 2 | disk | 866.1 | 873.8 | +0.9% | 92.6 | 92.1 |
+| Migration | 2 | memory | 560.2 | 566.1 | +1.1% | 124.5 | 123.2 |
+| Migration | 8 | disk | 736.7 | 722.8 | -1.9% | 98.2 | 94.7 |
+| Migration | 8 | memory | 457.3 | 468.0 | +2.3% | 118.1 | 116.2 |
+| Verification | 2 | disk | 776.8 | 813.6 | +4.7% | 112.3 | 115.9 |
+| Verification | 2 | memory | 477.6 | 493.2 | +3.3% | 152.8 | 142.0 |
+| Verification | 8 | disk | 641.1 | 655.6 | +2.3% | 120.8 | 123.4 |
+| Verification | 8 | memory | 380.3 | 393.4 | +3.4% | 138.5 | 147.4 |
+
+Positive changes are measured regressions. This fixture shows no consistent
+end-to-end speedup; its two-block history offers little work to overlap with
+preimage scanning. Three short samples do not establish a persistent performance
+trend or production acceptance. In particular, they do not measure long-history,
+cold-disk or source-I/O contention behavior. RSS includes setup; heap/file peaks
+are sampled and may miss peaks, as described above. Raw logs also retain setup,
+allocation and scratch-storage measurements.
+
+Reproduce with the same harness in an isolated baseline checkout:
+
+```bash
+python3 scripts/benchmark-ovm.py --holders 10000 --temp-dbs disk memory \
+  --with-preimages --with-verify --count 3 \
+  --baseline-root /absolute/isolated/baseline --out /absolute/new/evidence.txt
+```
+
+## Historical manual ERC20 retention comparison
 
 Raw evidence: [manual retention pairs](raw/ovm-retention-2026-09-16.txt), 96 fresh-process observations, three per configuration. This source passed `make ci`, `make test-race` and `git diff --check` before measurement; no CI or other benchmark ran concurrently.
 

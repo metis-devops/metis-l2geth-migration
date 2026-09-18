@@ -227,15 +227,16 @@ holder or allowance pair to the witness and restart with a new output path.
 
 ### Resources, checkpoint and evidence
 
-The original state is first migrated to a private hash database and independently
-reopened and verified while history is collected. Conversion begins only after
-both finish. The transformed account/storage tries are then rebuilt into a fresh
+Original-state copying to a private hash database, address-preimage collection
+and canonical history scanning run concurrently. After all three finish, the
+original copy is independently reopened and verified before conversion begins.
+The transformed account/storage tries are then rebuilt into a fresh
 final target; no obsolete trie nodes or unreferenced old code are published.
 Other accounts that still reference the old code keep it. Hash/path and
 Pebble/LevelDB remain supported, including path completion metadata and state ID 0.
 
-Account/storage work, history reading/decoding and balance classification share
-the global 2–16 worker limiter. Account and balance queues hold at most twice the
+Account/storage work, preimage scanning, history reading/decoding and balance
+classification share the global 2–16 worker limiter. Account and balance queues hold at most twice the
 worker count. History queues also cap encoded bytes at cache/8 (1–16 MiB); an
 oversize atomic source record drains the queue and is processed synchronously.
 Balance readers reuse decoded account-trie paths for at most 32 account reads

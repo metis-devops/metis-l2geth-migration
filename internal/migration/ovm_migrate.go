@@ -233,17 +233,20 @@ func (w *ovmWork) migrateOriginalAndHistory() error {
 	ctx, cancel := context.WithCancel(w.ctx)
 	defer cancel()
 	var wg sync.WaitGroup
-	var historyErr error
+	var preimageErr, historyErr error
 	wg.Go(func() {
-		lease := newMigrateWorkLease(w.limiter)
-		historyErr = lease.acquire(ctx)
-		if historyErr == nil {
-			historyErr = collectOVMPreimages(ctx, w.source.db, w.index)
+		// Share the database, never the mutable batch. Overlapping address
+		// discoveries write identical keys and values in either order.
+		index := newOVMIndex(w.indexDB)
+		defer index.batch.Close()
+		preimageErr = collectOVMPreimages(ctx, w.source.db, index, w.limiter)
+		if preimageErr != nil {
+			cancel()
 		}
-		lease.release()
-		if historyErr == nil {
-			w.history, historyErr = scanOVMHistory(ctx, w.source, w.opts, w.index, w.limiter, w.reporter)
-		}
+	})
+	wg.Go(func() {
+		// This lane exclusively owns w.index, including any pending inputs.
+		w.history, historyErr = scanOVMHistory(ctx, w.source, w.opts, w.index, w.limiter, w.reporter)
 		if historyErr != nil {
 			cancel()
 		}
@@ -256,7 +259,7 @@ func (w *ovmWork) migrateOriginalAndHistory() error {
 		cancel()
 	}
 	wg.Wait()
-	if err := errors.Join(stateErr, historyErr); err != nil {
+	if err := errors.Join(stateErr, preimageErr, historyErr); err != nil {
 		return err
 	}
 	return w.reopenOriginal()

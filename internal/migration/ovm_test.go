@@ -497,7 +497,7 @@ func TestOVMHistoryFailures(t *testing.T) {
 	}
 }
 
-func editOVMSource(t *testing.T, f ovmFixture, fn func(ethdb.Database)) {
+func editOVMSource(t testing.TB, f ovmFixture, fn func(ethdb.Database)) {
 	t.Helper()
 	kv, err := gethleveldb.New(f.source, 16, 16, "fixture", false)
 	if err != nil {

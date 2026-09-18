@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/golang/snappy"
 )
 
@@ -125,14 +127,35 @@ func BenchmarkOVMVerificationRetain(b *testing.B)      { benchmarkOVMVerificatio
 func BenchmarkOVMVerificationAllocRetain(b *testing.B) { benchmarkOVMVerification(b, true, true) }
 
 func ovmBenchmarkFixture(b *testing.B, count int, withRetention bool) ovmFixture {
-	if !withRetention && os.Getenv("L2STATE_BENCH_RETAIN_FIXTURE") != "1" {
-		return newOVMFixtureSized(b, count, nil)
-	}
-	return newOVMFixtureSized(b, count, func(accounts []fixtureAccount) {
-		for n := 1; n <= min(1000, len(accounts)-1); n++ {
-			accounts[n].code = []byte{0x00}
+	var change func([]fixtureAccount)
+	if withRetention || os.Getenv("L2STATE_BENCH_RETAIN_FIXTURE") == "1" {
+		change = func(accounts []fixtureAccount) {
+			for n := 1; n <= min(1000, len(accounts)-1); n++ {
+				accounts[n].code = []byte{0x00}
+			}
 		}
-	})
+	}
+	f := newOVMFixtureSized(b, count, change)
+	if os.Getenv("L2STATE_BENCH_PREIMAGES") == "1" {
+		editOVMSource(b, f, func(db ethdb.Database) {
+			index := newOVMIndex(db)
+			defer index.batch.Close()
+			for _, address := range f.holders {
+				if err := index.batch.Put(append([]byte("secure-key-"), crypto.Keccak256(address[:])...), address[:]); err != nil {
+					b.Fatal(err)
+				}
+				if index.batch.ValueSize() >= ethdb.IdealBatchSize {
+					if err := index.flush(); err != nil {
+						b.Fatal(err)
+					}
+				}
+			}
+			if err := index.flush(); err != nil {
+				b.Fatal(err)
+			}
+		})
+	}
+	return f
 }
 func writeOVMBenchmarkRetainList(b *testing.B, f ovmFixture) string {
 	var data strings.Builder
