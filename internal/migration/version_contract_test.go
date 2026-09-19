@@ -181,7 +181,7 @@ func assertOptionalGethArtifact(t *testing.T, source, bundlePath, provenance str
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertCurrentBuildProvenance(t, direct.Report)
+	assertCurrentBuildProvenance(t, requireDirectReport(t, direct))
 	rewriteGethProvenance(t, filepath.Join(direct.ArtifactPath, VerificationFileName), provenance)
 	before = directoryContentDigest(t, direct.ArtifactPath)
 	verifiedDirect, err := VerifyDirect(context.Background(), DirectVerifyOptions{SourceChaindata: source, Artifact: direct.ArtifactPath, CacheMB: 16, Handles: 16})

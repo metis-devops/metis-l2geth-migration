@@ -37,6 +37,7 @@ func ArtifactVerificationFormat(dir string) (format string, retErr error) {
 
 // OVMVerifyOptions supplies the source and operator inputs for independent replay.
 type OVMVerifyOptions struct {
+	TempDir         string
 	TempDB          TempDBMode
 	SourceChaindata string
 	Artifact        string
@@ -76,17 +77,24 @@ func VerifyOVM(ctx context.Context, opts OVMVerifyOptions) (report OVMVerificati
 	if opts.Workers > maxMigrateWorkers {
 		return report, fmt.Errorf("workers must not exceed %d", maxMigrateWorkers)
 	}
-	// A sibling scratch tree makes the extra disk requirement visible and avoids
-	// ever writing temporary databases inside the artifact being verified.
-	parent := filepath.Dir(opts.Artifact)
-	if err := rejectOVMOutputs(migrate, parent); err != nil {
-		return report, err
+	ancient := opts.OVM.SourceAncient
+	if ancient == "" {
+		ancient = filepath.Join(opts.SourceChaindata, "ancient")
+		if _, err := os.Lstat(ancient); errors.Is(err, os.ErrNotExist) {
+			ancient = ""
+		} else if err != nil {
+			return report, fmt.Errorf("inspect source ancient: %w", err)
+		}
 	}
-	scratch, err := os.MkdirTemp(parent, ".l2state-ovm-verify-")
+	workspace, err := prepareVerificationWorkspace(opts.TempDir, opts.SourceChaindata, ancient, opts.Artifact)
 	if err != nil {
 		return report, err
 	}
-	defer func() { retErr = errors.Join(retErr, os.RemoveAll(scratch)) }()
+	defer func() { retErr = errors.Join(retErr, workspace.Close()) }()
+	scratch, err := workspace.create(ctx)
+	if err != nil {
+		return report, err
+	}
 	recomputed, err := replayOVMState(ctx, migrate, scratch, reporter, false)
 	if err != nil {
 		return report, err

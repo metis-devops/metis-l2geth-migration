@@ -61,7 +61,7 @@ func testOVMLateInputMutation(t *testing.T, tempMode TempDBMode) {
 						t.Fatal(err)
 					}
 					writer := allocDatabasePhaseWriter{path: filepath.Join(opts.Output, "chaindata"), phase: ovmPhaseWriter{phase: "verify_state", act: act}}
-					_, err = VerifyOVM(t.Context(), OVMVerifyOptions{TempDB: tempMode, SourceChaindata: f.source, Artifact: opts.Output, CacheMB: 64, Handles: 64, Workers: 2, OVM: opts.OVM, Progress: ProgressOptions{Logger: log.NewLogger(log.NewTerminalHandler(&writer, false))}})
+					_, err = VerifyOVM(t.Context(), OVMVerifyOptions{TempDir: filepath.Dir(opts.Output), TempDB: tempMode, SourceChaindata: f.source, Artifact: opts.Output, CacheMB: 64, Handles: 64, Workers: 2, OVM: opts.OVM, Progress: ProgressOptions{Logger: log.NewLogger(log.NewTerminalHandler(&writer, false))}})
 				}
 				if !changed || err == nil || !strings.Contains(err.Error(), "input changed") {
 					t.Fatalf("late input mutation: changed=%t err=%v", changed, err)
@@ -230,7 +230,7 @@ func TestOVMVerifyReplaysWithoutFinalScratchTarget(t *testing.T) {
 			before := directoryContentDigest(t, opts.Output)
 			checked := false
 			hook := ovmPhaseWriter{phase: "replay_converted_state", act: func() {
-				matches, err := filepath.Glob(filepath.Join(filepath.Dir(opts.Output), ".l2state-ovm-verify-*"))
+				matches, err := filepath.Glob(filepath.Join(filepath.Dir(opts.Output), ".l2state-verify-*"))
 				if err != nil || len(matches) != 1 {
 					t.Fatalf("scratch: %v %v", matches, err)
 				}
@@ -241,12 +241,12 @@ func TestOVMVerifyReplaysWithoutFinalScratchTarget(t *testing.T) {
 			}}
 			var output bytes.Buffer
 			writer := io.MultiWriter(&hook, &output)
-			report, err := VerifyOVM(t.Context(), OVMVerifyOptions{SourceChaindata: f.source, Artifact: opts.Output, CacheMB: 64, Handles: 64, Workers: 4, OVM: opts.OVM, Progress: ProgressOptions{Logger: log.NewLogger(log.NewTerminalHandler(writer, false))}})
+			report, err := VerifyOVM(t.Context(), OVMVerifyOptions{TempDir: filepath.Dir(opts.Output), SourceChaindata: f.source, Artifact: opts.Output, CacheMB: 64, Handles: 64, Workers: 4, OVM: opts.OVM, Progress: ProgressOptions{Logger: log.NewLogger(log.NewTerminalHandler(writer, false))}})
 			if err != nil {
 				t.Fatal(err)
 			}
-			report.VerifiedAt = result.OVMReport.VerifiedAt
-			if !sameOVMReport(report, *result.OVMReport) {
+			report.VerifiedAt = requireOVMReport(t, result).VerifiedAt
+			if !sameOVMReport(report, *requireOVMReport(t, result)) {
 				t.Fatal("validation-only replay changed evidence")
 			}
 			if !checked || bytes.Contains(output.Bytes(), []byte("phase=build_converted_state")) {
@@ -258,11 +258,11 @@ func TestOVMVerifyReplaysWithoutFinalScratchTarget(t *testing.T) {
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 			cancelHook := ovmPhaseWriter{phase: "replay_converted_state", act: cancel}
-			_, err = VerifyOVM(ctx, OVMVerifyOptions{SourceChaindata: f.source, Artifact: opts.Output, CacheMB: 64, Handles: 64, Workers: 4, OVM: opts.OVM, Progress: ProgressOptions{Logger: log.NewLogger(log.NewTerminalHandler(&cancelHook, false))}})
+			_, err = VerifyOVM(ctx, OVMVerifyOptions{TempDir: filepath.Dir(opts.Output), SourceChaindata: f.source, Artifact: opts.Output, CacheMB: 64, Handles: 64, Workers: 4, OVM: opts.OVM, Progress: ProgressOptions{Logger: log.NewLogger(log.NewTerminalHandler(&cancelHook, false))}})
 			if !errors.Is(err, context.Canceled) {
 				t.Fatalf("replay cancellation lost: %v", err)
 			}
-			matches, err := filepath.Glob(filepath.Join(filepath.Dir(opts.Output), ".l2state-ovm-verify-*"))
+			matches, err := filepath.Glob(filepath.Join(filepath.Dir(opts.Output), ".l2state-verify-*"))
 			if err != nil || len(matches) != 0 {
 				t.Fatalf("replay leaked scratch: %v %v", matches, err)
 			}
@@ -313,14 +313,14 @@ func TestOVMBoundedReadersAcrossTargets(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if result.OVMReport.Target.Root != expected {
+			if requireOVMReport(t, result).Target.Root != expected {
 				t.Fatal("reader reuse changed serial StateDB reference root")
 			}
-			report, err := VerifyOVM(t.Context(), OVMVerifyOptions{SourceChaindata: f.source, Artifact: opts.Output, CacheMB: 64, Handles: 64, Workers: workers, OVM: opts.OVM})
+			report, err := VerifyOVM(t.Context(), OVMVerifyOptions{TempDir: filepath.Dir(opts.Output), SourceChaindata: f.source, Artifact: opts.Output, CacheMB: 64, Handles: 64, Workers: workers, OVM: opts.OVM})
 			if err != nil {
 				t.Fatal(err)
 			}
-			if report.Target != result.OVMReport.Target {
+			if report.Target != requireOVMReport(t, result).Target {
 				t.Fatal("replay counts or root changed")
 			}
 		})

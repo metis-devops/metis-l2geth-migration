@@ -18,11 +18,22 @@
   and assembles the same canonical root and target layout. Portable import
   retains a test-only pinned `GenerateTrie` reference builder for independent
   layout comparison.
+- `partition_execution.go` owns shared worker/account bounds and failure state;
+  `partition_accounts.go` owns account scheduling and ordered merging;
+  `partition_storage.go` owns bounded storage probes and partition construction.
+  Outputs are explicitly injected factories, never inferred from a nil database.
+  OVM zero-native-balance policy is an injected account validator owned by OVM.
 - `internal/migration/verify.go` and `direct_verify.go` independently verify
   bundle-backed and direct artifacts; their report formats are intentionally
   distinct.
 - `internal/migration/head_metadata.go`, `progress.go`, and `atomicdir.go` own
   the minimal header inventory, stderr progress, and no-replace publication.
+- `publish_artifact.go` orders report write/sync, strict reread/comparison,
+  mode-specific input confirmation, cancellation and atomic commit. Callers own
+  staging cleanup; codecs and report schemas stay independent.
+- `migrate_result.go` holds a single private report. Callers use `DirectReport()`
+  or `OVMReport()` and check the boolean discriminator. Only typed constructors
+  create successful results; zero results cannot be serialized. CLI JSON is unchanged.
 - `internal/migration/testdata` contains the committed legacy canary and
   expected evidence.
 - `testdata/legacyfixturegen` is a separate, maintenance-only module for
@@ -58,6 +69,15 @@
 
 - Preserve `context.Context` cancellation through source scans, chunked bundle
   reads/writes, path adoption, and verification.
+- Standalone `VerifyOptions`, `DirectVerifyOptions` and `OVMVerifyOptions` accept
+  `TempDir` (`verify --temp-dir`). `verify_workspace.go` validates explicit parents,
+  lazily creates unique scratch under that parent or the system temp directory,
+  rejects every input/alias (also for default TMPDIR), and cleans up after handles
+  close. OVM verification must not require a writable artifact parent. Pure bundle,
+  ordinary path and ordinary memory verification create no physical scratch.
+- Trie finalization must check the callback's live error state after `Hash()` and
+  before root acceptance or writer flush. Never pass a snapshot of that error to
+  a finalizer that invokes more callbacks.
 - Wrap errors with operation context and `%w`. Check and combine relevant
   close, sync, abort, and cleanup errors instead of discarding them.
 - Keep human-readable progress on standard error and the single final JSON

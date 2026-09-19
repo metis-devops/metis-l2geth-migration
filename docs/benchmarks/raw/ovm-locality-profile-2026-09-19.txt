@@ -1,0 +1,379 @@
+# Operation-scoped diagnostic profiles. NOT paired timing observations.
+# BenchmarkOVMMigration/workers=8, 100000 holders, disk, no alloc/retention/preimages.
+# CPU/block/mutex sampling starts after setup; allocation profiles use after minus before.
+# Instrumentation/forced GC affect runtime. Blocking delay sums goroutines, not elapsed time.
+# Binary pprof files are in /tmp/l2state-perf-20260919/{baseline,current}-final-profile.
+# go version go1.27.1 darwin/arm64
+
+# variant=baseline source-sha256=3f7990c3aee37b3b6e6e789204a3935ccd08b66b603e55468f77383e492d0788
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMMigration/workers=8-16         	       1	7560866875 ns/op	        32.00 GC-cycles	 164105021 sampled-disk-peak-B	 154585264 sampled-heap-peak-B	         0 sampled-memory-files-peak-B	 134871597 sampled-temp-disk-peak-B	         1.419 setup-s	1924498168 B/op	31163528 allocs/op
+PASS
+
+# go tool pprof -top -nodecount=20 /tmp/l2state-perf-20260919/baseline-final-profile/cpu.pprof
+File: baseline.test
+Type: cpu
+Time: 2026-09-19 21:00:46 CST
+Duration: 7.73s, Total samples = 17.97s (232.32%)
+Showing nodes accounting for 17.40s, 96.83% of 17.97s total
+Dropped 283 nodes (cum <= 0.09s)
+Showing top 20 nodes out of 238
+      flat  flat%   sum%        cum   cum%
+     8.25s 45.91% 45.91%      8.25s 45.91%  syscall.rawsyscalln
+     4.18s 23.26% 69.17%      4.18s 23.26%  runtime.usleep
+     2.36s 13.13% 82.30%      2.36s 13.13%  runtime.pthread_cond_wait
+     2.23s 12.41% 94.71%      2.23s 12.41%  runtime.pthread_cond_signal
+     0.22s  1.22% 95.94%      0.22s  1.22%  runtime.madvise
+     0.10s  0.56% 96.49%      0.10s  0.56%  github.com/cockroachdb/pebble/v2/internal/arenaskl.newRawNode
+     0.02s  0.11% 96.61%      2.02s 11.24%  github.com/syndtr/goleveldb/leveldb/cache.(*Cache).Get
+     0.01s 0.056% 96.66%      2.06s 11.46%  github.com/syndtr/goleveldb/leveldb.(*DB).get
+     0.01s 0.056% 96.72%      2.04s 11.35%  github.com/syndtr/goleveldb/leveldb.(*version).walkOverlapping
+     0.01s 0.056% 96.77%      0.42s  2.34%  internal/sync.(*Mutex).Unlock (inline)
+     0.01s 0.056% 96.83%      0.23s  1.28%  internal/sync.(*Mutex).lockSlow
+         0     0% 96.83%      1.75s  9.74%  _.goready.func1
+         0     0% 96.83%      0.09s   0.5%  bufio.(*Scanner).Scan
+         0     0% 96.83%      1.62s  9.02%  bufio.(*Writer).Flush
+         0     0% 96.83%      1.62s  9.02%  bufio.(*Writer).Write
+         0     0% 96.83%      0.20s  1.11%  github.com/cockroachdb/pebble/v2.(*Batch).Commit
+         0     0% 96.83%      0.20s  1.11%  github.com/cockroachdb/pebble/v2.(*DB).Apply (inline)
+         0     0% 96.83%      4.52s 25.15%  github.com/cockroachdb/pebble/v2.(*DB).Get
+         0     0% 96.83%      0.20s  1.11%  github.com/cockroachdb/pebble/v2.(*DB).applyInternal
+         0     0% 96.83%      0.19s  1.06%  github.com/cockroachdb/pebble/v2.(*DB).commitApply
+
+# go tool pprof -top -cum -nodecount=30 -focus=migration /tmp/l2state-perf-20260919/baseline-final-profile/cpu.pprof
+File: baseline.test
+Type: cpu
+Time: 2026-09-19 21:00:46 CST
+Duration: 7.73s, Total samples = 17.97s (232.32%)
+Active filters:
+   focus=migration
+Showing nodes accounting for 6.11s, 34.00% of 17.97s total
+Dropped 155 nodes (cum <= 0.09s)
+Showing top 30 nodes out of 208
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%      6.59s 36.67%  github.com/ethereum/go-ethereum/core/rawdb.ReadLegacyTrieNode
+         0     0%     0%      6.59s 36.67%  github.com/ethereum/go-ethereum/trie.(*Reader).Node
+         0     0%     0%      6.59s 36.67%  github.com/ethereum/go-ethereum/triedb/hashdb.(*Database).node
+         0     0%     0%      6.59s 36.67%  github.com/ethereum/go-ethereum/triedb/hashdb.(*reader).Node
+     6.11s 34.00% 34.00%      6.11s 34.00%  syscall.rawsyscalln
+         0     0% 34.00%      6.11s 34.00%  syscall.syscalln
+         0     0% 34.00%      5.82s 32.39%  internal/poll.(*FD).Pread
+         0     0% 34.00%      5.82s 32.39%  internal/poll.(*FD).Pread.func1 (inline)
+         0     0% 34.00%      5.82s 32.39%  internal/poll.ignoringEINTR2[go.shape.int] (inline)
+         0     0% 34.00%      5.82s 32.39%  os.(*File).ReadAt
+         0     0% 34.00%      5.82s 32.39%  os.(*File).pread (inline)
+         0     0% 34.00%      5.82s 32.39%  syscall.Pread (inline)
+         0     0% 34.00%      5.82s 32.39%  syscall.pread
+         0     0% 34.00%      5.82s 32.39%  syscall.syscall6
+         0     0% 34.00%      5.34s 29.72%  github.com/ethereum/go-ethereum/trie.(*Iterator).Next
+         0     0% 34.00%      5.33s 29.66%  github.com/ethereum/go-ethereum/trie.(*nodeIterator).Next
+         0     0% 34.00%      5.33s 29.66%  github.com/ethereum/go-ethereum/trie.(*nodeIterator).peek
+         0     0% 34.00%      5.33s 29.66%  github.com/ethereum/go-ethereum/trie.(*nodeIterator).resolveHash
+         0     0% 34.00%      5.33s 29.66%  github.com/ethereum/go-ethereum/trie.(*nodeIteratorState).resolve
+         0     0% 34.00%      4.61s 25.65%  github.com/cockroachdb/pebble/v2/sstable/block.(*Reader).Read
+         0     0% 34.00%      4.57s 25.43%  github.com/cockroachdb/pebble/v2/sstable.(*singleLevelIterator[go.shape.struct { github.com/cockroachdb/pebble/v2/sstable/rowblk.iter github.com/cockroachdb/pebble/v2/sstable/rowblk.Iter },go.shape.*github.com/cockroachdb/pebble/v2/sstable/rowblk.IndexIter,go.shape.2d95560dd2a436f029e6e31dd6b50f33cdf7f7fbac770a905f7c097f0b5ec4b0,go.shape.*github.com/cockroachdb/pebble/v2/sstable/rowblk.Iter]).loadDataBlock
+         0     0% 34.00%      4.56s 25.38%  github.com/cockroachdb/pebble/v2/sstable.(*Reader).readDataBlock (inline)
+         0     0% 34.00%      4.54s 25.26%  github.com/cockroachdb/pebble/v2/sstable/block.(*Reader).doRead
+         0     0% 34.00%      4.53s 25.21%  github.com/ethereum/go-ethereum/ethdb/pebble.(*Database).Get
+         0     0% 34.00%      4.52s 25.15%  github.com/cockroachdb/pebble/v2.(*DB).Get (inline)
+         0     0% 34.00%      4.52s 25.15%  github.com/cockroachdb/pebble/v2.(*DB).getInternal
+         0     0% 34.00%      4.52s 25.15%  github.com/cockroachdb/pebble/v2/objstorage/objstorageprovider.(*vfsReadHandle).ReadAt
+         0     0% 34.00%      4.52s 25.15%  sync.(*WaitGroup).Go.func1
+         0     0% 34.00%      4.51s 25.10%  github.com/cockroachdb/pebble/v2.(*Iterator).First
+         0     0% 34.00%      4.51s 25.10%  github.com/cockroachdb/pebble/v2.(*Iterator).iterFirstWithinBounds
+
+# go tool pprof -top -alloc_space -nodecount=20 -base=/tmp/l2state-perf-20260919/baseline-final-profile/alloc-before.pprof /tmp/l2state-perf-20260919/baseline-final-profile/alloc-after.pprof
+File: baseline.test
+Type: alloc_space
+Time: 2026-09-19 21:00:46 CST
+Showing nodes accounting for 1.59GB, 86.12% of 1.85GB total
+Dropped 285 nodes (cum <= 0.01GB)
+Showing top 20 nodes out of 164
+      flat  flat%   sum%        cum   cum%
+    0.34GB 18.37% 18.37%     0.34GB 18.37%  github.com/syndtr/goleveldb/leveldb/table.(*Reader).newBlockIter
+    0.25GB 13.56% 31.94%     0.25GB 13.62%  github.com/ethereum/go-ethereum/ethdb/pebble.(*Database).Get
+    0.21GB 11.53% 43.47%     0.32GB 17.29%  github.com/ethereum/go-ethereum/trie.decodeFull
+    0.11GB  5.82% 49.28%     0.16GB  8.43%  github.com/ethereum/go-ethereum/trie.decodeShort
+    0.11GB  5.79% 55.07%     0.11GB  5.79%  github.com/ethereum/go-ethereum/trie.decodeRef
+    0.07GB  3.91% 58.98%     0.09GB  4.65%  github.com/ethereum/go-ethereum/trie.(*nodeIterator).nextChild
+    0.06GB  3.35% 62.34%     0.06GB  3.35%  github.com/ethereum/go-ethereum/trie.(*PrevalueTracer).Put
+    0.06GB  3.17% 65.51%     0.83GB 44.75%  github.com/ethereum/go-ethereum/core/rawdb.ReadLegacyTrieNode
+    0.06GB  3.04% 68.55%     0.06GB  3.04%  github.com/ethereum/go-ethereum/trie.keybytesToHex (inline)
+    0.06GB  3.04% 71.59%     0.06GB  3.04%  github.com/syndtr/goleveldb/leveldb/table.(*blockIter).Next
+    0.05GB  2.45% 74.04%     0.05GB  2.45%  github.com/syndtr/goleveldb/leveldb/util.(*BufferPool).Get
+    0.03GB  1.82% 75.87%     0.07GB  3.65%  github.com/metis-devops/metis-l2geth-migration/internal/migration.decodeFullAccount
+    0.03GB  1.77% 77.64%     0.03GB  1.77%  encoding/json/jsontext.NewDecoder
+    0.03GB  1.59% 79.22%     0.03GB  1.59%  github.com/ethereum/go-ethereum/trie.hexToKeybytes
+    0.03GB  1.48% 80.70%     0.03GB  1.48%  github.com/metis-devops/metis-l2geth-migration/internal/migration.prefixedKey (inline)
+    0.03GB  1.37% 82.08%     0.50GB 26.83%  github.com/syndtr/goleveldb/leveldb/table.(*Reader).find
+    0.02GB  1.24% 83.32%     0.08GB  4.41%  github.com/syndtr/goleveldb/leveldb/cache.(*Cache).Get
+    0.02GB  1.06% 84.38%     0.04GB  2.12%  github.com/metis-devops/metis-l2geth-migration/internal/migration.(*ovmBalanceBatch).submit
+    0.02GB   0.9% 85.28%     0.02GB   0.9%  bytes.Clone
+    0.02GB  0.85% 86.12%     0.02GB  0.85%  github.com/ethereum/go-ethereum/rlp.(*Stream).Bytes
+
+# go tool pprof -top -cum -alloc_space -nodecount=15 -focus=ovmAccountReader -base=/tmp/l2state-perf-20260919/baseline-final-profile/alloc-before.pprof /tmp/l2state-perf-20260919/baseline-final-profile/alloc-after.pprof
+File: baseline.test
+Type: alloc_space
+Time: 2026-09-19 21:00:46 CST
+Active filters:
+   focus=ovmAccountReader
+Showing nodes accounting for 355.10MB, 18.77% of 1891.65MB total
+Showing top 15 nodes out of 30
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%   462.05MB 24.43%  github.com/metis-devops/metis-l2geth-migration/internal/migration.(*ovmAccountReader).read
+         0     0%     0%   462.05MB 24.43%  github.com/metis-devops/metis-l2geth-migration/internal/migration.(*ovmBalanceBatch).inspect
+         0     0%     0%   462.05MB 24.43%  github.com/metis-devops/metis-l2geth-migration/internal/migration.(*ovmBalanceBatch).submit.func1
+         0     0%     0%   462.05MB 24.43%  sync.(*WaitGroup).Go.func1
+         0     0%     0%   441.05MB 23.32%  github.com/ethereum/go-ethereum/trie.(*Trie).Get
+         0     0%     0%   432.55MB 22.87%  github.com/ethereum/go-ethereum/trie.(*Trie).resolveAndTrack
+    3.50MB  0.19%  0.19%   432.55MB 22.87%  github.com/ethereum/go-ethereum/trie.(*Trie).get
+         0     0%  0.19%   200.53MB 10.60%  github.com/ethereum/go-ethereum/trie.decodeNodeUnsafe
+   97.03MB  5.13%  5.31%   180.53MB  9.54%  github.com/ethereum/go-ethereum/trie.decodeFull
+      19MB  1.00%  6.32%   171.07MB  9.04%  github.com/ethereum/go-ethereum/core/rawdb.ReadLegacyTrieNode
+         0     0%  6.32%   171.07MB  9.04%  github.com/ethereum/go-ethereum/triedb/hashdb.(*Database).node
+         0     0%  6.32%   168.57MB  8.91%  github.com/ethereum/go-ethereum/trie.(*Reader).Node
+         0     0%  6.32%   168.57MB  8.91%  github.com/ethereum/go-ethereum/triedb/hashdb.(*reader).Node
+  152.07MB  8.04% 14.36%   152.07MB  8.04%  github.com/ethereum/go-ethereum/ethdb/pebble.(*Database).Get
+   83.50MB  4.41% 18.77%    83.50MB  4.41%  github.com/ethereum/go-ethereum/trie.decodeRef
+
+# go tool pprof -top -cum -nodecount=15 -focus=migration /tmp/l2state-perf-20260919/baseline-final-profile/block.pprof
+File: baseline.test
+Type: delay
+Time: 2026-09-19 21:00:54 CST
+Active filters:
+   focus=migration
+Showing nodes accounting for 21.77s, 4.58% of 475.37s total
+Dropped 158 nodes (cum <= 2.38s)
+Showing top 15 nodes out of 135
+      flat  flat%   sum%        cum   cum%
+    18.95s  3.99%  3.99%     18.95s  3.99%  runtime.selectgo
+         0     0%  3.99%     14.31s  3.01%  sync.(*WaitGroup).Go.func1
+         0     0%  3.99%     13.65s  2.87%  github.com/metis-devops/metis-l2geth-migration/internal/migration.runMigratePartitionTasks.func1
+         0     0%  3.99%     10.90s  2.29%  github.com/metis-devops/metis-l2geth-migration/internal/migration.(*migrateWorkLease).acquire
+         0     0%  3.99%     10.90s  2.29%  github.com/metis-devops/metis-l2geth-migration/internal/migration.(*migrateWorkLimiter).acquire
+         0     0%  3.99%     10.86s  2.29%  github.com/metis-devops/metis-l2geth-migration/internal/migration.(*partitionedStateMigrator).migrateAccountPartition
+         0     0%  3.99%     10.86s  2.29%  github.com/metis-devops/metis-l2geth-migration/internal/migration.(*partitionedStateMigrator).run.func1
+         0     0%  3.99%      7.25s  1.52%  github.com/metis-devops/metis-l2geth-migration/internal/migration.sampleTemporaryBenchmark.func3
+         0     0%  3.99%      2.88s  0.61%  github.com/metis-devops/metis-l2geth-migration/internal/migration.benchmarkOVMMigration.func1
+         0     0%  3.99%      2.88s  0.61%  testing.(*B).run1.func1
+         0     0%  3.99%      2.88s  0.61%  testing.(*B).runN
+     2.83s  0.59%  4.58%      2.83s  0.59%  sync.(*WaitGroup).Wait
+         0     0%  4.58%      2.79s  0.59%  github.com/metis-devops/metis-l2geth-migration/internal/migration.(*partitionedStateMigrator).migratePartitionedStorage.func1
+         0     0%  4.58%      2.70s  0.57%  github.com/metis-devops/metis-l2geth-migration/internal/migration.Migrate
+         0     0%  4.58%      2.70s  0.57%  github.com/metis-devops/metis-l2geth-migration/internal/migration.migrateOVM
+
+# go tool pprof -top -cum -nodecount=15 -focus=migration /tmp/l2state-perf-20260919/baseline-final-profile/mutex.pprof
+File: baseline.test
+Type: delay
+Time: 2026-09-19 21:00:54 CST
+Active filters:
+   focus=migration
+Showing nodes accounting for 1.83s, 77.16% of 2.37s total
+Dropped 290 nodes (cum <= 0.01s)
+Showing top 15 nodes out of 101
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%      2.24s 94.51%  sync.(*WaitGroup).Go.func1
+         0     0%     0%      2.17s 91.73%  github.com/metis-devops/metis-l2geth-migration/internal/migration.runMigratePartitionTasks.func1
+     1.83s 77.16% 77.16%      1.84s 77.60%  sync.(*Mutex).Unlock
+         0     0% 77.16%      1.66s 70.07%  github.com/metis-devops/metis-l2geth-migration/internal/migration.(*partitionedStateMigrator).migrateAccountPartition
+         0     0% 77.16%      1.66s 70.07%  github.com/metis-devops/metis-l2geth-migration/internal/migration.(*partitionedStateMigrator).run.func1
+         0     0% 77.16%      1.23s 51.98%  github.com/ethereum/go-ethereum/core/rawdb.ReadLegacyTrieNode
+         0     0% 77.16%      1.23s 51.98%  github.com/ethereum/go-ethereum/triedb/hashdb.(*Database).node
+         0     0% 77.16%      1.23s 51.98%  github.com/ethereum/go-ethereum/trie.(*Reader).Node
+         0     0% 77.16%      1.23s 51.98%  github.com/ethereum/go-ethereum/triedb/hashdb.(*reader).Node
+         0     0% 77.16%      1.18s 49.64%  github.com/ethereum/go-ethereum/trie.(*nodeIterator).resolveHash
+         0     0% 77.16%      1.18s 49.64%  github.com/ethereum/go-ethereum/trie.(*nodeIteratorState).resolve
+         0     0% 77.16%      1.17s 49.55%  github.com/ethereum/go-ethereum/trie.(*Iterator).Next
+         0     0% 77.16%      1.17s 49.55%  github.com/ethereum/go-ethereum/trie.(*nodeIterator).Next
+         0     0% 77.16%      1.17s 49.55%  github.com/ethereum/go-ethereum/trie.(*nodeIterator).peek
+         0     0% 77.16%      1.14s 48.10%  github.com/ethereum/go-ethereum/trie.(*subtreeIterator).Next
+
+# variant=current source-sha256=c0aa4a18cb30e5287c0975aa9a4880365c36c5a71680e3cdf36ca78d7b95247b
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMMigration/workers=8-16         	       1	7536628083 ns/op	        28.00 GC-cycles	 176613722 sampled-disk-peak-B	 152553488 sampled-heap-peak-B	         0 sampled-memory-files-peak-B	 147024206 sampled-temp-disk-peak-B	         1.421 setup-s	1659700112 B/op	27681273 allocs/op
+PASS
+
+# go tool pprof -top -nodecount=20 /tmp/l2state-perf-20260919/current-final-profile/cpu.pprof
+File: current.test
+Type: cpu
+Time: 2026-09-19 21:00:56 CST
+Duration: 7.65s, Total samples = 17.92s (234.38%)
+Showing nodes accounting for 17.20s, 95.98% of 17.92s total
+Dropped 311 nodes (cum <= 0.09s)
+Showing top 20 nodes out of 231
+      flat  flat%   sum%        cum   cum%
+     8.41s 46.93% 46.93%      8.41s 46.93%  syscall.rawsyscalln
+     3.78s 21.09% 68.02%      3.78s 21.09%  runtime.usleep
+     2.34s 13.06% 81.08%      2.34s 13.06%  runtime.pthread_cond_signal
+     2.32s 12.95% 94.03%      2.32s 12.95%  runtime.pthread_cond_wait
+     0.23s  1.28% 95.31%      0.23s  1.28%  runtime.madvise
+     0.03s  0.17% 95.48%      0.23s  1.28%  internal/sync.(*Mutex).lockSlow
+     0.02s  0.11% 95.59%      0.42s  2.34%  internal/sync.(*Mutex).Unlock (inline)
+     0.02s  0.11% 95.70%      3.14s 17.52%  runtime.stealWork
+     0.01s 0.056% 95.76%      0.21s  1.17%  github.com/cockroachdb/pebble/v2/internal/arenaskl.(*Skiplist).addInternal
+     0.01s 0.056% 95.81%      0.22s  1.23%  github.com/ethereum/go-ethereum/trie.(*StackTrie).hash
+     0.01s 0.056% 95.87%      2.56s 14.29%  github.com/syndtr/goleveldb/leveldb/cache.(*Cache).Get
+     0.01s 0.056% 95.93%      0.24s  1.34%  internal/sync.(*Mutex).Lock (inline)
+     0.01s 0.056% 95.98%      3.12s 17.41%  runtime.runqgrab
+         0     0% 95.98%      1.92s 10.71%  _.goready.func1
+         0     0% 95.98%      0.12s  0.67%  bufio.(*Scanner).Scan
+         0     0% 95.98%      1.47s  8.20%  bufio.(*Writer).Flush
+         0     0% 95.98%      1.46s  8.15%  bufio.(*Writer).Write
+         0     0% 95.98%      0.22s  1.23%  github.com/cockroachdb/pebble/v2.(*Batch).Commit (inline)
+         0     0% 95.98%      0.22s  1.23%  github.com/cockroachdb/pebble/v2.(*DB).Apply (inline)
+         0     0% 95.98%      4.19s 23.38%  github.com/cockroachdb/pebble/v2.(*DB).Get
+
+# go tool pprof -top -cum -nodecount=30 -focus=migration /tmp/l2state-perf-20260919/current-final-profile/cpu.pprof
+File: current.test
+Type: cpu
+Time: 2026-09-19 21:00:56 CST
+Duration: 7.65s, Total samples = 17.92s (234.38%)
+Active filters:
+   focus=migration
+Showing nodes accounting for 6.39s, 35.66% of 17.92s total
+Dropped 162 nodes (cum <= 0.09s)
+Showing top 30 nodes out of 206
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%      6.81s 38.00%  github.com/ethereum/go-ethereum/core/rawdb.ReadLegacyTrieNode
+         0     0%     0%      6.81s 38.00%  github.com/ethereum/go-ethereum/trie.(*Reader).Node
+         0     0%     0%      6.81s 38.00%  github.com/ethereum/go-ethereum/triedb/hashdb.(*Database).node
+         0     0%     0%      6.81s 38.00%  github.com/ethereum/go-ethereum/triedb/hashdb.(*reader).Node
+     6.39s 35.66% 35.66%      6.39s 35.66%  syscall.rawsyscalln
+         0     0% 35.66%      6.39s 35.66%  syscall.syscalln
+         0     0% 35.66%      6.12s 34.15%  internal/poll.(*FD).Pread
+         0     0% 35.66%      6.12s 34.15%  internal/poll.(*FD).Pread.func1 (inline)
+         0     0% 35.66%      6.12s 34.15%  internal/poll.ignoringEINTR2[go.shape.int] (inline)
+         0     0% 35.66%      6.12s 34.15%  os.(*File).ReadAt
+         0     0% 35.66%      6.12s 34.15%  os.(*File).pread (inline)
+         0     0% 35.66%      6.12s 34.15%  syscall.Pread (inline)
+         0     0% 35.66%      6.12s 34.15%  syscall.pread
+         0     0% 35.66%      6.12s 34.15%  syscall.syscall6
+         0     0% 35.66%      5.84s 32.59%  github.com/ethereum/go-ethereum/trie.(*Iterator).Next
+         0     0% 35.66%      5.78s 32.25%  github.com/ethereum/go-ethereum/trie.(*nodeIterator).Next
+         0     0% 35.66%      5.78s 32.25%  github.com/ethereum/go-ethereum/trie.(*nodeIterator).peek
+         0     0% 35.66%      5.78s 32.25%  github.com/ethereum/go-ethereum/trie.(*nodeIterator).resolveHash
+         0     0% 35.66%      5.78s 32.25%  github.com/ethereum/go-ethereum/trie.(*nodeIteratorState).resolve
+         0     0% 35.66%      5.01s 27.96%  sync.(*WaitGroup).Go.func1
+         0     0% 35.66%      4.38s 24.44%  github.com/cockroachdb/pebble/v2/sstable/block.(*Reader).Read
+         0     0% 35.66%      4.35s 24.27%  github.com/cockroachdb/pebble/v2/sstable.(*Reader).readDataBlock (inline)
+         0     0% 35.66%      4.35s 24.27%  github.com/cockroachdb/pebble/v2/sstable.(*singleLevelIterator[go.shape.struct { github.com/cockroachdb/pebble/v2/sstable/rowblk.iter github.com/cockroachdb/pebble/v2/sstable/rowblk.Iter },go.shape.*github.com/cockroachdb/pebble/v2/sstable/rowblk.IndexIter,go.shape.2d95560dd2a436f029e6e31dd6b50f33cdf7f7fbac770a905f7c097f0b5ec4b0,go.shape.*github.com/cockroachdb/pebble/v2/sstable/rowblk.Iter]).loadDataBlock
+         0     0% 35.66%      4.32s 24.11%  github.com/cockroachdb/pebble/v2/sstable/block.(*Reader).doRead
+         0     0% 35.66%      4.26s 23.77%  github.com/cockroachdb/pebble/v2/objstorage/objstorageprovider.(*vfsReadHandle).ReadAt
+         0     0% 35.66%      4.19s 23.38%  github.com/cockroachdb/pebble/v2.(*DB).Get (inline)
+         0     0% 35.66%      4.19s 23.38%  github.com/cockroachdb/pebble/v2.(*DB).getInternal
+         0     0% 35.66%      4.19s 23.38%  github.com/cockroachdb/pebble/v2.(*Iterator).First
+         0     0% 35.66%      4.19s 23.38%  github.com/cockroachdb/pebble/v2.(*Iterator).iterFirstWithinBounds
+         0     0% 35.66%      4.19s 23.38%  github.com/cockroachdb/pebble/v2.(*getIter).First
+
+# go tool pprof -top -alloc_space -nodecount=20 -base=/tmp/l2state-perf-20260919/current-final-profile/alloc-before.pprof /tmp/l2state-perf-20260919/current-final-profile/alloc-after.pprof
+File: current.test
+Type: alloc_space
+Time: 2026-09-19 21:00:56 CST
+Showing nodes accounting for 1280.10MB, 82.25% of 1556.37MB total
+Dropped 275 nodes (cum <= 7.78MB)
+Showing top 20 nodes out of 170
+      flat  flat%   sum%        cum   cum%
+  341.58MB 21.95% 21.95%   341.58MB 21.95%  github.com/syndtr/goleveldb/leveldb/table.(*Reader).newBlockIter
+  136.53MB  8.77% 30.72%   138.03MB  8.87%  github.com/ethereum/go-ethereum/ethdb/pebble.(*Database).Get
+  129.54MB  8.32% 39.04%   177.04MB 11.38%  github.com/ethereum/go-ethereum/trie.decodeFull
+  104.51MB  6.71% 45.76%   158.51MB 10.18%  github.com/ethereum/go-ethereum/trie.decodeShort
+   67.01MB  4.31% 50.06%    77.51MB  4.98%  github.com/ethereum/go-ethereum/trie.(*nodeIterator).nextChild
+   64.50MB  4.14% 54.21%    64.50MB  4.14%  github.com/ethereum/go-ethereum/trie.keybytesToHex (inline)
+   47.50MB  3.05% 57.26%    47.50MB  3.05%  github.com/ethereum/go-ethereum/trie.decodeRef
+      46MB  2.96% 60.21%       46MB  2.96%  github.com/syndtr/goleveldb/leveldb/table.(*blockIter).Next
+   45.50MB  2.92% 63.14%   690.92MB 44.39%  github.com/ethereum/go-ethereum/core/rawdb.ReadLegacyTrieNode
+      42MB  2.70% 65.84%       75MB  4.82%  github.com/metis-devops/metis-l2geth-migration/internal/migration.decodeFullAccount
+   36.11MB  2.32% 68.16%    36.11MB  2.32%  github.com/ethereum/go-ethereum/trie.(*PrevalueTracer).Put
+   33.31MB  2.14% 70.30%    33.31MB  2.14%  github.com/syndtr/goleveldb/leveldb/util.(*BufferPool).Get
+      33MB  2.12% 72.42%    77.31MB  4.97%  github.com/syndtr/goleveldb/leveldb/cache.(*Cache).Get
+   31.50MB  2.02% 74.44%    31.50MB  2.02%  github.com/ethereum/go-ethereum/trie.hexToKeybytes
+   23.01MB  1.48% 75.92%    23.01MB  1.48%  encoding/json/jsontext.NewDecoder
+      23MB  1.48% 77.40%   474.39MB 30.48%  github.com/syndtr/goleveldb/leveldb/table.(*Reader).find
+      21MB  1.35% 78.75%       21MB  1.35%  bytes.Clone
+   19.50MB  1.25% 80.00%    19.50MB  1.25%  github.com/metis-devops/metis-l2geth-migration/internal/migration.prefixedKey (inline)
+      19MB  1.22% 81.22%    43.50MB  2.80%  github.com/metis-devops/metis-l2geth-migration/internal/migration.(*ovmBalanceBatch).submit
+      16MB  1.03% 82.25%       16MB  1.03%  github.com/ethereum/go-ethereum/crypto.Keccak256Hash
+
+# go tool pprof -top -cum -alloc_space -nodecount=15 -focus=ovmAccountReader -base=/tmp/l2state-perf-20260919/current-final-profile/alloc-before.pprof /tmp/l2state-perf-20260919/current-final-profile/alloc-after.pprof
+File: current.test
+Type: alloc_space
+Time: 2026-09-19 21:00:56 CST
+Active filters:
+   focus=ovmAccountReader
+Showing nodes accounting for 120.64MB, 7.75% of 1556.37MB total
+Dropped 15 nodes (cum <= 7.78MB)
+Showing top 15 nodes out of 30
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%   184.14MB 11.83%  github.com/metis-devops/metis-l2geth-migration/internal/migration.(*ovmAccountReader).read
+         0     0%     0%   184.14MB 11.83%  github.com/metis-devops/metis-l2geth-migration/internal/migration.(*ovmBalanceBatch).inspect
+         0     0%     0%   184.14MB 11.83%  github.com/metis-devops/metis-l2geth-migration/internal/migration.(*ovmBalanceBatch).submit.func1
+         0     0%     0%   184.14MB 11.83%  sync.(*WaitGroup).Go.func1
+         0     0%     0%   156.13MB 10.03%  github.com/ethereum/go-ethereum/trie.(*Trie).Get
+         0     0%     0%   149.14MB  9.58%  github.com/ethereum/go-ethereum/trie.(*Trie).resolveAndTrack
+       3MB  0.19%  0.19%   145.63MB  9.36%  github.com/ethereum/go-ethereum/trie.(*Trie).get
+         0     0%  0.19%    64.01MB  4.11%  github.com/ethereum/go-ethereum/trie.decodeNodeUnsafe
+    7.50MB  0.48%  0.67%    51.51MB  3.31%  github.com/ethereum/go-ethereum/core/rawdb.ReadLegacyTrieNode
+         0     0%  0.67%    51.51MB  3.31%  github.com/ethereum/go-ethereum/triedb/hashdb.(*Database).node
+   30.51MB  1.96%  2.63%    51.51MB  3.31%  github.com/ethereum/go-ethereum/trie.decodeFull
+         0     0%  2.63%    49.01MB  3.15%  github.com/ethereum/go-ethereum/trie.(*Reader).Node
+         0     0%  2.63%    49.01MB  3.15%  github.com/ethereum/go-ethereum/triedb/hashdb.(*reader).Node
+   43.51MB  2.80%  5.43%    44.01MB  2.83%  github.com/ethereum/go-ethereum/ethdb/pebble.(*Database).Get
+   36.11MB  2.32%  7.75%    36.11MB  2.32%  github.com/ethereum/go-ethereum/trie.(*PrevalueTracer).Put
+
+# go tool pprof -top -cum -nodecount=15 -focus=migration /tmp/l2state-perf-20260919/current-final-profile/block.pprof
+File: current.test
+Type: delay
+Time: 2026-09-19 21:01:03 CST
+Active filters:
+   focus=migration
+Showing nodes accounting for 24.12s, 5.04% of 478.44s total
+Dropped 153 nodes (cum <= 2.39s)
+Showing top 15 nodes out of 134
+      flat  flat%   sum%        cum   cum%
+    21.01s  4.39%  4.39%     21.01s  4.39%  runtime.selectgo
+         0     0%  4.39%     16.73s  3.50%  sync.(*WaitGroup).Go.func1
+         0     0%  4.39%     15.76s  3.29%  github.com/metis-devops/metis-l2geth-migration/internal/migration.runMigratePartitionTasks.func1
+         0     0%  4.39%     13.07s  2.73%  github.com/metis-devops/metis-l2geth-migration/internal/migration.(*migrateWorkLease).acquire
+         0     0%  4.39%     13.07s  2.73%  github.com/metis-devops/metis-l2geth-migration/internal/migration.(*migrateWorkLimiter).acquire
+         0     0%  4.39%     12.89s  2.69%  github.com/metis-devops/metis-l2geth-migration/internal/migration.(*partitionedStateMigrator).migrateAccountPartition
+         0     0%  4.39%     12.89s  2.69%  github.com/metis-devops/metis-l2geth-migration/internal/migration.(*partitionedStateMigrator).run.func1
+         0     0%  4.39%      7.06s  1.48%  github.com/metis-devops/metis-l2geth-migration/internal/migration.sampleTemporaryBenchmark.func3
+     3.11s  0.65%  5.04%      3.11s  0.65%  sync.(*WaitGroup).Wait
+         0     0%  5.04%         3s  0.63%  github.com/metis-devops/metis-l2geth-migration/internal/migration.benchmarkOVMMigration.func1
+         0     0%  5.04%         3s  0.63%  testing.(*B).run1.func1
+         0     0%  5.04%         3s  0.63%  testing.(*B).runN
+         0     0%  5.04%      2.89s   0.6%  github.com/metis-devops/metis-l2geth-migration/internal/migration.Migrate
+         0     0%  5.04%      2.89s   0.6%  github.com/metis-devops/metis-l2geth-migration/internal/migration.migrateOVM
+         0     0%  5.04%      2.89s   0.6%  github.com/metis-devops/metis-l2geth-migration/internal/migration.replayOVMState
+
+# go tool pprof -top -cum -nodecount=15 -focus=migration /tmp/l2state-perf-20260919/current-final-profile/mutex.pprof
+File: current.test
+Type: delay
+Time: 2026-09-19 21:01:03 CST
+Active filters:
+   focus=migration
+Showing nodes accounting for 1.82s, 72.06% of 2.53s total
+Dropped 309 nodes (cum <= 0.01s)
+Showing top 15 nodes out of 108
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%      2.41s 95.25%  sync.(*WaitGroup).Go.func1
+         0     0%     0%      2.28s 90.18%  github.com/metis-devops/metis-l2geth-migration/internal/migration.runMigratePartitionTasks.func1
+     1.82s 72.06% 72.06%      1.84s 72.48%  sync.(*Mutex).Unlock
+         0     0% 72.06%      1.72s 67.88%  github.com/metis-devops/metis-l2geth-migration/internal/migration.(*partitionedStateMigrator).migrateAccountPartition
+         0     0% 72.06%      1.72s 67.88%  github.com/metis-devops/metis-l2geth-migration/internal/migration.(*partitionedStateMigrator).run.func1
+         0     0% 72.06%      1.32s 52.02%  github.com/ethereum/go-ethereum/core/rawdb.ReadLegacyTrieNode
+         0     0% 72.06%      1.32s 52.02%  github.com/ethereum/go-ethereum/triedb/hashdb.(*Database).node
+         0     0% 72.06%      1.32s 52.02%  github.com/ethereum/go-ethereum/trie.(*Reader).Node
+         0     0% 72.06%      1.32s 52.02%  github.com/ethereum/go-ethereum/triedb/hashdb.(*reader).Node
+         0     0% 72.06%      1.23s 48.71%  github.com/ethereum/go-ethereum/trie.(*nodeIterator).resolveHash
+         0     0% 72.06%      1.23s 48.71%  github.com/ethereum/go-ethereum/trie.(*nodeIteratorState).resolve
+         0     0% 72.06%      1.23s 48.62%  github.com/ethereum/go-ethereum/trie.(*Iterator).Next
+         0     0% 72.06%      1.23s 48.62%  github.com/ethereum/go-ethereum/trie.(*nodeIterator).Next
+         0     0% 72.06%      1.23s 48.62%  github.com/ethereum/go-ethereum/trie.(*nodeIterator).peek
+         0     0% 72.06%      1.22s 48.23%  github.com/ethereum/go-ethereum/trie.(*subtreeIterator).Next

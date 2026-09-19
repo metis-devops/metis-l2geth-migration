@@ -45,6 +45,8 @@ stated otherwise; run command examples from that root.
   before closing databases, and propagate close/sync/cleanup failures.
   Disk-backed temporary storage remains the default; memory mode is explicit.
 - Preserve stdout JSON / stderr progress separation and strict artifact layouts.
+- Standalone verification scratch belongs under `--temp-dir` or the system
+  temporary directory, outside every input; never require a writable artifact parent.
 - Do not incidentally change the Go 1.27 requirement, geth v1.17.5 pin,
   format v1 contracts, encoding, supported engines/schemes or compression.
   Do not restore legacy target generation or historical-format readers.

@@ -108,7 +108,7 @@ func Import(ctx context.Context, opts ImportOptions) (result ImportResult, retEr
 	}
 	report := newVerificationReport(bundleResult, opts.Scheme)
 	report.DBEngine, report.StateLayout = target.engine, target.layout
-	if err := publishImportedArtifact(ctx, output, report, opts.Output, reporter); err != nil {
+	if err := publishImportedArtifact(ctx, output, report, reporter); err != nil {
 		return ImportResult{}, err
 	}
 	return ImportResult{ArtifactPath: opts.Output, Report: report}, nil
@@ -128,36 +128,16 @@ func validateImportOptions(opts ImportOptions) error {
 	return err
 }
 
-func publishImportedArtifact(ctx context.Context, output *atomicDir, report VerificationReport, final string, reporter *progressReporter) error {
-	phase := reporter.StartPhase("publish_artifact", nil, "output", final)
-	if err := ctx.Err(); err != nil {
-		phase.Finish(err)
-		return err
-	}
-	if _, err := writeVerificationReport(output.Path(), report); err != nil {
-		phase.Finish(err)
-		return err
-	}
-	stored, err := loadVerificationReport(output.Path())
-	if err != nil {
-		phase.Finish(err)
-		return fmt.Errorf("re-open generated verification report: %w", err)
-	}
-	if stored != report {
-		err := errors.New("re-opened verification report does not match generated report")
-		phase.Finish(err)
-		return err
-	}
-	if err := ctx.Err(); err != nil {
-		phase.Finish(err)
-		return err
-	}
-	if err := output.Commit(); err != nil {
-		phase.Finish(err)
-		return err
-	}
-	phase.Finish(nil)
-	return nil
+func publishImportedArtifact(ctx context.Context, output *atomicDir, report VerificationReport, reporter *progressReporter) error {
+	return publishArtifact(ctx, output, report, artifactReportCodec[VerificationReport]{
+		label: "verification report",
+		write: func(dir string, report VerificationReport) error {
+			_, err := writeVerificationReport(dir, report)
+			return err
+		},
+		load:  loadVerificationReport,
+		equal: func(a, b VerificationReport) bool { return a == b },
+	}, nil, reporter)
 }
 
 func finalizeAndVerifyTarget(

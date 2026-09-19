@@ -48,10 +48,10 @@ func TestDirectMigrateGoldenLegacyL2GethFixtureBothSchemes(t *testing.T) {
 				if err != nil {
 					t.Fatalf("direct migrate golden fixture as %s: %v", scheme, err)
 				}
-				if migrated.Report.Source.HeadBefore.StateRoot != expected.StateRoot || migrated.Report.RecomputedRoot != expected.StateRoot {
-					t.Fatalf("unexpected direct root evidence: %+v", migrated.Report)
+				if requireDirectReport(t, migrated).Source.HeadBefore.StateRoot != expected.StateRoot || requireDirectReport(t, migrated).RecomputedRoot != expected.StateRoot {
+					t.Fatalf("unexpected direct root evidence: %+v", requireDirectReport(t, migrated))
 				}
-				if counts := migrated.Report.Counts; counts.Accounts != 5 || counts.StorageSlots != 9 || counts.CodeReferences != 3 || counts.CodeRecords != 2 {
+				if counts := requireDirectReport(t, migrated).Counts; counts.Accounts != 5 || counts.StorageSlots != 9 || counts.CodeReferences != 3 || counts.CodeRecords != 2 {
 					t.Fatalf("golden direct state shape mismatch: %+v", counts)
 				}
 				verified, err := VerifyDirect(context.Background(), DirectVerifyOptions{
@@ -63,17 +63,17 @@ func TestDirectMigrateGoldenLegacyL2GethFixtureBothSchemes(t *testing.T) {
 				if err != nil {
 					t.Fatalf("verify direct golden %s artifact: %v", scheme, err)
 				}
-				if verified.Scheme != scheme || verified.Counts != migrated.Report.Counts ||
-					verified.RecomputedRoot != migrated.Report.RecomputedRoot ||
-					!sameSourceEvidence(verified.Source, migrated.Report.Source) {
-					t.Fatalf("direct verification result mismatch: have %+v want %+v", verified, migrated.Report)
+				if verified.Scheme != scheme || verified.Counts != requireDirectReport(t, migrated).Counts ||
+					verified.RecomputedRoot != requireDirectReport(t, migrated).RecomputedRoot ||
+					!sameSourceEvidence(verified.Source, requireDirectReport(t, migrated).Source) {
+					t.Fatalf("direct verification result mismatch: have %+v want %+v", verified, requireDirectReport(t, migrated))
 				}
 				for _, name := range []string{bundle.ManifestFileName, bundle.RecordsFileRaw, bundle.RecordsFileZstd} {
 					if _, err := os.Lstat(filepath.Join(artifact, name)); !errors.Is(err, os.ErrNotExist) {
 						t.Fatalf("direct artifact unexpectedly contains %s: %v", name, err)
 					}
 				}
-				assertArtifactHeadMetadata(t, artifact, migrated.Report.Source)
+				assertArtifactHeadMetadata(t, artifact, requireDirectReport(t, migrated).Source)
 				assertGoldenOVMState(t, artifact, scheme, expected.StateRoot, expected.OVMETHCodeHash)
 				assertNoTemporaryTrieNodeIndexes(t, artifact)
 			})
@@ -123,13 +123,13 @@ func TestDirectMigrateMatchesBundleImportBothSchemes(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if direct.Report.Source.HeadBefore != exported.Manifest.Source.HeadBefore ||
-				direct.Report.Counts != imported.Report.Counts ||
-				direct.Report.RecomputedRoot != imported.Report.RecomputedRoot {
-				t.Fatalf("direct and bundle paths disagree: direct=%+v imported=%+v", direct.Report, imported.Report)
+			if requireDirectReport(t, direct).Source.HeadBefore != exported.Manifest.Source.HeadBefore ||
+				requireDirectReport(t, direct).Counts != imported.Report.Counts ||
+				requireDirectReport(t, direct).RecomputedRoot != imported.Report.RecomputedRoot {
+				t.Fatalf("direct and bundle paths disagree: direct=%+v imported=%+v", requireDirectReport(t, direct), imported.Report)
 			}
 			assertArtifactState(t, directArtifact, scheme, fixture.root, fixture.accounts)
-			assertArtifactHeadMetadata(t, directArtifact, direct.Report.Source)
+			assertArtifactHeadMetadata(t, directArtifact, requireDirectReport(t, direct).Source)
 			assertArtifactHeadMetadata(t, importArtifact, exported.Manifest.Source)
 			assertLogicalDatabaseEqual(t, filepath.Join(directArtifact, "chaindata"), filepath.Join(importArtifact, "chaindata"))
 			if _, err := Verify(context.Background(), VerifyOptions{

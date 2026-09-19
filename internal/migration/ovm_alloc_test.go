@@ -171,7 +171,7 @@ func testOVMGenesisAllocAllTargets(t *testing.T, tempMode TempDBMode) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				r := result.OVMReport
+				r := requireOVMReport(t, result)
 				expected := ovmReferenceWithAllocDB(t, f, apply, func(db ethdb.Database, root common.Hash) {
 					if reference == nil {
 						reference = allocReferenceInventory(t, db, root, scheme, r.Checkpoint)
@@ -323,7 +323,7 @@ func testOVMGenesisAllocLargeStorageAndDuplicates(t *testing.T, tempMode TempDBM
 			s.SetState(f.holders[0], common.BigToHash(big.NewInt(n)), common.BigToHash(big.NewInt(n+1)))
 		}
 	})
-	if expected != result.OVMReport.Target.Root {
+	if expected != requireOVMReport(t, result).Target.Root {
 		t.Fatal("large storage root differs")
 	}
 }
@@ -337,7 +337,7 @@ func TestOVMGenesisAllocNoOpAndInputStability(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if result.OVMReport.GenesisAlloc.Converted != result.OVMReport.Target {
+		if requireOVMReport(t, result).GenesisAlloc.Converted != requireOVMReport(t, result).Target {
 			t.Fatal("no-op changed state")
 		}
 	}

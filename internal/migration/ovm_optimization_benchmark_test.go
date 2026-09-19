@@ -36,14 +36,16 @@ func benchmarkOVMVerification(b *testing.B, withAlloc, withRetention bool) {
 			}
 			setupElapsed := time.Since(setup)
 			ctx, stop := sampleTemporaryBenchmark(b, b.Context(), filepath.Dir(opts.Output))
+			stopProfile := profileOVMBenchmark(b)
 			b.ReportAllocs()
 			b.ResetTimer()
 			for range b.N {
-				if _, err := VerifyOVM(ctx, OVMVerifyOptions{TempDB: mode, SourceChaindata: f.source, Artifact: opts.Output, CacheMB: 128, Handles: 128, Workers: workers, OVM: opts.OVM}); err != nil {
+				if _, err := VerifyOVM(ctx, OVMVerifyOptions{TempDir: filepath.Dir(opts.Output), TempDB: mode, SourceChaindata: f.source, Artifact: opts.Output, CacheMB: 128, Handles: 128, Workers: workers, OVM: opts.OVM}); err != nil {
 					b.Fatal(err)
 				}
 			}
 			b.StopTimer()
+			stopProfile()
 			stop()
 			b.ReportMetric(setupElapsed.Seconds(), "setup-s")
 		})

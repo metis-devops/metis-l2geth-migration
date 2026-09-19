@@ -50,6 +50,11 @@
   Witnesses provide addresses and allowance pairs, never balances or eligibility.
   Keep evidence/patches in operation-local Pebble (disk by default, or explicit
   `--temp-db memory`) and reject unclassified storage slots.
+  Hot-history reads use one LevelDB Get; only its not-found sentinel is absence.
+  Empty records and other read failures must still fail before ancient fallback.
+  Witness lines use one typed JSON decoding pass with explicit field/duplicate/null
+  and end-of-input checks. Keep the frozen two-pass decoder as a differential test
+  oracle; raw input hashing and the 4095-byte line bound remain unchanged.
 - Complete and independently reopen the original migrated state before applying
   balance changes. Build the final artifact afresh with the partitioned core.
   Run original-state copying, preimage collection and canonical history scanning
@@ -73,6 +78,25 @@
   state, then compute final root/counts with validation-only partitioned output;
   do not materialize a second final artifact. Preserve the actual artifact's
   independent engine/scheme/inventory verification and scratch cleanup.
+  Use the common standalone verification workspace (`--temp-dir`, default system
+  temporary directory), outside source/ancient/artifact including aliases. Do not
+  create scratch beside the artifact implicitly; read-only artifact parents work
+  in both temporary modes. Zero-native-balance validation remains OVM policy
+  injected into the shared traversal before account scheduling.
+- Storage classification reuses three ordered evidence cursors (balance,
+  allowance and metadata), checking every namespace for ambiguous ownership.
+  Evidence is flushed and immutable in these namespaces during the scan. Bound
+  each cursor to eight forward steps before reseeking so sparse witnesses do not
+  cause an unbounded scan. Release iterators and propagate their errors.
+- Stage fixed-size balance jobs in the existing temporary Pebble index, keyed by
+  account hash, then dispatch in that order. This improves trie-path locality
+  without increasing decoded-trie windows or keeping a state-sized memory map.
+  Queue records contain address, storage hash and uint256 value (84 bytes plus a
+  33-byte key before database overhead); memory temporary mode keeps these files
+  in RAM too. Preserve all slot checks, conservation, eligibility and source-head
+  classification. Keep the two-times-workers job bound, ordered application,
+  cancellation and joins; borrow the shared limiter while advancing the job
+  iterator and release it before waiting for balance jobs.
 - Account readers may reuse decoded trie paths for at most 32 reads before
   dropping the trie. Balance readers are exclusive to a worker lease, with no
   more than the worker count retained; alloc uses one bounded reader. Never

@@ -17,6 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	leveldb "github.com/syndtr/goleveldb/leveldb"
 )
 
 var (
@@ -79,11 +80,12 @@ func scanOVMHistory(ctx context.Context, source *legacySource, opts MigrateOptio
 }
 
 func optionalHistoryKV(db ethdb.Database, key []byte) ([]byte, error) {
-	ok, err := db.Has(key)
-	if err != nil || !ok {
-		return nil, err
-	}
 	value, err := db.Get(key)
+	// Hot history is always the immutable legacy LevelDB. Only its not-found
+	// sentinel permits cold-history fallback; empty values and I/O errors do not.
+	if errors.Is(err, leveldb.ErrNotFound) {
+		return nil, nil
+	}
 	if err != nil {
 		return nil, err
 	}

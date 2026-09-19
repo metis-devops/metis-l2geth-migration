@@ -1,0 +1,219 @@
+# Exploratory pre-optimization CPU/allocation profile; not a paired timing sample.
+# baseline source-sha256=f45845978e3e5024d251f80e73cceda8bba716f3451965f98ad3a53ca8312c34
+# BenchmarkOVMMigration/workers=2, holders=100000, temp-db=disk; two-block synthetic history; no alloc/retention/preimages.
+# Profile includes fixture setup and runtime/Go test work; ns/op and B/op from the benchmark exclude fixture setup.
+File: baseline.test
+Type: cpu
+Time: 2026-09-19 19:42:55 CST
+Duration: 9.95s, Total samples = 14.47s (145.36%)
+Showing nodes accounting for 12.88s, 89.01% of 14.47s total
+Dropped 338 nodes (cum <= 0.07s)
+Showing top 100 nodes out of 235
+      flat  flat%   sum%        cum   cum%
+     8.49s 58.67% 58.67%      8.49s 58.67%  syscall.rawsyscalln
+         0     0% 58.67%      8.49s 58.67%  syscall.syscalln
+         0     0% 58.67%      5.52s 38.15%  internal/poll.(*FD).Pread
+         0     0% 58.67%      5.52s 38.15%  internal/poll.(*FD).Pread.func1 (inline)
+         0     0% 58.67%      5.52s 38.15%  internal/poll.ignoringEINTR2[go.shape.int] (inline)
+         0     0% 58.67%      5.52s 38.15%  os.(*File).ReadAt
+         0     0% 58.67%      5.52s 38.15%  os.(*File).pread (inline)
+         0     0% 58.67%      5.52s 38.15%  syscall.Pread (inline)
+         0     0% 58.67%      5.52s 38.15%  syscall.pread
+         0     0% 58.67%      5.52s 38.15%  syscall.syscall6
+         0     0% 58.67%      4.94s 34.14%  github.com/ethereum/go-ethereum/core/rawdb.ReadLegacyTrieNode
+         0     0% 58.67%      4.94s 34.14%  github.com/ethereum/go-ethereum/trie.(*Reader).Node
+         0     0% 58.67%      4.94s 34.14%  github.com/ethereum/go-ethereum/triedb/hashdb.(*Database).node
+         0     0% 58.67%      4.94s 34.14%  github.com/ethereum/go-ethereum/triedb/hashdb.(*reader).Node
+         0     0% 58.67%      4.12s 28.47%  github.com/ethereum/go-ethereum/trie.(*Iterator).Next
+         0     0% 58.67%      4.10s 28.33%  github.com/cockroachdb/pebble/v2/sstable/block.(*Reader).Read
+         0     0% 58.67%      4.09s 28.27%  github.com/cockroachdb/pebble/v2/sstable.(*Reader).readDataBlock (inline)
+         0     0% 58.67%      4.09s 28.27%  github.com/cockroachdb/pebble/v2/sstable.(*singleLevelIterator[go.shape.struct { github.com/cockroachdb/pebble/v2/sstable/rowblk.iter github.com/cockroachdb/pebble/v2/sstable/rowblk.Iter },go.shape.*github.com/cockroachdb/pebble/v2/sstable/rowblk.IndexIter,go.shape.2d95560dd2a436f029e6e31dd6b50f33cdf7f7fbac770a905f7c097f0b5ec4b0,go.shape.*github.com/cockroachdb/pebble/v2/sstable/rowblk.Iter]).loadDataBlock
+         0     0% 58.67%      4.09s 28.27%  github.com/cockroachdb/pebble/v2/sstable/block.(*Reader).doRead
+         0     0% 58.67%      4.08s 28.20%  github.com/ethereum/go-ethereum/trie.(*nodeIterator).Next
+         0     0% 58.67%      4.08s 28.20%  github.com/ethereum/go-ethereum/trie.(*nodeIterator).peek
+         0     0% 58.67%      4.08s 28.20%  github.com/ethereum/go-ethereum/trie.(*nodeIterator).resolveHash
+         0     0% 58.67%      4.08s 28.20%  github.com/ethereum/go-ethereum/trie.(*nodeIteratorState).resolve
+         0     0% 58.67%      4.06s 28.06%  github.com/cockroachdb/pebble/v2/objstorage/objstorageprovider.(*vfsReadHandle).ReadAt
+     0.01s 0.069% 58.74%      3.51s 24.26%  github.com/ethereum/go-ethereum/ethdb/pebble.(*Database).Get
+         0     0% 58.74%      3.49s 24.12%  github.com/cockroachdb/pebble/v2.(*DB).Get (inline)
+         0     0% 58.74%      3.49s 24.12%  github.com/cockroachdb/pebble/v2.(*DB).getInternal
+         0     0% 58.74%      3.49s 24.12%  github.com/cockroachdb/pebble/v2.(*Iterator).First
+         0     0% 58.74%      3.49s 24.12%  github.com/cockroachdb/pebble/v2.(*Iterator).iterFirstWithinBounds
+         0     0% 58.74%      3.49s 24.12%  github.com/cockroachdb/pebble/v2.(*getIter).First
+         0     0% 58.74%      3.49s 24.12%  github.com/cockroachdb/pebble/v2.(*getIter).Next
+         0     0% 58.74%      3.45s 23.84%  github.com/cockroachdb/pebble/v2/sstable.(*singleLevelIterator[go.shape.struct { github.com/cockroachdb/pebble/v2/sstable/rowblk.iter github.com/cockroachdb/pebble/v2/sstable/rowblk.Iter },go.shape.*github.com/cockroachdb/pebble/v2/sstable/rowblk.IndexIter,go.shape.2d95560dd2a436f029e6e31dd6b50f33cdf7f7fbac770a905f7c097f0b5ec4b0,go.shape.*github.com/cockroachdb/pebble/v2/sstable/rowblk.Iter]).seekGEHelper
+         0     0% 58.74%      3.45s 23.84%  github.com/cockroachdb/pebble/v2/sstable.(*singleLevelIterator[go.shape.struct { github.com/cockroachdb/pebble/v2/sstable/rowblk.iter github.com/cockroachdb/pebble/v2/sstable/rowblk.Iter },go.shape.*github.com/cockroachdb/pebble/v2/sstable/rowblk.IndexIter,go.shape.2d95560dd2a436f029e6e31dd6b50f33cdf7f7fbac770a905f7c097f0b5ec4b0,go.shape.*github.com/cockroachdb/pebble/v2/sstable/rowblk.Iter]).seekPrefixGE
+         0     0% 58.74%      3.42s 23.64%  github.com/cockroachdb/pebble/v2/sstable.(*twoLevelIterator[go.shape.struct { github.com/cockroachdb/pebble/v2/sstable/rowblk.iter github.com/cockroachdb/pebble/v2/sstable/rowblk.Iter },go.shape.*github.com/cockroachdb/pebble/v2/sstable/rowblk.IndexIter,go.shape.2d95560dd2a436f029e6e31dd6b50f33cdf7f7fbac770a905f7c097f0b5ec4b0,go.shape.*github.com/cockroachdb/pebble/v2/sstable/rowblk.Iter]).SeekPrefixGE
+         0     0% 58.74%      3.13s 21.63%  testing.(*B).run1.func1
+         0     0% 58.74%      3.13s 21.63%  testing.(*B).runN
+         0     0% 58.74%      3.12s 21.56%  github.com/metis-devops/metis-l2geth-migration/internal/migration.benchmarkOVMMigration.func1
+         0     0% 58.74%      3.08s 21.29%  sync.(*WaitGroup).Go.func1
+         0     0% 58.74%      2.96s 20.46%  syscall.syscall
+         0     0% 58.74%      2.89s 19.97%  runtime.systemstack
+         0     0% 58.74%      2.77s 19.14%  internal/poll.ignoringEINTRIO (inline)
+     2.66s 18.38% 77.13%      2.67s 18.45%  runtime.pthread_cond_signal
+         0     0% 77.13%      2.67s 18.45%  runtime.semawakeup
+         0     0% 77.13%      2.65s 18.31%  runtime.notewakeup
+         0     0% 77.13%      2.64s 18.24%  runtime.startm
+         0     0% 77.13%      2.64s 18.24%  runtime.wakep
+         0     0% 77.13%      2.56s 17.69%  internal/poll.(*FD).Write
+         0     0% 77.13%      2.56s 17.69%  os.(*File).Write
+         0     0% 77.13%      2.56s 17.69%  os.(*File).write (inline)
+         0     0% 77.13%      2.56s 17.69%  syscall.Write (inline)
+         0     0% 77.13%      2.56s 17.69%  syscall.write
+         0     0% 77.13%      2.46s 17.00%  _.goready.func1
+         0     0% 77.13%      2.46s 17.00%  runtime.ready
+         0     0% 77.13%      2.42s 16.72%  runtime.schedule
+         0     0% 77.13%      2.40s 16.59%  runtime.mcall
+         0     0% 77.13%      2.38s 16.45%  runtime.findRunnable
+         0     0% 77.13%      2.36s 16.31%  runtime.park_m
+         0     0% 77.13%      2.17s 15.00%  github.com/metis-devops/metis-l2geth-migration/internal/migration.runMigratePartitionTasks.func1
+         0     0% 77.13%      2.13s 14.72%  runtime/pprof.Do
+         0     0% 77.13%      2.09s 14.44%  github.com/ethereum/go-ethereum/trie.(*subtreeIterator).Next
+         0     0% 77.13%      2.05s 14.17%  github.com/cockroachdb/pebble/v2.(*DB).compactAndWrite
+         0     0% 77.13%      2.05s 14.17%  github.com/cockroachdb/pebble/v2.(*DB).runCompaction
+         0     0% 77.13%      2.02s 13.96%  github.com/cockroachdb/pebble/v2/internal/compact.(*Runner).WriteTable
+         0     0% 77.13%      1.99s 13.75%  github.com/cockroachdb/pebble/v2/internal/compact.(*Runner).writeKeysToTable
+         0     0% 77.13%      1.99s 13.75%  github.com/metis-devops/metis-l2geth-migration/internal/migration.Migrate
+         0     0% 77.13%      1.99s 13.75%  github.com/metis-devops/metis-l2geth-migration/internal/migration.migrateOVM
+         0     0% 77.13%      1.99s 13.75%  github.com/metis-devops/metis-l2geth-migration/internal/migration.replayOVMState
+         0     0% 77.13%      1.75s 12.09%  github.com/cockroachdb/pebble/v2.(*DB).compact
+         0     0% 77.13%      1.75s 12.09%  github.com/cockroachdb/pebble/v2.(*DB).compact.func1
+         0     0% 77.13%      1.75s 12.09%  github.com/cockroachdb/pebble/v2.(*DB).compact.func1.1
+         0     0% 77.13%      1.75s 12.09%  github.com/cockroachdb/pebble/v2.(*DB).compact1
+         0     0% 77.13%      1.75s 12.09%  github.com/cockroachdb/pebble/v2.(*DB).runPickedCompaction.func1
+         0     0% 77.13%      1.75s 12.09%  github.com/cockroachdb/pebble/v2.(*tableCompaction).Execute
+     1.72s 11.89% 89.01%      1.72s 11.89%  runtime.pthread_cond_wait
+         0     0% 89.01%      1.72s 11.89%  runtime.semasleep
+         0     0% 89.01%      1.70s 11.75%  runtime.mPark (inline)
+         0     0% 89.01%      1.70s 11.75%  runtime.notesleep
+         0     0% 89.01%      1.70s 11.75%  runtime.stopm
+         0     0% 89.01%      1.59s 10.99%  github.com/cockroachdb/pebble/v2/vfs.(*diskHealthCheckingFile).timeDiskOp
+         0     0% 89.01%      1.58s 10.92%  github.com/cockroachdb/pebble/v2/vfs.(*syncingFile).Write
+         0     0% 89.01%      1.55s 10.71%  github.com/metis-devops/metis-l2geth-migration/internal/migration.transformOVMState
+         0     0% 89.01%      1.54s 10.64%  github.com/cockroachdb/pebble/v2/vfs.(*diskHealthCheckingFile).Write
+         0     0% 89.01%      1.54s 10.64%  github.com/cockroachdb/pebble/v2/vfs.(*diskHealthCheckingFile).Write.func1
+         0     0% 89.01%      1.53s 10.57%  bufio.(*Writer).Flush
+         0     0% 89.01%      1.53s 10.57%  bufio.(*Writer).Write
+         0     0% 89.01%      1.53s 10.57%  github.com/cockroachdb/pebble/v2/objstorage/objstorageprovider.(*fileBufferedWritable).Write
+         0     0% 89.01%      1.53s 10.57%  github.com/cockroachdb/pebble/v2/sstable.(*layoutWriter).writePrecompressedBlock
+         0     0% 89.01%      1.53s 10.57%  github.com/cockroachdb/pebble/v2/sstable/block.(*PhysicalBlock).WriteTo
+         0     0% 89.01%      1.51s 10.44%  github.com/cockroachdb/pebble/v2/internal/compact.NeverSeparateValues.Add
+         0     0% 89.01%      1.51s 10.44%  github.com/cockroachdb/pebble/v2/sstable.(*RawRowWriter).Add
+         0     0% 89.01%      1.51s 10.44%  github.com/cockroachdb/pebble/v2/sstable.(*RawRowWriter).addPoint
+         0     0% 89.01%      1.51s 10.44%  github.com/cockroachdb/pebble/v2/sstable.(*RawRowWriter).flush
+         0     0% 89.01%      1.51s 10.44%  github.com/cockroachdb/pebble/v2/sstable.(*RawRowWriter).maybeFlush
+         0     0% 89.01%      1.51s 10.44%  github.com/cockroachdb/pebble/v2/sstable.(*layoutWriter).WritePrecompressedDataBlock (inline)
+         0     0% 89.01%      1.51s 10.44%  github.com/cockroachdb/pebble/v2/sstable.(*writeQueue).addSync
+         0     0% 89.01%      1.51s 10.44%  github.com/cockroachdb/pebble/v2/sstable.(*writeQueue).performWrite
+         0     0% 89.01%      1.46s 10.09%  github.com/syndtr/goleveldb/leveldb.(*iStorageReader).ReadAt
+         0     0% 89.01%      1.46s 10.09%  github.com/syndtr/goleveldb/leveldb/table.(*Reader).getDataIter
+         0     0% 89.01%      1.46s 10.09%  github.com/syndtr/goleveldb/leveldb/table.(*Reader).readBlock
+         0     0% 89.01%      1.46s 10.09%  github.com/syndtr/goleveldb/leveldb/table.(*Reader).readBlockCached
+File: baseline.test
+Type: alloc_space
+Time: 2026-09-19 19:43:05 CST
+Showing nodes accounting for 1849.97MB, 77.07% of 2400.31MB total
+Dropped 404 nodes (cum <= 12MB)
+Showing top 100 nodes out of 183
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%  1186.83MB 49.44%  sync.(*WaitGroup).Go.func1
+         0     0%     0%  1038.51MB 43.27%  github.com/ethereum/go-ethereum/trie.(*Iterator).Next
+         0     0%     0%  1012.51MB 42.18%  github.com/ethereum/go-ethereum/trie.(*nodeIterator).Next
+         0     0%     0%  1012.51MB 42.18%  github.com/ethereum/go-ethereum/trie.(*nodeIterator).peek
+         0     0%     0%   948.01MB 39.50%  github.com/ethereum/go-ethereum/trie.(*nodeIterator).resolveHash
+         0     0%     0%   948.01MB 39.50%  github.com/ethereum/go-ethereum/trie.(*nodeIteratorState).resolve
+         0     0%     0%   941.05MB 39.21%  github.com/metis-devops/metis-l2geth-migration/internal/migration.benchmarkOVMMigration.func1
+         0     0%     0%   941.05MB 39.21%  testing.(*B).run1.func1
+         0     0%     0%   941.05MB 39.21%  testing.(*B).runN
+   54.50MB  2.27%  2.27%   813.54MB 33.89%  github.com/ethereum/go-ethereum/core/rawdb.ReadLegacyTrieNode
+         0     0%  2.27%   813.54MB 33.89%  github.com/ethereum/go-ethereum/triedb/hashdb.(*Database).node
+         0     0%  2.27%   809.04MB 33.71%  github.com/ethereum/go-ethereum/trie.(*Reader).Node
+         0     0%  2.27%   809.04MB 33.71%  github.com/ethereum/go-ethereum/triedb/hashdb.(*reader).Node
+         0     0%  2.27%   732.77MB 30.53%  github.com/metis-devops/metis-l2geth-migration/internal/migration.runMigratePartitionTasks.func1
+         0     0%  2.27%   663.96MB 27.66%  github.com/ethereum/go-ethereum/trie.(*subtreeIterator).Next
+         0     0%  2.27%   523.95MB 21.83%  github.com/metis-devops/metis-l2geth-migration/internal/readonlydb.(*Database).Get
+         0     0%  2.27%   523.95MB 21.83%  github.com/syndtr/goleveldb/leveldb.(*DB).Get
+    5.50MB  0.23%  2.50%   519.95MB 21.66%  github.com/syndtr/goleveldb/leveldb.(*DB).get
+         0     0%  2.50%   501.95MB 20.91%  github.com/syndtr/goleveldb/leveldb.(*tOps).find
+         0     0%  2.50%   501.95MB 20.91%  github.com/syndtr/goleveldb/leveldb.(*version).get
+         0     0%  2.50%   501.95MB 20.91%  github.com/syndtr/goleveldb/leveldb.(*version).get.func1
+         0     0%  2.50%   501.95MB 20.91%  github.com/syndtr/goleveldb/leveldb.(*version).walkOverlapping
+         0     0%  2.50%   496.07MB 20.67%  github.com/ethereum/go-ethereum/trie.decodeNodeUnsafe
+         0     0%  2.50%   489.95MB 20.41%  github.com/syndtr/goleveldb/leveldb/table.(*Reader).Find (inline)
+      25MB  1.04%  3.54%   489.95MB 20.41%  github.com/syndtr/goleveldb/leveldb/table.(*Reader).find
+   72.89MB  3.04%  6.58%   483.92MB 20.16%  github.com/metis-devops/metis-l2geth-migration/internal/migration.newOVMFixtureSized
+         0     0%  6.58%   483.92MB 20.16%  github.com/metis-devops/metis-l2geth-migration/internal/migration.ovmBenchmarkFixture
+         0     0%  6.58%   457.13MB 19.04%  github.com/metis-devops/metis-l2geth-migration/internal/migration.Migrate
+         0     0%  6.58%   457.13MB 19.04%  github.com/metis-devops/metis-l2geth-migration/internal/migration.migrateOVM
+         0     0%  6.58%   457.13MB 19.04%  github.com/metis-devops/metis-l2geth-migration/internal/migration.replayOVMState
+         0     0%  6.58%   449.56MB 18.73%  github.com/metis-devops/metis-l2geth-migration/internal/migration.(*ovmAccountReader).read
+         0     0%  6.58%   449.56MB 18.73%  github.com/metis-devops/metis-l2geth-migration/internal/migration.(*ovmBalanceBatch).inspect
+         0     0%  6.58%   449.56MB 18.73%  github.com/metis-devops/metis-l2geth-migration/internal/migration.(*ovmBalanceBatch).submit.func1
+         0     0%  6.58%   428.70MB 17.86%  github.com/metis-devops/metis-l2geth-migration/internal/migration.(*partitionedStateMigrator).migrateAccountPartition
+         0     0%  6.58%   428.70MB 17.86%  github.com/metis-devops/metis-l2geth-migration/internal/migration.(*partitionedStateMigrator).run.func1
+         0     0%  6.58%   424.55MB 17.69%  github.com/ethereum/go-ethereum/trie.(*Trie).resolveAndTrack
+         0     0%  6.58%   424.55MB 17.69%  github.com/ethereum/go-ethereum/trie.(*Trie).Get
+       1MB 0.042%  6.62%   421.55MB 17.56%  github.com/ethereum/go-ethereum/trie.(*Trie).get
+   85.85MB  3.58% 10.20%   359.34MB 14.97%  github.com/metis-devops/metis-l2geth-migration/internal/migration.writeOVMFixtureState
+  329.08MB 13.71% 23.91%   329.08MB 13.71%  github.com/syndtr/goleveldb/leveldb/table.(*Reader).newBlockIter
+  199.56MB  8.31% 32.22%   318.06MB 13.25%  github.com/ethereum/go-ethereum/trie.decodeFull
+         0     0% 32.22%   304.07MB 12.67%  github.com/metis-devops/metis-l2geth-migration/internal/migration.(*partitionedStateMigrator).migratePartitionedStorage.func1
+         0     0% 32.22%   304.07MB 12.67%  github.com/metis-devops/metis-l2geth-migration/internal/migration.(*partitionedStateMigrator).migrateStoragePartition
+         0     0% 32.22%   294.54MB 12.27%  github.com/ethereum/go-ethereum/trie.mustDecodeNodeUnsafe
+  235.08MB  9.79% 42.01%   237.08MB  9.88%  github.com/ethereum/go-ethereum/ethdb/pebble.(*Database).Get
+         0     0% 42.01%   235.12MB  9.80%  github.com/metis-devops/metis-l2geth-migration/internal/migration.transformOVMState
+  113.01MB  4.71% 46.72%   178.01MB  7.42%  github.com/ethereum/go-ethereum/trie.decodeShort
+   26.50MB  1.10% 47.83%   173.06MB  7.21%  github.com/ethereum/go-ethereum/trie.NewStackTrie
+         0     0% 47.83%   171.94MB  7.16%  github.com/metis-devops/metis-l2geth-migration/internal/migration.(*ovmWork).prepare
+         0     0% 47.83%   171.52MB  7.15%  github.com/metis-devops/metis-l2geth-migration/internal/migration.(*inventoryNodeIterator).Next
+         0     0% 47.83%   163.59MB  6.82%  github.com/metis-devops/metis-l2geth-migration/internal/migration.loadOVMWitness
+       4MB  0.17% 47.99%   138.02MB  5.75%  github.com/metis-devops/metis-l2geth-migration/internal/migration.decodeOVMWitness
+         0     0% 47.99%   134.52MB  5.60%  github.com/metis-devops/metis-l2geth-migration/internal/migration.newAccountTrieStream.func1
+         0     0% 47.99%   134.52MB  5.60%  github.com/metis-devops/metis-l2geth-migration/internal/migration.newTrieLeafStream[go.shape.struct { github.com/metis-devops/metis-l2geth-migration/internal/migration.accountHash github.com/ethereum/go-ethereum/common.Hash; github.com/metis-devops/metis-l2geth-migration/internal/migration.value []uint8 }].func1
+         0     0% 47.99%   134.52MB  5.60%  github.com/metis-devops/metis-l2geth-migration/internal/migration.produceAccountTrie
+         0     0% 47.99%   121.37MB  5.06%  github.com/syndtr/goleveldb/leveldb/table.(*Reader).getDataIter
+         0     0% 47.99%   120.57MB  5.02%  github.com/metis-devops/metis-l2geth-migration/internal/migration.(*ovmTransformer).classifyStorage
+     119MB  4.96% 52.95%      119MB  4.96%  github.com/ethereum/go-ethereum/trie.decodeRef
+         0     0% 52.95%   116.32MB  4.85%  sync.(*Pool).Get
+         0     0% 52.95%   114.55MB  4.77%  github.com/metis-devops/metis-l2geth-migration/internal/migration.(*ovmTransformer).rebuildPatchedTrie (inline)
+         0     0% 52.95%   114.55MB  4.77%  github.com/metis-devops/metis-l2geth-migration/internal/migration.(*ovmTransformer).rebuildPatchedTriePrefix
+      38MB  1.58% 54.53%    91.37MB  3.81%  github.com/syndtr/goleveldb/leveldb/cache.(*Cache).Get
+    1.50MB 0.062% 54.60%    83.40MB  3.47%  github.com/ethereum/go-ethereum/trie.(*StackTrie).hash
+         0     0% 54.60%    81.90MB  3.41%  github.com/ethereum/go-ethereum/trie.(*StackTrie).insert
+         0     0% 54.60%    81.90MB  3.41%  github.com/ethereum/go-ethereum/trie.(*StackTrie).update
+    3.50MB  0.15% 54.74%    81.01MB  3.38%  github.com/metis-devops/metis-l2geth-migration/internal/strictio.DecodeJSON[go.shape.struct { Type string "json:\"type\""; Address *github.com/ethereum/go-ethereum/common.Address "json:\"address,omitempty\""; Owner *github.com/ethereum/go-ethereum/common.Address "json:\"owner,omitempty\""; Spender *github.com/ethereum/go-ethereum/common.Address "json:\"spender,omitempty\"" }]
+      37MB  1.54% 56.28%    79.50MB  3.31%  github.com/metis-devops/metis-l2geth-migration/internal/migration.decodeFullAccount
+         0     0% 56.28%    79.37MB  3.31%  github.com/syndtr/goleveldb/leveldb/cache.(*NamespaceGetter).Get (inline)
+   60.03MB  2.50% 58.78%    79.03MB  3.29%  github.com/ethereum/go-ethereum/trie.init.func1
+         0     0% 58.78%    79.03MB  3.29%  github.com/ethereum/go-ethereum/trie.newHasher (inline)
+         0     0% 58.78%    71.38MB  2.97%  github.com/syndtr/goleveldb/leveldb/table.(*Reader).readBlockCached
+    9.50MB   0.4% 59.18%    70.52MB  2.94%  encoding/json.NewDecoder
+         0     0% 59.18%    70.47MB  2.94%  github.com/ethereum/go-ethereum/trie.(*StackTrie).Update
+      10MB  0.42% 59.60%    69.43MB  2.89%  github.com/metis-devops/metis-l2geth-migration/internal/migration.writeOVMFixtureState.func1
+   67.50MB  2.81% 62.41%    67.50MB  2.81%  github.com/ethereum/go-ethereum/trie.keybytesToHex (inline)
+   67.45MB  2.81% 65.22%    67.45MB  2.81%  github.com/ethereum/go-ethereum/trie.(*PrevalueTracer).Put
+   58.50MB  2.44% 67.66%       66MB  2.75%  github.com/ethereum/go-ethereum/trie.(*nodeIterator).nextChild
+         0     0% 67.66%    64.50MB  2.69%  github.com/ethereum/go-ethereum/trie.compactToHex
+   61.02MB  2.54% 70.20%    61.02MB  2.54%  encoding/json/jsontext.NewDecoder (inline)
+         0     0% 70.20%    59.43MB  2.48%  github.com/ethereum/go-ethereum/ethdb/leveldb.(*Database).Put
+         0     0% 70.20%    59.43MB  2.48%  github.com/metis-devops/metis-l2geth-migration/internal/migration.putOVMTest
+         0     0% 70.20%    59.43MB  2.48%  github.com/syndtr/goleveldb/leveldb.(*DB).Put (inline)
+         0     0% 70.20%    59.43MB  2.48%  github.com/syndtr/goleveldb/leveldb.(*DB).putRec
+         0     0% 70.20%    59.43MB  2.48%  github.com/syndtr/goleveldb/leveldb.(*DB).writeLocked
+         0     0% 70.20%    59.04MB  2.46%  github.com/metis-devops/metis-l2geth-migration/internal/migration.(*ovmTransformer).rebuildAccounts
+   58.50MB  2.44% 72.64%    58.50MB  2.44%  github.com/syndtr/goleveldb/leveldb/table.(*blockIter).Next
+         0     0% 72.64%    58.50MB  2.44%  github.com/syndtr/goleveldb/leveldb/table.(*blockIter).Seek
+         0     0% 72.64%    56.51MB  2.35%  github.com/metis-devops/metis-l2geth-migration/internal/migration.newStorageTrieStream.func1
+         0     0% 72.64%    56.51MB  2.35%  github.com/metis-devops/metis-l2geth-migration/internal/migration.newTrieLeafStream[go.shape.struct { github.com/metis-devops/metis-l2geth-migration/internal/migration.slotHash github.com/ethereum/go-ethereum/common.Hash; github.com/metis-devops/metis-l2geth-migration/internal/migration.value []uint8 }].func1
+         0     0% 72.64%    56.51MB  2.35%  github.com/metis-devops/metis-l2geth-migration/internal/migration.produceStorageTrie
+         0     0% 72.64%    55.51MB  2.31%  github.com/metis-devops/metis-l2geth-migration/internal/migration.(*ovmTransformer).rebuildStorage
+         0     0% 72.64%    48.56MB  2.02%  github.com/metis-devops/metis-l2geth-migration/internal/migration.verifyTargetDatabase
+         0     0% 72.64%    48.06MB  2.00%  github.com/metis-devops/metis-l2geth-migration/internal/migration.(*ovmTransformer).classifySlot
+         0     0% 72.64%    47.50MB  1.98%  github.com/metis-devops/metis-l2geth-migration/internal/migration.verifyOpenedTarget
+   45.95MB  1.91% 74.55%    46.95MB  1.96%  github.com/syndtr/goleveldb/leveldb/util.(*BufferPool).Get
+    1.50MB 0.062% 74.61%    45.38MB  1.89%  github.com/syndtr/goleveldb/leveldb/table.(*Reader).readBlock
+   15.50MB  0.65% 75.26%       44MB  1.83%  github.com/ethereum/go-ethereum/rlp.DecodeBytes
+         0     0% 75.26%    43.88MB  1.83%  github.com/syndtr/goleveldb/leveldb/table.(*Reader).readRawBlock
+   43.52MB  1.81% 77.07%    43.52MB  1.81%  github.com/ethereum/go-ethereum/trie.newUnsafeBytesPool (inline)
+         0     0% 77.07%    43.37MB  1.81%  github.com/syndtr/goleveldb/leveldb/table.(*Reader).readBlockCached.func1

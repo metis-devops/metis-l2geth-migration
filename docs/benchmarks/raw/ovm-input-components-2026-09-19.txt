@@ -1,0 +1,215 @@
+# macOS-27.0-arm64-arm-64bit-Mach-O
+# source-sha256=251ba6d6ce5dda94a4b06250e1e779849d1d32de6366e34302438b5bc6990721
+# Fresh process per component/variant; 5 repetitions; alternating reference/optimized order.
+# Witness: one bounded JSON record per op. Hot history: 60000 sequential 512-byte values per op; strict read-only LevelDB, cache-mb=16 handles=16.
+# Setup excluded from benchmark timers; caches not flushed; only synthetic inputs.
+# sample=1 component=address variant=reference
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMWitnessDecode/address/reference-16         	  249916	      1300 ns/op	    1485 B/op	      25 allocs/op
+PASS
+# sample=1 component=address variant=optimized
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMWitnessDecode/address/single-pass-16         	  496974	       689.0 ns/op	     650 B/op	      15 allocs/op
+PASS
+# sample=1 component=allowance variant=reference
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMWitnessDecode/allowance/reference-16         	  199134	      1759 ns/op	    1605 B/op	      30 allocs/op
+PASS
+# sample=1 component=allowance variant=optimized
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMWitnessDecode/allowance/single-pass-16         	  369600	       960.6 ns/op	     698 B/op	      18 allocs/op
+PASS
+# sample=1 component=history variant=reference
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMHotHistoryRead/reference-16         	       4	  89303521 ns/op	     60000 records/op	103833750 B/op	 1338412 allocs/op
+PASS
+# sample=1 component=history variant=optimized
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMHotHistoryRead/single-get-16         	       6	  50570368 ns/op	     60000 records/op	68994130 B/op	  720009 allocs/op
+PASS
+# sample=2 component=address variant=optimized
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMWitnessDecode/address/single-pass-16         	  504066	       686.1 ns/op	     650 B/op	      15 allocs/op
+PASS
+# sample=2 component=address variant=reference
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMWitnessDecode/address/reference-16         	  274426	      1279 ns/op	    1484 B/op	      25 allocs/op
+PASS
+# sample=2 component=allowance variant=optimized
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMWitnessDecode/allowance/single-pass-16         	  369612	       958.8 ns/op	     698 B/op	      18 allocs/op
+PASS
+# sample=2 component=allowance variant=reference
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMWitnessDecode/allowance/reference-16         	  200596	      1772 ns/op	    1605 B/op	      30 allocs/op
+PASS
+# sample=2 component=history variant=optimized
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMHotHistoryRead/single-get-16         	       6	  50447930 ns/op	     60000 records/op	69019706 B/op	  720010 allocs/op
+PASS
+# sample=2 component=history variant=reference
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMHotHistoryRead/reference-16         	       4	  89378104 ns/op	     60000 records/op	103844920 B/op	 1338413 allocs/op
+PASS
+# sample=3 component=address variant=reference
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMWitnessDecode/address/reference-16         	  272646	      1293 ns/op	    1485 B/op	      25 allocs/op
+PASS
+# sample=3 component=address variant=optimized
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMWitnessDecode/address/single-pass-16         	  488554	       724.7 ns/op	     650 B/op	      15 allocs/op
+PASS
+# sample=3 component=allowance variant=reference
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMWitnessDecode/allowance/reference-16         	  200926	      1790 ns/op	    1605 B/op	      30 allocs/op
+PASS
+# sample=3 component=allowance variant=optimized
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMWitnessDecode/allowance/single-pass-16         	  362211	       975.9 ns/op	     698 B/op	      18 allocs/op
+PASS
+# sample=3 component=history variant=reference
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMHotHistoryRead/reference-16         	       4	  89145823 ns/op	     60000 records/op	103817920 B/op	 1338407 allocs/op
+PASS
+# sample=3 component=history variant=optimized
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMHotHistoryRead/single-get-16         	       6	  51903306 ns/op	     60000 records/op	68995016 B/op	  720010 allocs/op
+PASS
+# sample=4 component=address variant=optimized
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMWitnessDecode/address/single-pass-16         	  490582	       691.7 ns/op	     649 B/op	      15 allocs/op
+PASS
+# sample=4 component=address variant=reference
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMWitnessDecode/address/reference-16         	  271251	      1287 ns/op	    1484 B/op	      25 allocs/op
+PASS
+# sample=4 component=allowance variant=optimized
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMWitnessDecode/allowance/single-pass-16         	  366804	       959.2 ns/op	     698 B/op	      18 allocs/op
+PASS
+# sample=4 component=allowance variant=reference
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMWitnessDecode/allowance/reference-16         	  198483	      1768 ns/op	    1605 B/op	      30 allocs/op
+PASS
+# sample=4 component=history variant=optimized
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMHotHistoryRead/single-get-16         	       6	  50671125 ns/op	     60000 records/op	68990274 B/op	  720007 allocs/op
+PASS
+# sample=4 component=history variant=reference
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMHotHistoryRead/reference-16         	       4	  89227417 ns/op	     60000 records/op	103878436 B/op	 1338415 allocs/op
+PASS
+# sample=5 component=address variant=reference
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMWitnessDecode/address/reference-16         	  278175	      1280 ns/op	    1485 B/op	      25 allocs/op
+PASS
+# sample=5 component=address variant=optimized
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMWitnessDecode/address/single-pass-16         	  505508	       686.7 ns/op	     650 B/op	      15 allocs/op
+PASS
+# sample=5 component=allowance variant=reference
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMWitnessDecode/allowance/reference-16         	  201705	      1761 ns/op	    1604 B/op	      30 allocs/op
+PASS
+# sample=5 component=allowance variant=optimized
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMWitnessDecode/allowance/single-pass-16         	  369783	       963.1 ns/op	     697 B/op	      18 allocs/op
+PASS
+# sample=5 component=history variant=reference
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMHotHistoryRead/reference-16         	       4	  92304521 ns/op	     60000 records/op	103847084 B/op	 1338413 allocs/op
+PASS
+# sample=5 component=history variant=optimized
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMHotHistoryRead/single-get-16         	       6	  50002298 ns/op	     60000 records/op	68996622 B/op	  720009 allocs/op
+PASS

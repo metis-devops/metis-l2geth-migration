@@ -17,7 +17,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/metis-devops/metis-l2geth-migration/internal/strictio"
 )
 
 var ovmETHAddress = common.HexToAddress("0xDeadDeAddeAddEAddeadDEaDDEAdDeaDDeAD0000")
@@ -142,12 +141,15 @@ func loadOVMWitness(ctx context.Context, path string, index *ovmIndex) (digest c
 }
 
 func decodeOVMWitness(data []byte) (ovmWitnessRecord, error) {
+	var record ovmWitnessRecord
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	token, err := decoder.Token()
 	if err != nil || token != json.Delim('{') {
 		return ovmWitnessRecord{}, errors.New("OVM witness must be a JSON object")
 	}
-	seen := make(map[string]bool, 4)
+	// Decode typed values during the strict field walk. A second whole-record
+	// decode would allocate another decoder and parse every witness byte again.
+	var seen uint8
 	for decoder.More() {
 		token, err := decoder.Token()
 		if err != nil {
@@ -157,22 +159,49 @@ func decodeOVMWitness(data []byte) (ovmWitnessRecord, error) {
 		if !ok {
 			return ovmWitnessRecord{}, errors.New("invalid witness field")
 		}
-		if seen[key] {
-			return ovmWitnessRecord{}, fmt.Errorf("duplicate OVM witness field %q", key)
-		}
-		if key != "type" && key != "address" && key != "owner" && key != "spender" {
+		var bit uint8
+		var address **common.Address
+		switch key {
+		case "type":
+			bit = 1
+		case "address":
+			bit, address = 2, &record.Address
+		case "owner":
+			bit, address = 4, &record.Owner
+		case "spender":
+			bit, address = 8, &record.Spender
+		default:
 			return ovmWitnessRecord{}, fmt.Errorf("unknown OVM witness field %q", key)
 		}
-		seen[key] = true
-		var value json.RawMessage
-		if err := decoder.Decode(&value); err != nil {
-			return ovmWitnessRecord{}, err
+		if seen&bit != 0 {
+			return ovmWitnessRecord{}, fmt.Errorf("duplicate OVM witness field %q", key)
 		}
-		if bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
-			return ovmWitnessRecord{}, errors.New("null OVM witness field")
+		seen |= bit
+		if address != nil {
+			if err := decoder.Decode(address); err != nil {
+				return ovmWitnessRecord{}, err
+			}
+			if *address == nil {
+				return ovmWitnessRecord{}, errors.New("null OVM witness field")
+			}
+		} else {
+			var kind *string
+			if err := decoder.Decode(&kind); err != nil {
+				return ovmWitnessRecord{}, err
+			}
+			if kind == nil {
+				return ovmWitnessRecord{}, errors.New("null OVM witness field")
+			}
+			record.Type = *kind
 		}
 	}
-	return strictio.DecodeJSON[ovmWitnessRecord](data, "OVM witness record")
+	if token, err := decoder.Token(); err != nil || token != json.Delim('}') {
+		return ovmWitnessRecord{}, errors.Join(errors.New("invalid OVM witness object ending"), err)
+	}
+	if _, err := decoder.Token(); !errors.Is(err, io.EOF) {
+		return ovmWitnessRecord{}, errors.Join(errors.New("trailing OVM witness data"), err)
+	}
+	return record, nil
 }
 
 func (i *ovmIndex) addWitness(r ovmWitnessRecord) error {

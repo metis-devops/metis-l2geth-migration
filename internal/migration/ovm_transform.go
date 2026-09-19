@@ -262,6 +262,16 @@ func (t *ovmTransformer) classifyStorage() (retErr error) {
 	}
 	lease := newMigrateWorkLease(t.limiter)
 	defer lease.release()
+	cursors := [3]ovmStorageCursor{
+		{db: t.index.db, prefix: 'b'},
+		{db: t.index.db, prefix: 'a'},
+		{db: t.index.db, prefix: 'k'},
+	}
+	defer func() {
+		for n := range cursors {
+			cursors[n].close()
+		}
+	}()
 	for {
 		if err := lease.acquire(ctx); err != nil {
 			return err
@@ -277,7 +287,7 @@ func (t *ovmTransformer) classifyStorage() (retErr error) {
 		if len(it.Key) != 32 {
 			return errors.New("invalid OVM storage key length")
 		}
-		if err := t.classifySlot(it.Key, value, &batch); err != nil {
+		if err := t.classifySlot(ctx, it.Key, value, &cursors); err != nil {
 			return fmt.Errorf("OVM storage %x: %w", it.Key, err)
 		}
 		lease.release()
@@ -285,20 +295,24 @@ func (t *ovmTransformer) classifyStorage() (retErr error) {
 	if it.Err != nil {
 		return it.Err
 	}
-	return batch.drain()
+	for n := range cursors {
+		cursors[n].close()
+	}
+	return t.inspectOrderedBalances(&batch)
 }
 
-func (t *ovmTransformer) classifySlot(key []byte, value *uint256.Int, batch *ovmBalanceBatch) error {
+func (t *ovmTransformer) classifySlot(ctx context.Context, key []byte, value *uint256.Int, cursors *[3]ovmStorageCursor) error {
 	var found int
 	var address []byte
-	for _, prefix := range []byte{'b', 'a', 'k'} {
-		v, ok, err := t.index.get(prefix, key)
+	for n := range cursors {
+		cursor := &cursors[n]
+		v, ok, err := cursor.get(ctx, key)
 		if err != nil {
 			return err
 		}
 		if ok {
 			found++
-			if prefix == 'b' {
+			if cursor.prefix == 'b' {
 				address = v
 			}
 		}
@@ -312,7 +326,7 @@ func (t *ovmTransformer) classifySlot(key []byte, value *uint256.Int, batch *ovm
 	if len(address) != 20 {
 		return errors.New("invalid indexed balance address")
 	}
-	return batch.submit(common.Address(address), common.Hash(key), value)
+	return t.queueBalance(address, key, value)
 }
 
 func (t *ovmTransformer) applyBalance(b *ovmBalanceJob) error {

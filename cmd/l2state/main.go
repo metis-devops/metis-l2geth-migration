@@ -196,6 +196,7 @@ func runImport(ctx context.Context, args []string, stdout, stderr io.Writer) err
 func runVerify(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	flags := flag.NewFlagSet("verify", flag.ContinueOnError)
 	flags.SetOutput(stderr)
+	tempDir := flags.String("temp-dir", "", "existing parent for verification scratch, outside all inputs (default: system temporary directory)")
 	tempDB := flags.String("temp-db", "disk", "temporary database storage: disk or memory (RAM grows with data size)")
 	bundlePath := flags.String("bundle", "", "export bundle directory")
 	source := flags.String("source-chaindata", "", "stopped l2geth LevelDB chaindata directory")
@@ -227,7 +228,7 @@ func runVerify(ctx context.Context, args []string, stdout, stderr io.Writer) err
 			return err
 		}
 		if format == migration.OVMVerificationFormat {
-			report, err := migration.VerifyOVM(ctx, migration.OVMVerifyOptions{TempDB: migration.TempDBMode(*tempDB), SourceChaindata: *source, Artifact: *artifact, CacheMB: *cache, Handles: *handles, Workers: *workers,
+			report, err := migration.VerifyOVM(ctx, migration.OVMVerifyOptions{TempDir: *tempDir, TempDB: migration.TempDBMode(*tempDB), SourceChaindata: *source, Artifact: *artifact, CacheMB: *cache, Handles: *handles, Workers: *workers,
 				OVM: migration.OVMOptions{Enabled: true, WrappedEtherCode: *wrappedCode, SourceAncient: *ancient, StateWitness: *witness, GenesisAlloc: *alloc, ERC20RetainList: *retainList}, Progress: newProgressOptions(stderr, *quiet)})
 			if err != nil {
 				return err
@@ -237,7 +238,7 @@ func runVerify(ctx context.Context, args []string, stdout, stderr io.Writer) err
 		if *wrappedCode != "" || *ancient != "" || *witness != "" || *alloc != "" || *retainList != "" {
 			return errors.New("OVM input flags require an OVM artifact")
 		}
-		report, err := migration.VerifyDirect(ctx, migration.DirectVerifyOptions{TempDB: migration.TempDBMode(*tempDB),
+		report, err := migration.VerifyDirect(ctx, migration.DirectVerifyOptions{TempDir: *tempDir, TempDB: migration.TempDBMode(*tempDB),
 			SourceChaindata: *source,
 			Artifact:        *artifact,
 			CacheMB:         *cache,
@@ -252,7 +253,7 @@ func runVerify(ctx context.Context, args []string, stdout, stderr io.Writer) err
 	if *wrappedCode != "" || *ancient != "" || *witness != "" || *alloc != "" || *retainList != "" {
 		return errors.New("OVM input flags cannot be used with --bundle")
 	}
-	report, err := migration.Verify(ctx, migration.VerifyOptions{TempDB: migration.TempDBMode(*tempDB),
+	report, err := migration.Verify(ctx, migration.VerifyOptions{TempDir: *tempDir, TempDB: migration.TempDBMode(*tempDB),
 		Bundle:   *bundlePath,
 		Artifact: *artifact,
 		CacheMB:  *cache,
@@ -319,8 +320,8 @@ func printUsage(w io.Writer) error {
   l2state import --bundle BUNDLE --out ARTIFACT --scheme hash|path [--db-engine pebble|leveldb] [--quiet]
   l2state migrate --source-chaindata PATH --out ARTIFACT --scheme hash|path [--db-engine pebble|leveldb] [--workers N] [--quiet]
   l2state prune --chaindata PATH [--workers N] [--temp-dir PATH] [--dry-run | --compact] [--quiet]
-  l2state verify --bundle BUNDLE [--artifact ARTIFACT] [--quiet]
-  l2state verify --source-chaindata PATH --artifact ARTIFACT [--quiet]
+  l2state verify --bundle BUNDLE [--artifact ARTIFACT] [--temp-dir PATH] [--quiet]
+  l2state verify --source-chaindata PATH --artifact ARTIFACT [--temp-dir PATH] [--quiet]
   l2state version
   l2state sleep
 

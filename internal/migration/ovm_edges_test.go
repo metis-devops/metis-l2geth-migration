@@ -56,10 +56,10 @@ func TestOVMOversizeHistoryAndPreimages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.OVMReport.Target.Root != ovmReferenceRoot(t, f) {
+	if requireOVMReport(t, r).Target.Root != ovmReferenceRoot(t, f) {
 		t.Fatal("oversize history or preimages changed transformation")
 	}
-	if r.OVMReport.History.Transfers != 2 {
+	if requireOVMReport(t, r).History.Transfers != 2 {
 		t.Fatal("unrelated emitter counted")
 	}
 }
@@ -75,7 +75,7 @@ func TestOVMHistoricalBurnAndDestroyedSender(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.OVMReport.Target.Root != ovmReferenceRoot(t, f) {
+	if requireOVMReport(t, r).Target.Root != ovmReferenceRoot(t, f) {
 		t.Fatal("burn qualification or destroyed sender classification is wrong")
 	}
 }
@@ -176,7 +176,7 @@ func TestOVMLongSparseStringPreserved(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	withArtifactState(t, opts.Output, opts.Scheme, r.OVMReport.Target.Root, true, func(s *state.StateDB) {
+	withArtifactState(t, opts.Output, opts.Scheme, requireOVMReport(t, r).Target.Root, true, func(s *state.StateDB) {
 		if s.GetState(ovmETHAddress, common.HexToHash("0x03")) != common.HexToHash("0x0801") {
 			t.Fatal("long string metadata changed")
 		}

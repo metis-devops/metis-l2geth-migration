@@ -83,8 +83,8 @@ func TestMigrateAccountBurstStopsAtGlobalWindow(t *testing.T) {
 	const accountCount = 6
 	ctx := t.Context()
 	migrator := &partitionedStateMigrator{
-		target: rawdb.NewDatabase(memorydb.New()), scheme: rawdb.HashScheme,
-		limiter: newMigrateWorkLimiter(2), accounts: newMigrateAccountWindow(2),
+		outputFactory: persistentPartitionOutput(rawdb.NewDatabase(memorydb.New()), rawdb.HashScheme),
+		limiter:       newMigrateWorkLimiter(2), accounts: newMigrateAccountWindow(2),
 		codeHashes: newConcurrentHashSet(),
 	}
 	accounts := buildAccountPipelineIterator(t, accountCount)
@@ -116,7 +116,7 @@ func TestMigrateAccountBurstStopsAtGlobalWindow(t *testing.T) {
 		return migrateAccountResult{job: job, account: job.account, counts: job.counts}
 	}
 	migrator.accountProcessor = process
-	writer := newDirectStateWriter(migrator.target, migrator.scheme)
+	writer := migrator.newOutput(false)
 	defer writer.Abort()
 	var result migratePartitionResult
 	var nodeErr error
@@ -247,7 +247,7 @@ func TestMigrateAccountMergerOrdersOutOfOrderResults(t *testing.T) {
 	target := rawdb.NewDatabase(memorydb.New())
 	progress := new(progressCounts)
 	migrator := &partitionedStateMigrator{
-		target: target, scheme: rawdb.HashScheme, limiter: newMigrateWorkLimiter(2),
+		outputFactory: persistentPartitionOutput(target, rawdb.HashScheme), limiter: newMigrateWorkLimiter(2),
 		accounts: newMigrateAccountWindow(2), progress: progress,
 	}
 	keys := []common.Hash{
@@ -333,8 +333,8 @@ func TestMigrateAccountMergerOrdersOutOfOrderResults(t *testing.T) {
 func TestMigrateAccountBurstFailureCancelsAndJoins(t *testing.T) {
 	ctx := t.Context()
 	migrator := &partitionedStateMigrator{
-		target: rawdb.NewDatabase(memorydb.New()), scheme: rawdb.HashScheme,
-		limiter: newMigrateWorkLimiter(2), accounts: newMigrateAccountWindow(2),
+		outputFactory: persistentPartitionOutput(rawdb.NewDatabase(memorydb.New()), rawdb.HashScheme),
+		limiter:       newMigrateWorkLimiter(2), accounts: newMigrateAccountWindow(2),
 		codeHashes: newConcurrentHashSet(),
 	}
 	accounts := buildAccountPipelineIterator(t, 6)
@@ -357,7 +357,7 @@ func TestMigrateAccountBurstFailureCancelsAndJoins(t *testing.T) {
 		return migrateAccountResult{job: job, err: injected}
 	}
 	migrator.accountProcessor = process
-	writer := newDirectStateWriter(migrator.target, migrator.scheme)
+	writer := migrator.newOutput(false)
 	defer writer.Abort()
 	var result migratePartitionResult
 	var nodeErr error
@@ -517,7 +517,7 @@ func TestStorageProbeThresholdAndDiscard(t *testing.T) {
 	t.Run("slots=0", func(t *testing.T) {
 		target := rawdb.NewDatabase(memorydb.New())
 		migrator := &partitionedStateMigrator{
-			target: target, scheme: rawdb.PathScheme, limiter: newMigrateWorkLimiter(2),
+			outputFactory: persistentPartitionOutput(target, rawdb.PathScheme), limiter: newMigrateWorkLimiter(2),
 		}
 		lease := newMigrateWorkLease(migrator.limiter)
 		if err := lease.acquire(context.Background()); err != nil {
@@ -544,8 +544,7 @@ func TestStorageProbeThresholdAndDiscard(t *testing.T) {
 			target := rawdb.NewDatabase(memorydb.New())
 			progress := new(progressCounts)
 			migrator := &partitionedStateMigrator{
-				ctx: context.Background(), source: source, trieDB: trieDB, target: target,
-				scheme: rawdb.PathScheme, root: root, limiter: newMigrateWorkLimiter(2),
+				ctx: context.Background(), source: source, trieDB: trieDB, outputFactory: persistentPartitionOutput(target, rawdb.PathScheme), root: root, limiter: newMigrateWorkLimiter(2),
 				codeHashes: newConcurrentHashSet(), progress: progress,
 			}
 			partition, counts, err := migrator.probeStorage(context.Background(), accountHash, root)
@@ -593,8 +592,7 @@ func TestPartitionedLargeStorageMatchesSerialNodes(t *testing.T) {
 				target := rawdb.NewDatabase(memorydb.New())
 				progress := new(progressCounts)
 				migrator := &partitionedStateMigrator{
-					ctx: context.Background(), source: source, trieDB: trieDB, target: target,
-					scheme: scheme, root: root, limiter: newMigrateWorkLimiter(workers),
+					ctx: context.Background(), source: source, trieDB: trieDB, outputFactory: persistentPartitionOutput(target, scheme), root: root, limiter: newMigrateWorkLimiter(workers),
 					codeHashes: newConcurrentHashSet(), progress: progress,
 				}
 				lease := newMigrateWorkLease(migrator.limiter)
@@ -663,8 +661,8 @@ func TestDirectMigrateLargeStorageEndToEndBothSchemes(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					if migrated.Report.RecomputedRoot != root || migrated.Report.Counts != counts {
-						t.Fatalf("unexpected large-storage migration report: %+v", migrated.Report)
+					if requireDirectReport(t, migrated).RecomputedRoot != root || requireDirectReport(t, migrated).Counts != counts {
+						t.Fatalf("unexpected large-storage migration report: %+v", requireDirectReport(t, migrated))
 					}
 					verified, err := VerifyDirect(context.Background(), DirectVerifyOptions{
 						SourceChaindata: chaindata, Artifact: artifact, CacheMB: 16, Handles: 16,
@@ -815,7 +813,7 @@ func TestPartitionedMigrateReadsSharedCodeOnce(t *testing.T) {
 	target := rawdb.NewDatabase(memorydb.New())
 	progress := new(progressCounts)
 	migrator := &partitionedStateMigrator{
-		ctx: context.Background(), source: source, target: target,
+		ctx: context.Background(), source: source, outputFactory: persistentPartitionOutput(target, rawdb.HashScheme),
 		codeHashes: newConcurrentHashSet(), progress: progress,
 	}
 	var counts [migrateTriePartitions]bundle.Counts

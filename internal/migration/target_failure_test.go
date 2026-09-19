@@ -33,18 +33,19 @@ func testTargetTamperingRejected(t *testing.T, mode TempDBMode) {
 				if err != nil {
 					t.Fatal(err)
 				}
+				report := requireDirectReport(t, result)
 				dbPath := filepath.Join(artifact, "chaindata")
 				switch damage {
 				case "engine":
 					if tc.engine == DBEngineLevelDB {
-						result.Report.DBEngine = DBEnginePebble
+						report.DBEngine = DBEnginePebble
 					} else {
-						result.Report.DBEngine = DBEngineLevelDB
+						report.DBEngine = DBEngineLevelDB
 					}
-					writeUncheckedDirectReport(t, artifact, result.Report)
+					writeUncheckedDirectReport(t, artifact, report)
 				case "layout":
-					result.Report.StateLayout = "legacy-l2geth"
-					writeUncheckedDirectReport(t, artifact, result.Report)
+					report.StateLayout = "legacy-l2geth"
+					writeUncheckedDirectReport(t, artifact, report)
 				case "corrupt-current":
 					if err := os.WriteFile(filepath.Join(dbPath, "CURRENT"), []byte("bad manifest\n"), 0600); err != nil {
 						t.Fatal(err)

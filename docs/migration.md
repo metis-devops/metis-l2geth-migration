@@ -27,9 +27,9 @@ described in the [pruning guide](prune.md) intentionally deletes old state in pl
 
 ## Choose a workflow
 
-| Workflow               | Use it when                                                                                            | Evidence and storage tradeoff                                                                      |
-| ---------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
-| `migrate`              | The source snapshot and destination are available together.                                            | Avoids creating a bundle, but later full verification requires the same source snapshot.           |
+| Workflow | Use it when| Evidence and storage tradeoff|
+| ---------------------- | -------------- | --- |
+| `migrate`              | The source snapshot and destination are available together.| Avoids creating a bundle, but later full verification requires the same source snapshot.|
 | `export` then `import` | The environments are separate, the state must be portable, or both schemes may be built from one scan. | Stores a portable record stream with file and ordered-record digests; needs additional disk space. |
 
 Without OVM conversion, both workflows rebuild the same state root, support `hash` and `path`, reopen
@@ -115,6 +115,9 @@ or a content-identical copy:
 
 Direct verification recomputes the canonical source head and state, then
 reopens and checks the target without modifying either database.
+Use `verify --temp-dir /scratch` to select an existing temporary workspace parent
+outside the inputs. The default follows the system temporary directory and
+`TMPDIR`; artifact directories and their parents may remain read-only.
 
 ## Portable bundle migration
 
@@ -176,3 +179,6 @@ Artifact verification additionally checks every reachable state entry, the
 scheme-specific metadata, the selected header and head markers, and the exact
 database inventory. Unexpected trie nodes, code, chain data, or metadata cause
 verification to fail.
+When an artifact is supplied, its layout and report are checked before the full
+bundle scan. Its report and layout are checked again after database verification
+to detect changes during the operation.

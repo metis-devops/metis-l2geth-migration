@@ -216,7 +216,7 @@ func testOVMMigrateAllTargets(t *testing.T, tempMode TempDBMode) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				r := result.OVMReport
+				r := requireOVMReport(t, result)
 				if r == nil || r.Target.Root != expected || r.Target.Root == f.root {
 					t.Fatalf("unexpected root/report: %+v expected %s", r, expected)
 				}
@@ -440,9 +440,9 @@ func TestOVMAncientAndWorkers(t *testing.T) {
 				t.Fatal(err)
 			}
 			if expected == (common.Hash{}) {
-				expected = r.OVMReport.Target.Root
+				expected = requireOVMReport(t, r).Target.Root
 			}
-			if expected != r.OVMReport.Target.Root {
+			if expected != requireOVMReport(t, r).Target.Root {
 				t.Fatal("workers changed root")
 			}
 		})

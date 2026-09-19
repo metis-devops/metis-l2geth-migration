@@ -101,7 +101,7 @@ func (w *ovmWork) applyGenesisAlloc(root common.Hash) (newRoot common.Hash, evid
 	}
 	phase := w.reporter.StartPhase("apply_genesis_alloc", nil)
 	defer func() { phase.Finish(retErr) }()
-	converted, err := runOVMPartitioned(w.ctx, w.base, nil, root, "hash", w.opts.Workers, w.limiter, targetConfig{}.readCode, false)
+	converted, err := runOVMPartitioned(w.ctx, w.base, root, w.opts.Workers, w.limiter, targetConfig{}.readCode, nil, newValidationOutput)
 	if err != nil {
 		return newRoot, nil, fmt.Errorf("validate converted state before GenesisAlloc: %w", err)
 	}

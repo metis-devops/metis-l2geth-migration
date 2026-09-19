@@ -40,7 +40,7 @@ func testOVMWrappedRuntimeAndContinuation(t *testing.T, tempMode TempDBMode) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				withArtifactState(t, opts.Output, scheme, result.OVMReport.Target.Root, true, func(s *state.StateDB) {
+				withArtifactState(t, opts.Output, scheme, requireOVMReport(t, result).Target.Root, true, func(s *state.StateDB) {
 					call := func(sender common.Address, value int64, method string, args ...[]byte) []byte {
 						input := append([]byte(nil), crypto.Keccak256([]byte(method))[:4]...)
 						for _, arg := range args {
@@ -74,7 +74,7 @@ func testOVMWrappedRuntimeAndContinuation(t *testing.T, tempMode TempDBMode) {
 						t.Fatal("transfer mismatch")
 					}
 				})
-				root := commitOVMContinuation(t, opts, result.OVMReport.Target.Root, f.holders[0])
+				root := commitOVMContinuation(t, opts, requireOVMReport(t, result).Target.Root, f.holders[0])
 				withArtifactState(t, opts.Output, scheme, root, true, func(s *state.StateDB) {
 					if s.GetBalance(f.holders[0]).Uint64() != 12 {
 						t.Fatal("subsequent state commit was not persisted")
@@ -120,7 +120,7 @@ func TestOVMReportStrictness(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	original, err := json.Marshal(result.OVMReport)
+	original, err := json.Marshal(requireOVMReport(t, result))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +206,7 @@ func TestOVMVerifyRejectsTampering(t *testing.T) {
 					t.Fatal(err)
 				}
 			case "report_supply":
-				r := *result.OVMReport
+				r := *requireOVMReport(t, result)
 				r.Balances.MigratedNative.SubUint64(r.Balances.MigratedNative, 1)
 				r.Balances.RemainingSupply.AddUint64(r.Balances.RemainingSupply, 1)
 				if err := writeOVMReport(opts.Output, r); err != nil {
@@ -220,7 +220,7 @@ func TestOVMVerifyRejectsTampering(t *testing.T) {
 				db := rawdb.NewDatabase(kv)
 				switch kind {
 				case "body":
-					for key := range ovmBodyMetadata(result.OVMReport.Checkpoint) {
+					for key := range ovmBodyMetadata(requireOVMReport(t, result).Checkpoint) {
 						if err := db.Delete([]byte(key)); err != nil {
 							t.Fatal(err)
 						}
@@ -254,7 +254,7 @@ func TestOVMZeroSupply(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !r.OVMReport.Balances.RemainingSupply.IsZero() || !r.OVMReport.Balances.MigratedNative.IsZero() {
+	if !requireOVMReport(t, r).Balances.RemainingSupply.IsZero() || !requireOVMReport(t, r).Balances.MigratedNative.IsZero() {
 		t.Fatal("nonzero migrated supply")
 	}
 }

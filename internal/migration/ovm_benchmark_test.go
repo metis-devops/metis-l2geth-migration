@@ -38,6 +38,7 @@ func benchmarkOVMMigration(b *testing.B, withAlloc, withRetention bool) {
 			root := b.TempDir()
 			setupElapsed := time.Since(setup)
 			ctx, stop := sampleTemporaryBenchmark(b, b.Context(), root)
+			stopProfile := profileOVMBenchmark(b)
 			b.ReportAllocs()
 			b.ResetTimer()
 			for n := range b.N {
@@ -47,6 +48,7 @@ func benchmarkOVMMigration(b *testing.B, withAlloc, withRetention bool) {
 				}
 			}
 			b.StopTimer()
+			stopProfile()
 			stop()
 			b.ReportMetric(setupElapsed.Seconds(), "setup-s")
 		})

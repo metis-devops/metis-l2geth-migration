@@ -2,7 +2,6 @@ package migration
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -25,25 +24,6 @@ type MigrateOptions struct {
 	OVM             OVMOptions
 }
 
-// MigrateResult identifies a directly migrated artifact and its verification report.
-type MigrateResult struct {
-	ArtifactPath string                   `json:"artifact"`
-	Report       DirectVerificationReport `json:"verification"`
-	OVMReport    *OVMVerificationReport   `json:"-"`
-}
-
-// MarshalJSON preserves the ordinary result shape while selecting the independent OVM report.
-func (r MigrateResult) MarshalJSON() ([]byte, error) {
-	var report any = r.Report
-	if r.OVMReport != nil {
-		report = r.OVMReport
-	}
-	return json.Marshal(struct {
-		Artifact     string `json:"artifact"`
-		Verification any    `json:"verification"`
-	}{r.ArtifactPath, report})
-}
-
 // Migrate directly rebuilds and verifies a state database without creating a bundle.
 func Migrate(ctx context.Context, opts MigrateOptions) (result MigrateResult, retErr error) {
 	if err := opts.TempDB.validate(); err != nil {
@@ -64,10 +44,10 @@ func Migrate(ctx context.Context, opts MigrateOptions) (result MigrateResult, re
 	)
 	defer func() {
 		attrs := []any{"artifact", result.ArtifactPath}
-		if result.ArtifactPath != "" {
+		if report, ok := result.DirectReport(); ok {
 			attrs = append(attrs,
-				"block", result.Report.Source.HeadBefore.BlockNumber,
-				"root", result.Report.RecomputedRoot,
+				"block", report.Source.HeadBefore.BlockNumber,
+				"root", report.RecomputedRoot,
 			)
 		}
 		reporter.Finish(retErr, attrs...)
@@ -172,7 +152,7 @@ func Migrate(ctx context.Context, opts MigrateOptions) (result MigrateResult, re
 	if err := publishDirectArtifact(ctx, output, report, opts, reporter); err != nil {
 		return MigrateResult{}, err
 	}
-	return MigrateResult{ArtifactPath: opts.Output, Report: report}, nil
+	return newDirectMigrateResult(opts.Output, report), nil
 }
 
 func validateMigrateOptions(opts MigrateOptions) error {
@@ -199,37 +179,12 @@ func normalizeMigrateWorkers(workers int) int {
 }
 
 func publishDirectArtifact(ctx context.Context, output *atomicDir, report DirectVerificationReport, opts MigrateOptions, reporter *progressReporter) error {
-	phase := reporter.StartPhase("publish_artifact", nil, "output", opts.Output)
-	if err := ctx.Err(); err != nil {
-		phase.Finish(err)
-		return err
-	}
-	if _, err := writeDirectVerificationReport(output.Path(), report); err != nil {
-		phase.Finish(err)
-		return err
-	}
-	stored, err := loadDirectVerificationReport(output.Path())
-	if err != nil {
-		phase.Finish(err)
-		return fmt.Errorf("re-open generated direct verification report: %w", err)
-	}
-	if !sameDirectVerificationReport(stored, report) {
-		err := errors.New("re-opened direct verification report does not match generated report")
-		phase.Finish(err)
-		return err
-	}
-	if err := rejectOutputInsideSource(opts.SourceChaindata, opts.Output); err != nil {
-		phase.Finish(err)
-		return err
-	}
-	if err := ctx.Err(); err != nil {
-		phase.Finish(err)
-		return err
-	}
-	if err := output.Commit(); err != nil {
-		phase.Finish(err)
-		return err
-	}
-	phase.Finish(nil)
-	return nil
+	return publishArtifact(ctx, output, report, artifactReportCodec[DirectVerificationReport]{
+		label: "direct verification report",
+		write: func(dir string, report DirectVerificationReport) error {
+			_, err := writeDirectVerificationReport(dir, report)
+			return err
+		},
+		load: loadDirectVerificationReport, equal: sameDirectVerificationReport,
+	}, func() error { return rejectOutputInsideSource(opts.SourceChaindata, opts.Output) }, reporter)
 }

@@ -163,7 +163,7 @@ func TestOVMRetentionAllTargets(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				r := result.OVMReport
+				r := requireOVMReport(t, result)
 				var reference []logicalEntry
 				expected := ovmReferenceWithAllocDB(t, f, retainedPoolReference(f), func(db ethdb.Database, root common.Hash) {
 					reference = allocReferenceInventory(t, db, root, tc.scheme, r.Checkpoint)
@@ -234,7 +234,7 @@ func TestOVMRetentionValidationAndAlloc(t *testing.T) {
 				s.SetCode(f.holders[2], nil, tracing.CodeChangeUnspecified)
 				s.SetBalance(f.holders[2], uint256.NewInt(7), tracing.BalanceChangeUnspecified)
 			})
-			if r.OVMReport.Target.Root != expected || r.OVMReport.GenesisAlloc.Converted.Root != converted || r.OVMReport.Balances.RemainingSupply.Uint64() != 132 {
+			if requireOVMReport(t, r).Target.Root != expected || requireOVMReport(t, r).GenesisAlloc.Converted.Root != converted || requireOVMReport(t, r).Balances.RemainingSupply.Uint64() != 132 {
 				t.Fatal("alloc affected conversion-stage classification/evidence")
 			}
 			if _, err := VerifyOVM(t.Context(), OVMVerifyOptions{TempDB: mode, SourceChaindata: f.source, Artifact: opts.Output, CacheMB: 64, Handles: 64, Workers: 2, OVM: opts.OVM}); err != nil {
@@ -261,7 +261,7 @@ func TestOVMRetentionWithOnlyZeroTransfer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if plain.OVMReport.Balances.RemainingSupply.Uint64() != 77 || listed.OVMReport.Target.Root != ovmReferenceRoot(t, f) || listed.OVMReport.History != plain.OVMReport.History {
+	if requireOVMReport(t, plain).Balances.RemainingSupply.Uint64() != 77 || requireOVMReport(t, listed).Target.Root != ovmReferenceRoot(t, f) || requireOVMReport(t, listed).History != requireOVMReport(t, plain).History {
 		t.Fatal("manual policy changed history evidence or zero events granted eligibility")
 	}
 }

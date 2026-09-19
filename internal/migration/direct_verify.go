@@ -13,6 +13,7 @@ import (
 
 // DirectVerifyOptions configures independent legacy-source and artifact verification.
 type DirectVerifyOptions struct {
+	TempDir         string
 	TempDB          TempDBMode
 	SourceChaindata string
 	Artifact        string
@@ -50,6 +51,11 @@ func VerifyDirect(ctx context.Context, opts DirectVerifyOptions) (result DirectV
 	if err != nil {
 		return DirectVerificationReport{}, err
 	}
+	workspace, err := prepareVerificationWorkspace(opts.TempDir, opts.SourceChaindata, opts.Artifact)
+	if err != nil {
+		return DirectVerificationReport{}, err
+	}
+	defer func() { retErr = errors.Join(retErr, workspace.Close()) }()
 	source, err := openLegacySource(opts.SourceChaindata, opts.CacheMB, opts.Handles, reporter)
 	if err != nil {
 		return DirectVerificationReport{}, err
@@ -95,7 +101,11 @@ func VerifyDirect(ctx context.Context, opts DirectVerifyOptions) (result DirectV
 	if err != nil {
 		return DirectVerificationReport{}, err
 	}
-	dbState, err := verifyTargetDatabase(ctx, filepath.Join(opts.Artifact, artifactDatabaseDirName), stored.Scheme, target, sourceEvidence, stateResult, opts.CacheMB, opts.Handles, reporter, trieNodeIndexOptions{Mode: opts.TempDB, CacheMB: opts.CacheMB, Handles: opts.Handles})
+	scratch, err := workspace.nodeIndex(ctx, opts.TempDB, stored.Scheme, opts.CacheMB, opts.Handles)
+	if err != nil {
+		return DirectVerificationReport{}, err
+	}
+	dbState, err := verifyTargetDatabase(ctx, filepath.Join(opts.Artifact, artifactDatabaseDirName), stored.Scheme, target, sourceEvidence, stateResult, opts.CacheMB, opts.Handles, reporter, scratch)
 	if err != nil {
 		return DirectVerificationReport{}, err
 	}

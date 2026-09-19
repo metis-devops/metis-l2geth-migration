@@ -21,15 +21,22 @@ type partitionStateOutput interface {
 	Abort()
 }
 
+type partitionOutputFactory func(deferred bool) partitionStateOutput
+
 func (m *partitionedStateMigrator) newOutput(deferred bool) partitionStateOutput {
-	if m.outputFactory != nil {
-		return m.outputFactory(deferred)
-	}
-	if deferred {
-		return newDeferredDirectStateWriter(m.target, m.scheme)
-	}
-	return newDirectStateWriter(m.target, m.scheme)
+	return m.outputFactory(deferred)
 }
+
+func persistentPartitionOutput(db ethdb.Database, scheme string) partitionOutputFactory {
+	return func(deferred bool) partitionStateOutput {
+		if deferred {
+			return newDeferredDirectStateWriter(db, scheme)
+		}
+		return newDirectStateWriter(db, scheme)
+	}
+}
+
+func newValidationOutput(bool) partitionStateOutput { return validationStateOutput{} }
 
 type validationStateOutput struct{}
 
@@ -48,7 +55,7 @@ func validatePartitionedState(ctx context.Context, db ethdb.Database, head bundl
 		ctx: ctx, source: db, trieDB: nodes, root: head.StateRoot,
 		limiter: newMigrateWorkLimiter(workers), accounts: newMigrateAccountWindow(workers),
 		codeHashes: newConcurrentHashSet(), progress: progress,
-		outputFactory: func(bool) partitionStateOutput { return validationStateOutput{} },
+		outputFactory: newValidationOutput,
 	}
 	result, output, err := walker.run()
 	if err != nil {

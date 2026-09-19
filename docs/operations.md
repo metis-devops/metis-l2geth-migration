@@ -40,10 +40,19 @@
   (or the lower positive configured allowances). Import and direct migration
   keep this verification index inside the current `.partial-*` directory in
   disk mode. Memory mode retains it in a private in-memory filesystem.
-  In disk mode, standalone artifact verification uses the operating system temporary
-  directory; set `TMPDIR` to place it on a disk with enough capacity. `path`
+  In disk mode, standalone artifact verification uses `verify --temp-dir PATH`
+  or the operating system temporary directory (which honors `TMPDIR`). `path`
   verification does not create this index. The index is removed before a
   successful output is published or a verification command returns.
+- All standalone verification modes accept `--temp-dir`. An explicit parent must
+  already exist and resolve outside the source, any OVM ancient directory, bundle
+  and artifact, including symlink aliases. Only this invocation's unique scratch
+  directory is created and removed; the parent is retained. Configuration is
+  checked even when no scratch is needed. Pure bundle, ordinary path and ordinary
+  memory verification create no disk scratch. OVM replay creates its private
+  workspace there in both modes, with temporary database files only in memory
+  when requested. It no longer requires a writable artifact parent. Plan enough
+  space on the selected disk for OVM original state, evidence and conversion nodes.
 - Progress logs go to standard error; the final JSON result is the only output
   on standard output. Phase changes appear immediately and long phases update
   every 30 seconds. Use `--quiet` to suppress progress logs.

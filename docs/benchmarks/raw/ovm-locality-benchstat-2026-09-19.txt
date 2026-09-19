@@ -1,0 +1,247 @@
+                                                            │ /tmp/l2state-perf-20260919/baseline-benchstat.txt │ /tmp/l2state-perf-20260919/current-benchstat.txt │
+                                                            │                      sec/op                       │          sec/op            vs base               │
+OVMMigration/workers=2/holders=10000/temp=disk-16                                                  876.9m ±  4%                805.0m ±  4%   -8.21% (p=0.002 n=6)
+OVMMigration/workers=2/holders=10000/temp=memory-16                                                531.1m ±  2%                464.4m ±  2%  -12.56% (p=0.002 n=6)
+OVMVerification/workers=2/holders=10000/temp=disk-16                                               793.2m ±  2%                728.0m ±  3%   -8.23% (p=0.002 n=6)
+OVMVerification/workers=2/holders=10000/temp=memory-16                                             456.2m ±  2%                392.3m ±  2%  -14.01% (p=0.002 n=6)
+OVMMigrationAlloc/workers=2/holders=10000/temp=disk-16                                             920.5m ±  1%                860.2m ±  2%   -6.55% (p=0.002 n=6)
+OVMMigrationAlloc/workers=2/holders=10000/temp=memory-16                                           617.0m ±  2%                546.7m ±  1%  -11.40% (p=0.002 n=6)
+OVMVerificationAlloc/workers=2/holders=10000/temp=disk-16                                          855.3m ±  2%                796.1m ±  2%   -6.92% (p=0.002 n=6)
+OVMVerificationAlloc/workers=2/holders=10000/temp=memory-16                                        530.7m ±  1%                464.8m ±  1%  -12.43% (p=0.002 n=6)
+OVMMigration/workers=8/holders=10000/temp=disk-16                                                  743.3m ±  3%                720.0m ±  4%        ~ (p=0.180 n=6)
+OVMMigration/workers=8/holders=10000/temp=memory-16                                                426.4m ±  2%                434.1m ±  4%        ~ (p=0.132 n=6)
+OVMVerification/workers=8/holders=10000/temp=disk-16                                               663.0m ±  3%                649.2m ±  2%        ~ (p=0.065 n=6)
+OVMVerification/workers=8/holders=10000/temp=memory-16                                             362.2m ±  1%                361.5m ±  2%        ~ (p=0.818 n=6)
+OVMMigrationAlloc/workers=8/holders=10000/temp=disk-16                                             834.9m ±  2%                838.2m ±  2%        ~ (p=0.699 n=6)
+OVMMigrationAlloc/workers=8/holders=10000/temp=memory-16                                           517.2m ±  3%                518.8m ±  2%        ~ (p=0.699 n=6)
+OVMVerificationAlloc/workers=8/holders=10000/temp=disk-16                                          762.9m ±  2%                766.8m ±  3%        ~ (p=0.699 n=6)
+OVMVerificationAlloc/workers=8/holders=10000/temp=memory-16                                        443.7m ±  1%                442.9m ±  2%        ~ (p=0.937 n=6)
+OVMMigration/workers=2/holders=100000/temp=disk-16                                                  8.478 ±  6%                 7.636 ± 11%   -9.93% (p=0.015 n=6)
+OVMVerification/workers=2/holders=100000/temp=disk-16                                               8.150 ±  9%                 7.307 ±  9%  -10.34% (p=0.004 n=6)
+OVMMigration/workers=8/holders=100000/temp=disk-16                                                  7.458 ± 13%                 7.298 ± 10%        ~ (p=0.240 n=6)
+OVMVerification/workers=8/holders=100000/temp=disk-16                                               7.302 ± 17%                 7.034 ± 14%        ~ (p=0.394 n=6)
+geomean                                                                                             1.030                      972.8m         -5.58%
+
+                                                            │ /tmp/l2state-perf-20260919/baseline-benchstat.txt │ /tmp/l2state-perf-20260919/current-benchstat.txt │
+                                                            │                     GC-cycles                     │         GC-cycles          vs base               │
+OVMMigration/workers=2/holders=10000/temp=disk-16                                                   15.00 ±  7%                 13.00 ±  8%  -13.33% (p=0.002 n=6)
+OVMMigration/workers=2/holders=10000/temp=memory-16                                                 16.50 ±  9%                 14.50 ± 10%        ~ (p=0.080 n=6)
+OVMVerification/workers=2/holders=10000/temp=disk-16                                                15.00 ±  7%                 12.00 ± 17%  -20.00% (p=0.004 n=6)
+OVMVerification/workers=2/holders=10000/temp=memory-16                                              16.00 ± 12%                 14.50 ± 10%        ~ (p=0.286 n=6)
+OVMMigrationAlloc/workers=2/holders=10000/temp=disk-16                                              18.00 ±  0%                 16.00 ±  0%  -11.11% (p=0.002 n=6)
+OVMMigrationAlloc/workers=2/holders=10000/temp=memory-16                                            19.00 ±  5%                 17.50 ±  3%   -7.89% (p=0.009 n=6)
+OVMVerificationAlloc/workers=2/holders=10000/temp=disk-16                                           20.00 ± 10%                 17.50 ±  3%  -12.50% (p=0.009 n=6)
+OVMVerificationAlloc/workers=2/holders=10000/temp=memory-16                                         20.00 ± 10%                 17.50 ± 14%  -12.50% (p=0.011 n=6)
+OVMMigration/workers=8/holders=10000/temp=disk-16                                                   15.00 ±  7%                 14.00 ±  7%   -6.67% (p=0.002 n=6)
+OVMMigration/workers=8/holders=10000/temp=memory-16                                                 16.00 ±  6%                 15.00 ±  0%   -6.25% (p=0.015 n=6)
+OVMVerification/workers=8/holders=10000/temp=disk-16                                                16.00 ±  6%                 14.00 ±  7%  -12.50% (p=0.013 n=6)
+OVMVerification/workers=8/holders=10000/temp=memory-16                                              15.00 ± 13%                 14.00 ±  7%        ~ (p=0.054 n=6)
+OVMMigrationAlloc/workers=8/holders=10000/temp=disk-16                                              19.00 ±  5%                 18.00 ±  6%   -5.26% (p=0.002 n=6)
+OVMMigrationAlloc/workers=8/holders=10000/temp=memory-16                                            20.00 ±  0%                 18.00 ±  6%  -10.00% (p=0.002 n=6)
+OVMVerificationAlloc/workers=8/holders=10000/temp=disk-16                                           20.00 ±  5%                 19.00 ± 11%        ~ (p=0.210 n=6)
+OVMVerificationAlloc/workers=8/holders=10000/temp=memory-16                                         21.00 ±  5%                 21.00 ± 19%        ~ (p=0.758 n=6)
+OVMMigration/workers=2/holders=100000/temp=disk-16                                                  31.50 ±  2%                 26.50 ±  2%  -15.87% (p=0.002 n=6)
+OVMVerification/workers=2/holders=100000/temp=disk-16                                               27.00 ±  4%                 21.00 ± 10%  -22.22% (p=0.002 n=6)
+OVMMigration/workers=8/holders=100000/temp=disk-16                                                  31.00 ±  0%                 27.00 ±  0%  -12.90% (p=0.002 n=6)
+OVMVerification/workers=8/holders=100000/temp=disk-16                                               26.00 ±  4%                 22.00 ±  0%  -15.38% (p=0.002 n=6)
+geomean                                                                                             19.30                       17.17        -11.03%
+
+                                                            │ /tmp/l2state-perf-20260919/baseline-benchstat.txt │ /tmp/l2state-perf-20260919/current-benchstat.txt │
+                                                            │                sampled-disk-peak-B                │   sampled-disk-peak-B    vs base                 │
+OVMMigration/workers=2/holders=10000/temp=disk-16                                                 14.13Mi ± 30%             16.38Mi ±  5%  +15.90% (p=0.002 n=6)
+OVMMigration/workers=2/holders=10000/temp=memory-16                                               2.002Mi ±  0%             2.002Mi ±  0%        ~ (p=0.545 n=6)
+OVMVerification/workers=2/holders=10000/temp=disk-16                                              14.19Mi ±  6%             15.89Mi ±  3%  +11.98% (p=0.002 n=6)
+OVMVerification/workers=2/holders=10000/temp=memory-16                                            2.002Mi ±  0%             2.002Mi ±  0%        ~ (p=0.545 n=6)
+OVMMigrationAlloc/workers=2/holders=10000/temp=disk-16                                            13.68Mi ±  1%             14.75Mi ±  3%   +7.82% (p=0.002 n=6)
+OVMMigrationAlloc/workers=2/holders=10000/temp=memory-16                                          2.092Mi ±  0%             2.092Mi ±  0%        ~ (p=0.182 n=6)
+OVMVerificationAlloc/workers=2/holders=10000/temp=disk-16                                         15.88Mi ± 17%             17.03Mi ± 14%        ~ (p=0.240 n=6)
+OVMVerificationAlloc/workers=2/holders=10000/temp=memory-16                                       2.092Mi ±  0%             2.092Mi ±  0%        ~ (p=1.000 n=6) ¹
+OVMMigration/workers=8/holders=10000/temp=disk-16                                                 11.10Mi ± 10%             11.29Mi ±  0%        ~ (p=0.054 n=6)
+OVMMigration/workers=8/holders=10000/temp=memory-16                                               2.002Mi ±  0%             2.002Mi ±  0%        ~ (p=1.000 n=6) ¹
+OVMVerification/workers=8/holders=10000/temp=disk-16                                              9.943Mi ± 14%            11.891Mi ±  7%  +19.59% (p=0.013 n=6)
+OVMVerification/workers=8/holders=10000/temp=memory-16                                            2.583Mi ± 34%             2.002Mi ± 69%        ~ (p=0.738 n=6)
+OVMMigrationAlloc/workers=8/holders=10000/temp=disk-16                                            16.86Mi ±  4%             18.13Mi ±  3%   +7.51% (p=0.002 n=6)
+OVMMigrationAlloc/workers=8/holders=10000/temp=memory-16                                          2.092Mi ±  0%             2.092Mi ±  0%        ~ (p=0.303 n=6)
+OVMVerificationAlloc/workers=8/holders=10000/temp=disk-16                                         18.58Mi ±  2%             19.72Mi ±  2%   +6.13% (p=0.002 n=6)
+OVMVerificationAlloc/workers=8/holders=10000/temp=memory-16                                       2.092Mi ±  0%             2.092Mi ±  0%        ~ (p=0.924 n=6)
+OVMMigration/workers=2/holders=100000/temp=disk-16                                                143.1Mi ±  6%             149.1Mi ± 10%        ~ (p=0.065 n=6)
+OVMVerification/workers=2/holders=100000/temp=disk-16                                             156.1Mi ±  2%             164.9Mi ±  1%   +5.62% (p=0.002 n=6)
+OVMMigration/workers=8/holders=100000/temp=disk-16                                                156.0Mi ±  2%             167.5Mi ±  3%   +7.36% (p=0.002 n=6)
+OVMVerification/workers=8/holders=100000/temp=disk-16                                             157.0Mi ± 12%             167.5Mi ±  2%   +6.65% (p=0.002 n=6)
+geomean                                                                                           10.61Mi                   10.99Mi         +3.62%
+¹ all samples are equal
+
+                                                            │ /tmp/l2state-perf-20260919/baseline-benchstat.txt │ /tmp/l2state-perf-20260919/current-benchstat.txt │
+                                                            │                sampled-heap-peak-B                │    sampled-heap-peak-B      vs base              │
+OVMMigration/workers=2/holders=10000/temp=disk-16                                                 24.44Mi ± 11%                26.30Mi ±  9%       ~ (p=0.132 n=6)
+OVMMigration/workers=2/holders=10000/temp=memory-16                                               41.05Mi ± 32%                44.21Mi ± 13%       ~ (p=0.937 n=6)
+OVMVerification/workers=2/holders=10000/temp=disk-16                                              25.25Mi ±  7%                25.64Mi ±  7%       ~ (p=0.485 n=6)
+OVMVerification/workers=2/holders=10000/temp=memory-16                                            43.63Mi ± 23%                49.14Mi ± 24%       ~ (p=0.132 n=6)
+OVMMigrationAlloc/workers=2/holders=10000/temp=disk-16                                            25.21Mi ± 10%                24.80Mi ±  6%       ~ (p=1.000 n=6)
+OVMMigrationAlloc/workers=2/holders=10000/temp=memory-16                                          54.93Mi ± 12%                49.62Mi ±  7%       ~ (p=0.240 n=6)
+OVMVerificationAlloc/workers=2/holders=10000/temp=disk-16                                         27.48Mi ±  3%                25.83Mi ±  6%  -5.98% (p=0.015 n=6)
+OVMVerificationAlloc/workers=2/holders=10000/temp=memory-16                                       43.24Mi ±  8%                44.75Mi ± 27%       ~ (p=0.310 n=6)
+OVMMigration/workers=8/holders=10000/temp=disk-16                                                 26.29Mi ±  2%                26.17Mi ±  9%       ~ (p=1.000 n=6)
+OVMMigration/workers=8/holders=10000/temp=memory-16                                               38.87Mi ±  7%                40.21Mi ± 12%       ~ (p=0.093 n=6)
+OVMVerification/workers=8/holders=10000/temp=disk-16                                              26.44Mi ± 11%                26.44Mi ± 10%       ~ (p=0.818 n=6)
+OVMVerification/workers=8/holders=10000/temp=memory-16                                            37.67Mi ±  4%                38.79Mi ±  6%  +2.98% (p=0.015 n=6)
+OVMMigrationAlloc/workers=8/holders=10000/temp=disk-16                                            29.63Mi ±  5%                28.79Mi ± 11%       ~ (p=0.394 n=6)
+OVMMigrationAlloc/workers=8/holders=10000/temp=memory-16                                          51.04Mi ±  6%                55.07Mi ± 13%  +7.88% (p=0.041 n=6)
+OVMVerificationAlloc/workers=8/holders=10000/temp=disk-16                                         28.04Mi ± 11%                28.09Mi ± 13%       ~ (p=0.818 n=6)
+OVMVerificationAlloc/workers=8/holders=10000/temp=memory-16                                       46.18Mi ± 10%                43.57Mi ± 24%       ~ (p=0.937 n=6)
+OVMMigration/workers=2/holders=100000/temp=disk-16                                                139.5Mi ±  2%                139.8Mi ±  1%       ~ (p=0.818 n=6)
+OVMVerification/workers=2/holders=100000/temp=disk-16                                             211.2Mi ±  2%                212.5Mi ±  2%       ~ (p=0.485 n=6)
+OVMMigration/workers=8/holders=100000/temp=disk-16                                                144.3Mi ±  2%                144.3Mi ±  1%       ~ (p=0.937 n=6)
+OVMVerification/workers=8/holders=100000/temp=disk-16                                             214.3Mi ±  2%                217.0Mi ±  4%       ~ (p=0.589 n=6)
+geomean                                                                                           47.42Mi                      47.91Mi        +1.04%
+
+                                                            │ /tmp/l2state-perf-20260919/baseline-benchstat.txt │   /tmp/l2state-perf-20260919/current-benchstat.txt   │
+                                                            │            sampled-memory-files-peak-B            │ sampled-memory-files-peak-B  vs base                 │
+OVMMigration/workers=2/holders=10000/temp=disk-16                                                 0.000 ±  0%                     0.000 ±  0%        ~ (p=1.000 n=6) ¹
+OVMMigration/workers=2/holders=10000/temp=memory-16                                             8.489Mi ± 24%                   9.841Mi ± 25%  +15.93% (p=0.026 n=6)
+OVMVerification/workers=2/holders=10000/temp=disk-16                                              0.000 ±  0%                     0.000 ±  0%        ~ (p=1.000 n=6) ¹
+OVMVerification/workers=2/holders=10000/temp=memory-16                                          9.176Mi ± 28%                  12.962Mi ± 28%        ~ (p=0.065 n=6)
+OVMMigrationAlloc/workers=2/holders=10000/temp=disk-16                                            0.000 ±  0%                     0.000 ±  0%        ~ (p=1.000 n=6) ¹
+OVMMigrationAlloc/workers=2/holders=10000/temp=memory-16                                        11.38Mi ± 42%                   12.66Mi ±  4%        ~ (p=0.372 n=6)
+OVMVerificationAlloc/workers=2/holders=10000/temp=disk-16                                         0.000 ±  0%                     0.000 ±  0%        ~ (p=1.000 n=6) ¹
+OVMVerificationAlloc/workers=2/holders=10000/temp=memory-16                                     11.38Mi ±  0%                   12.94Mi ±  7%  +13.72% (p=0.002 n=6)
+OVMMigration/workers=8/holders=10000/temp=disk-16                                                 0.000 ±  0%                     0.000 ±  0%        ~ (p=1.000 n=6) ¹
+OVMMigration/workers=8/holders=10000/temp=memory-16                                             7.944Mi ±  0%                   9.296Mi ±  0%  +17.02% (p=0.002 n=6)
+OVMVerification/workers=8/holders=10000/temp=disk-16                                              0.000 ±  0%                     0.000 ±  0%        ~ (p=1.000 n=6) ¹
+OVMVerification/workers=8/holders=10000/temp=memory-16                                          7.941Mi ±  6%                   9.281Mi ±  4%  +16.87% (p=0.002 n=6)
+OVMMigrationAlloc/workers=8/holders=10000/temp=disk-16                                            0.000 ±  0%                     0.000 ±  0%        ~ (p=1.000 n=6) ¹
+OVMMigrationAlloc/workers=8/holders=10000/temp=memory-16                                        12.25Mi ± 23%                   13.60Mi ± 15%  +10.99% (p=0.026 n=6)
+OVMVerificationAlloc/workers=8/holders=10000/temp=disk-16                                         0.000 ±  0%                     0.000 ±  0%        ~ (p=1.000 n=6) ¹
+OVMVerificationAlloc/workers=8/holders=10000/temp=memory-16                                     13.33Mi ± 12%                   14.38Mi ± 11%        ~ (p=0.240 n=6)
+OVMMigration/workers=2/holders=100000/temp=disk-16                                                0.000 ±  0%                     0.000 ±  0%        ~ (p=1.000 n=6) ¹
+OVMVerification/workers=2/holders=100000/temp=disk-16                                             0.000 ±  0%                     0.000 ±  0%        ~ (p=1.000 n=6) ¹
+OVMMigration/workers=8/holders=100000/temp=disk-16                                                0.000 ±  0%                     0.000 ±  0%        ~ (p=1.000 n=6) ¹
+OVMVerification/workers=8/holders=100000/temp=disk-16                                             0.000 ±  0%                     0.000 ±  0%        ~ (p=1.000 n=6) ¹
+geomean                                                                                                       ²                                 +6.30%               ²
+¹ all samples are equal
+² summaries must be >0 to compute geomean
+
+                                                            │ /tmp/l2state-perf-20260919/baseline-benchstat.txt │ /tmp/l2state-perf-20260919/current-benchstat.txt  │
+                                                            │             sampled-temp-disk-peak-B              │ sampled-temp-disk-peak-B  vs base                 │
+OVMMigration/workers=2/holders=10000/temp=disk-16                                               13.03Mi ± 39%                14.38Mi ±  0%  +10.38% (p=0.002 n=6)
+OVMMigration/workers=2/holders=10000/temp=memory-16                                               0.000 ±  0%                  0.000 ±  0%        ~ (p=1.000 n=6) ¹
+OVMVerification/workers=2/holders=10000/temp=disk-16                                            12.18Mi ±  7%                13.88Mi ±  3%  +13.95% (p=0.002 n=6)
+OVMVerification/workers=2/holders=10000/temp=memory-16                                            0.000 ±  0%                  0.000 ±  0%        ~ (p=1.000 n=6) ¹
+OVMMigrationAlloc/workers=2/holders=10000/temp=disk-16                                          13.68Mi ±  1%                14.71Mi ±  8%        ~ (p=0.180 n=6)
+OVMMigrationAlloc/workers=2/holders=10000/temp=memory-16                                          0.000 ±  0%                  0.000 ±  0%        ~ (p=1.000 n=6) ¹
+OVMVerificationAlloc/workers=2/holders=10000/temp=disk-16                                       13.78Mi ± 20%                14.93Mi ± 16%        ~ (p=0.240 n=6)
+OVMVerificationAlloc/workers=2/holders=10000/temp=memory-16                                       0.000 ±  0%                  0.000 ±  0%        ~ (p=1.000 n=6) ¹
+OVMMigration/workers=8/holders=10000/temp=disk-16                                               7.944Mi ±  0%                9.296Mi ±  0%  +17.02% (p=0.002 n=6)
+OVMMigration/workers=8/holders=10000/temp=memory-16                                               0.000 ±  0%                  0.000 ±  0%        ~ (p=1.000 n=6) ¹
+OVMVerification/workers=8/holders=10000/temp=disk-16                                            7.941Mi ±  0%                9.293Mi ±  0%  +17.03% (p=0.002 n=6)
+OVMVerification/workers=8/holders=10000/temp=memory-16                                            0.000 ±  0%                  0.000 ±  0%        ~ (p=1.000 n=6) ¹
+OVMMigrationAlloc/workers=8/holders=10000/temp=disk-16                                          16.49Mi ±  3%                17.78Mi ±  0%   +7.79% (p=0.002 n=6)
+OVMMigrationAlloc/workers=8/holders=10000/temp=memory-16                                          0.000 ±  0%                  0.000 ±  0%        ~ (p=1.000 n=6) ¹
+OVMVerificationAlloc/workers=8/holders=10000/temp=disk-16                                       16.49Mi ±  2%                17.63Mi ±  2%   +6.91% (p=0.002 n=6)
+OVMVerificationAlloc/workers=8/holders=10000/temp=memory-16                                       0.000 ±  0%                  0.000 ±  0%        ~ (p=1.000 n=6) ¹
+OVMMigration/workers=2/holders=100000/temp=disk-16                                              128.1Mi ±  3%                136.6Mi ±  2%   +6.63% (p=0.002 n=6)
+OVMVerification/workers=2/holders=100000/temp=disk-16                                           127.1Mi ±  2%                136.1Mi ±  1%   +7.06% (p=0.002 n=6)
+OVMMigration/workers=8/holders=100000/temp=disk-16                                              128.2Mi ±  1%                138.6Mi ±  3%   +8.11% (p=0.002 n=6)
+OVMVerification/workers=8/holders=100000/temp=disk-16                                           128.5Mi ± 11%                138.8Mi ±  1%   +7.99% (p=0.002 n=6)
+geomean                                                                                                       ²                              +5.79%               ²
+¹ all samples are equal
+² summaries must be >0 to compute geomean
+
+                                                            │ /tmp/l2state-perf-20260919/baseline-benchstat.txt │ /tmp/l2state-perf-20260919/current-benchstat.txt │
+                                                            │                      setup-s                      │          setup-s            vs base              │
+OVMMigration/workers=2/holders=10000/temp=disk-16                                                  142.6m ± 12%                 139.1m ±  3%  -2.49% (p=0.026 n=6)
+OVMMigration/workers=2/holders=10000/temp=memory-16                                                139.4m ±  7%                 137.6m ±  2%       ~ (p=0.102 n=6)
+OVMVerification/workers=2/holders=10000/temp=disk-16                                              1004.5m ±  4%                 950.4m ±  4%  -5.38% (p=0.009 n=6)
+OVMVerification/workers=2/holders=10000/temp=memory-16                                            1021.5m ±  3%                 952.7m ±  4%  -6.74% (p=0.009 n=6)
+OVMMigrationAlloc/workers=2/holders=10000/temp=disk-16                                             139.8m ±  2%                 142.7m ±  3%       ~ (p=0.310 n=6)
+OVMMigrationAlloc/workers=2/holders=10000/temp=memory-16                                           140.9m ±  3%                 138.7m ±  3%       ~ (p=0.240 n=6)
+OVMVerificationAlloc/workers=2/holders=10000/temp=disk-16                                           1.074 ±  2%                  1.014 ±  2%  -5.57% (p=0.002 n=6)
+OVMVerificationAlloc/workers=2/holders=10000/temp=memory-16                                         1.073 ±  3%                  1.001 ±  5%  -6.70% (p=0.009 n=6)
+OVMMigration/workers=8/holders=10000/temp=disk-16                                                  139.6m ±  6%                 139.2m ±  2%       ~ (p=0.452 n=6)
+OVMMigration/workers=8/holders=10000/temp=memory-16                                                141.0m ±  3%                 138.6m ±  1%  -1.74% (p=0.006 n=6)
+OVMVerification/workers=8/holders=10000/temp=disk-16                                               860.9m ±  6%                 873.4m ±  7%       ~ (p=0.699 n=6)
+OVMVerification/workers=8/holders=10000/temp=memory-16                                             874.9m ±  4%                 894.6m ±  5%       ~ (p=0.394 n=6)
+OVMMigrationAlloc/workers=8/holders=10000/temp=disk-16                                             141.1m ±  5%                 142.3m ±  3%       ~ (p=0.818 n=6)
+OVMMigrationAlloc/workers=8/holders=10000/temp=memory-16                                           140.2m ±  2%                 140.3m ±  3%       ~ (p=0.937 n=6)
+OVMVerificationAlloc/workers=8/holders=10000/temp=disk-16                                          983.0m ±  2%                 967.2m ±  2%       ~ (p=0.069 n=6)
+OVMVerificationAlloc/workers=8/holders=10000/temp=memory-16                                        972.4m ±  3%                 974.9m ±  2%       ~ (p=0.589 n=6)
+OVMMigration/workers=2/holders=100000/temp=disk-16                                                  1.430 ±  3%                  1.411 ± 10%       ~ (p=0.784 n=6)
+OVMVerification/workers=2/holders=100000/temp=disk-16                                               9.648 ±  7%                  8.989 ± 10%  -6.84% (p=0.026 n=6)
+OVMMigration/workers=8/holders=100000/temp=disk-16                                                  1.417 ± 15%                  1.421 ± 22%       ~ (p=0.937 n=6)
+OVMVerification/workers=8/holders=100000/temp=disk-16                                               8.608 ±  2%                  8.284 ±  5%       ~ (p=0.093 n=6)
+geomean                                                                                            584.8m                       573.4m        -1.95%
+
+                                                            │ /tmp/l2state-perf-20260919/baseline-benchstat.txt │ /tmp/l2state-perf-20260919/current-benchstat.txt │
+                                                            │                       B/op                        │           B/op             vs base               │
+OVMMigration/workers=2/holders=10000/temp=disk-16                                                 151.1Mi ±  0%               133.6Mi ±  1%  -11.61% (p=0.002 n=6)
+OVMMigration/workers=2/holders=10000/temp=memory-16                                               235.9Mi ±  9%               226.9Mi ± 10%        ~ (p=0.310 n=6)
+OVMVerification/workers=2/holders=10000/temp=disk-16                                              145.8Mi ±  0%               127.2Mi ±  0%  -12.75% (p=0.002 n=6)
+OVMVerification/workers=2/holders=10000/temp=memory-16                                            248.5Mi ± 14%               233.9Mi ± 12%        ~ (p=0.180 n=6)
+OVMMigrationAlloc/workers=2/holders=10000/temp=disk-16                                            188.1Mi ±  0%               169.6Mi ±  0%   -9.82% (p=0.002 n=6)
+OVMMigrationAlloc/workers=2/holders=10000/temp=memory-16                                          307.3Mi ±  3%               294.9Mi ±  3%   -4.06% (p=0.004 n=6)
+OVMVerificationAlloc/workers=2/holders=10000/temp=disk-16                                         181.5Mi ±  0%               162.9Mi ±  0%  -10.24% (p=0.002 n=6)
+OVMVerificationAlloc/workers=2/holders=10000/temp=memory-16                                       294.5Mi ±  3%               290.1Mi ±  4%   -1.49% (p=0.026 n=6)
+OVMMigration/workers=8/holders=10000/temp=disk-16                                                 150.2Mi ±  1%               136.8Mi ±  0%   -8.92% (p=0.002 n=6)
+OVMMigration/workers=8/holders=10000/temp=memory-16                                               222.9Mi ±  1%               217.5Mi ±  1%   -2.42% (p=0.002 n=6)
+OVMVerification/workers=8/holders=10000/temp=disk-16                                              144.9Mi ±  1%               129.6Mi ±  1%  -10.60% (p=0.002 n=6)
+OVMVerification/workers=8/holders=10000/temp=memory-16                                            216.9Mi ±  0%               211.4Mi ±  0%   -2.56% (p=0.002 n=6)
+OVMMigrationAlloc/workers=8/holders=10000/temp=disk-16                                            194.5Mi ±  1%               179.9Mi ±  1%   -7.52% (p=0.002 n=6)
+OVMMigrationAlloc/workers=8/holders=10000/temp=memory-16                                          312.6Mi ±  0%               304.2Mi ±  1%   -2.67% (p=0.002 n=6)
+OVMVerificationAlloc/workers=8/holders=10000/temp=disk-16                                         185.1Mi ±  0%               171.2Mi ±  1%   -7.51% (p=0.002 n=6)
+OVMVerificationAlloc/workers=8/holders=10000/temp=memory-16                                       303.8Mi ±  1%               296.6Mi ±  1%   -2.37% (p=0.002 n=6)
+OVMMigration/workers=2/holders=100000/temp=disk-16                                                1.794Gi ±  0%               1.502Gi ±  0%  -16.31% (p=0.002 n=6)
+OVMVerification/workers=2/holders=100000/temp=disk-16                                             1.787Gi ±  0%               1.493Gi ±  0%  -16.48% (p=0.002 n=6)
+OVMMigration/workers=8/holders=100000/temp=disk-16                                                1.794Gi ±  0%               1.548Gi ±  0%  -13.70% (p=0.002 n=6)
+OVMVerification/workers=8/holders=100000/temp=disk-16                                             1.787Gi ±  0%               1.539Gi ±  0%  -13.88% (p=0.002 n=6)
+geomean                                                                                           324.0Mi                     296.9Mi         -8.36%
+
+                                                            │ /tmp/l2state-perf-20260919/baseline-benchstat.txt │ /tmp/l2state-perf-20260919/current-benchstat.txt │
+                                                            │                     allocs/op                     │         allocs/op          vs base               │
+OVMMigration/workers=2/holders=10000/temp=disk-16                                                   2.310M ± 0%                 2.053M ± 0%  -11.14% (p=0.002 n=6)
+OVMMigration/workers=2/holders=10000/temp=memory-16                                                 2.305M ± 0%                 2.047M ± 0%  -11.21% (p=0.002 n=6)
+OVMVerification/workers=2/holders=10000/temp=disk-16                                                2.310M ± 0%                 2.051M ± 0%  -11.21% (p=0.002 n=6)
+OVMVerification/workers=2/holders=10000/temp=memory-16                                              2.305M ± 0%                 2.046M ± 0%  -11.23% (p=0.002 n=6)
+OVMMigrationAlloc/workers=2/holders=10000/temp=disk-16                                              2.821M ± 0%                 2.563M ± 0%   -9.16% (p=0.002 n=6)
+OVMMigrationAlloc/workers=2/holders=10000/temp=memory-16                                            2.818M ± 0%                 2.560M ± 0%   -9.18% (p=0.002 n=6)
+OVMVerificationAlloc/workers=2/holders=10000/temp=disk-16                                           2.818M ± 0%                 2.560M ± 0%   -9.16% (p=0.002 n=6)
+OVMVerificationAlloc/workers=2/holders=10000/temp=memory-16                                         2.814M ± 0%                 2.556M ± 0%   -9.17% (p=0.002 n=6)
+OVMMigration/workers=8/holders=10000/temp=disk-16                                                   2.285M ± 0%                 2.080M ± 0%   -8.96% (p=0.002 n=6)
+OVMMigration/workers=8/holders=10000/temp=memory-16                                                 2.277M ± 0%                 2.073M ± 0%   -8.97% (p=0.002 n=6)
+OVMVerification/workers=8/holders=10000/temp=disk-16                                                2.283M ± 0%                 2.080M ± 0%   -8.89% (p=0.002 n=6)
+OVMVerification/workers=8/holders=10000/temp=memory-16                                              2.274M ± 0%                 2.071M ± 0%   -8.94% (p=0.002 n=6)
+OVMMigrationAlloc/workers=8/holders=10000/temp=disk-16                                              2.804M ± 0%                 2.598M ± 0%   -7.35% (p=0.002 n=6)
+OVMMigrationAlloc/workers=8/holders=10000/temp=memory-16                                            2.795M ± 0%                 2.592M ± 0%   -7.29% (p=0.002 n=6)
+OVMVerificationAlloc/workers=8/holders=10000/temp=disk-16                                           2.799M ± 0%                 2.595M ± 0%   -7.31% (p=0.002 n=6)
+OVMVerificationAlloc/workers=8/holders=10000/temp=memory-16                                         2.791M ± 0%                 2.588M ± 0%   -7.29% (p=0.002 n=6)
+OVMMigration/workers=2/holders=100000/temp=disk-16                                                  31.26M ± 0%                 27.14M ± 0%  -13.21% (p=0.002 n=6)
+OVMVerification/workers=2/holders=100000/temp=disk-16                                               31.28M ± 0%                 27.12M ± 0%  -13.29% (p=0.002 n=6)
+OVMMigration/workers=8/holders=100000/temp=disk-16                                                  31.23M ± 0%                 27.70M ± 0%  -11.28% (p=0.002 n=6)
+OVMVerification/workers=8/holders=100000/temp=disk-16                                               31.22M ± 0%                 27.70M ± 0%  -11.28% (p=0.002 n=6)
+geomean                                                                                             4.193M                      3.782M        -9.79%
+
+                                                            │ /tmp/l2state-perf-20260919/baseline-benchstat.txt │ /tmp/l2state-perf-20260919/current-benchstat.txt │
+                                                            │                       rss-B                       │           rss-B             vs base              │
+OVMMigration/workers=2/holders=10000/temp=disk-16                                                  81.02Mi ± 2%                80.07Mi ±  4%       ~ (p=0.667 n=6)
+OVMMigration/workers=2/holders=10000/temp=memory-16                                                106.0Mi ± 9%                104.5Mi ±  9%       ~ (p=0.937 n=6)
+OVMVerification/workers=2/holders=10000/temp=disk-16                                               88.74Mi ± 2%                87.08Mi ±  1%  -1.88% (p=0.002 n=6)
+OVMVerification/workers=2/holders=10000/temp=memory-16                                             115.5Mi ± 9%                117.9Mi ± 14%       ~ (p=0.699 n=6)
+OVMMigrationAlloc/workers=2/holders=10000/temp=disk-16                                             85.48Mi ± 1%                83.93Mi ±  1%  -1.81% (p=0.009 n=6)
+OVMMigrationAlloc/workers=2/holders=10000/temp=memory-16                                           118.3Mi ± 4%                113.1Mi ±  7%       ~ (p=0.223 n=6)
+OVMVerificationAlloc/workers=2/holders=10000/temp=disk-16                                          91.92Mi ± 2%                89.82Mi ±  2%  -2.29% (p=0.004 n=6)
+OVMVerificationAlloc/workers=2/holders=10000/temp=memory-16                                        121.0Mi ± 3%                118.8Mi ±  9%       ~ (p=0.485 n=6)
+OVMMigration/workers=8/holders=10000/temp=disk-16                                                  82.97Mi ± 5%                81.86Mi ±  3%       ~ (p=1.000 n=6)
+OVMMigration/workers=8/holders=10000/temp=memory-16                                                100.7Mi ± 5%                100.4Mi ±  2%       ~ (p=0.699 n=6)
+OVMVerification/workers=8/holders=10000/temp=disk-16                                               91.72Mi ± 6%                89.62Mi ±  4%       ~ (p=0.240 n=6)
+OVMVerification/workers=8/holders=10000/temp=memory-16                                             110.0Mi ± 5%                106.8Mi ±  4%       ~ (p=0.180 n=6)
+OVMMigrationAlloc/workers=8/holders=10000/temp=disk-16                                             89.38Mi ± 2%                90.05Mi ±  4%       ~ (p=0.699 n=6)
+OVMMigrationAlloc/workers=8/holders=10000/temp=memory-16                                           121.1Mi ± 2%                122.9Mi ±  2%  +1.49% (p=0.026 n=6)
+OVMVerificationAlloc/workers=8/holders=10000/temp=disk-16                                         104.81Mi ± 6%                98.55Mi ±  2%  -5.98% (p=0.002 n=6)
+OVMVerificationAlloc/workers=8/holders=10000/temp=memory-16                                        132.3Mi ± 2%                133.8Mi ±  3%       ~ (p=0.310 n=6)
+OVMMigration/workers=2/holders=100000/temp=disk-16                                                 296.6Mi ± 5%                298.8Mi ±  7%       ~ (p=0.240 n=6)
+OVMVerification/workers=2/holders=100000/temp=disk-16                                              361.9Mi ± 6%                359.5Mi ±  5%       ~ (p=0.699 n=6)
+OVMMigration/workers=8/holders=100000/temp=disk-16                                                 286.2Mi ± 7%                290.4Mi ±  4%       ~ (p=0.699 n=6)
+OVMVerification/workers=8/holders=100000/temp=disk-16                                              376.2Mi ± 4%                373.4Mi ±  3%       ~ (p=0.974 n=6)
+geomean                                                                                            128.2Mi                     126.8Mi        -1.09%
+# benchstat A/B analysis of ovm-locality-pairs-2026-09-19.txt and ovm-locality-scale-2026-09-19.txt.
+# Each holder/temp/worker/operation configuration is a separate row, six observations per variant.
+# No profiling runs or exploratory observations are included. rss-B is whole-process maximum RSS.

@@ -157,8 +157,8 @@ func BenchmarkPartitionedMigrateEndToEnd(b *testing.B) {
 							if err != nil {
 								b.Fatal(err)
 							}
-							if result.Report.RecomputedRoot != root || result.Report.Counts != counts {
-								b.Fatalf("unexpected migration result: %+v", result.Report)
+							if requireDirectReport(b, result).RecomputedRoot != root || requireDirectReport(b, result).Counts != counts {
+								b.Fatalf("unexpected migration result: %+v", requireDirectReport(b, result))
 							}
 						}
 					})

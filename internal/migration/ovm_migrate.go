@@ -3,12 +3,14 @@ package migration
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/triedb"
@@ -41,31 +43,19 @@ func migrateOVM(ctx context.Context, opts MigrateOptions) (result MigrateResult,
 	if err != nil {
 		return result, err
 	}
-	phase := reporter.StartPhase("publish_artifact", nil, "output", opts.Output)
-	defer func() { phase.Finish(retErr) }()
-	if err := writeOVMReport(output.Path(), report); err != nil {
-		return result, err
-	}
-	stored, err := loadOVMReport(output.Path())
+	err = publishArtifact(ctx, output, report, artifactReportCodec[OVMVerificationReport]{
+		label: "OVM verification report", write: writeOVMReport,
+		load: loadOVMReport, equal: sameOVMReport,
+	}, func() error {
+		if err := rejectOVMOutputs(opts, opts.Output); err != nil {
+			return err
+		}
+		return confirmOVMReportInputs(ctx, opts.OVM, report)
+	}, reporter)
 	if err != nil {
 		return result, err
 	}
-	if !sameOVMReport(stored, report) {
-		return result, errors.New("reopened OVM report differs from generated report")
-	}
-	if err := rejectOVMOutputs(opts, opts.Output); err != nil {
-		return result, err
-	}
-	if err := ctx.Err(); err != nil {
-		return result, err
-	}
-	if err := confirmOVMReportInputs(ctx, opts.OVM, report); err != nil {
-		return result, err
-	}
-	if err := output.Commit(); err != nil {
-		return result, err
-	}
-	return MigrateResult{ArtifactPath: opts.Output, OVMReport: &report}, nil
+	return newOVMMigrateResult(opts.Output, report), nil
 }
 
 func validateOVMResources(opts MigrateOptions) error {
@@ -253,7 +243,7 @@ func (w *ovmWork) migrateOriginalAndHistory() error {
 	})
 	phase := w.reporter.StartPhase("migrate_original_state", nil, "root", w.source.head.StateRoot)
 	var stateErr error
-	w.original, stateErr = runOVMPartitioned(ctx, w.source.db, w.base, w.source.head.StateRoot, "hash", w.opts.Workers, w.limiter, nil, true)
+	w.original, stateErr = runOVMPartitioned(ctx, w.source.db, w.source.head.StateRoot, w.opts.Workers, w.limiter, nil, requireZeroOVMNative, persistentPartitionOutput(w.base, "hash"))
 	phase.Finish(stateErr)
 	if stateErr != nil {
 		cancel()
@@ -312,13 +302,10 @@ func (w *ovmWork) verifyMemoryOriginal(path string, config targetConfig, cache, 
 	return err
 }
 
-func runOVMPartitioned(ctx context.Context, source, target ethdb.Database, root common.Hash, scheme string, workers int, limiter *migrateWorkLimiter, readCode codeReader, zeroNative bool) (result StateResult, retErr error) {
+func runOVMPartitioned(ctx context.Context, source ethdb.Database, root common.Hash, workers int, limiter *migrateWorkLimiter, readCode codeReader, validateAccount func(common.Hash, *types.StateAccount) error, output partitionOutputFactory) (result StateResult, retErr error) {
 	tdb := triedb.NewDatabase(source, triedb.HashDefaults)
 	defer func() { retErr = errors.Join(retErr, tdb.Close()) }()
-	m := partitionedStateMigrator{ctx: ctx, source: source, trieDB: tdb, target: target, scheme: scheme, root: root, limiter: limiter, accounts: newMigrateAccountWindow(workers), codeHashes: newConcurrentHashSet(), readCode: readCode, requireZeroNative: zeroNative}
-	if target == nil {
-		m.outputFactory = func(bool) partitionStateOutput { return validationStateOutput{} }
-	}
+	m := partitionedStateMigrator{ctx: ctx, source: source, trieDB: tdb, outputFactory: output, root: root, limiter: limiter, accounts: newMigrateAccountWindow(workers), codeHashes: newConcurrentHashSet(), readCode: readCode, validateAccount: validateAccount}
 	result, writer, err := m.run()
 	if writer != nil {
 		defer writer.Abort()
@@ -341,7 +328,7 @@ func (w *ovmWork) finishState(root string, newRoot common.Hash, checkpoint bundl
 		return StateResult{}, target, err
 	}
 	phase := w.reporter.StartPhase("replay_converted_state", nil, "root", newRoot)
-	state, err := runOVMPartitioned(w.ctx, w.base, nil, newRoot, "hash", w.opts.Workers, w.limiter, target.readCode, false)
+	state, err := runOVMPartitioned(w.ctx, w.base, newRoot, w.opts.Workers, w.limiter, target.readCode, nil, newValidationOutput)
 	phase.Finish(err)
 	return state, target, err
 }
@@ -364,7 +351,7 @@ func (w *ovmWork) finalTarget(root string, newRoot common.Hash, checkpoint bundl
 		}
 	}()
 	phase := w.reporter.StartPhase("build_converted_state", nil, "root", newRoot)
-	final, err = runOVMPartitioned(w.ctx, w.base, db, newRoot, w.opts.Scheme, w.opts.Workers, w.limiter, target.readCode, false)
+	final, err = runOVMPartitioned(w.ctx, w.base, newRoot, w.opts.Workers, w.limiter, target.readCode, nil, persistentPartitionOutput(db, w.opts.Scheme))
 	phase.Finish(err)
 	if err != nil {
 		return final, target, err
@@ -401,4 +388,12 @@ func (w *ovmWork) finalTarget(root string, newRoot common.Hash, checkpoint bundl
 
 func (w *ovmWork) confirmInputs() error {
 	return confirmOVMInputs(w.ctx, w.opts.OVM, w.inputs)
+}
+
+// requireZeroOVMNative is conversion policy, independent of traversal scheduling.
+func requireZeroOVMNative(hash common.Hash, account *types.StateAccount) error {
+	if !account.Balance.IsZero() {
+		return fmt.Errorf("OVM migration requires zero source native balance: account %s has %s", hash, account.Balance)
+	}
+	return nil
 }

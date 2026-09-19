@@ -1,0 +1,174 @@
+# macOS-27.0-arm64-arm-64bit-Mach-O
+# source-sha256=5d253e788c55d40c66135bb48c877be76628d182b37977076d196b6efc501a64
+# 100000 sequential keys; sparse stride=1000. Disk Pebble, cache=16 MiB, handles=16.
+# Fixture setup and deferred database cleanup excluded; OS caches not flushed. Pebble background work remains enabled.
+# Six alternating fresh processes per variant/configuration; 3 iterations per process.
+# Earlier exploratory component runs including database close are excluded.
+# sample=1 sparse=false variant=point
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMStorageEvidence/sparse=false/point-16         	       3	  97300444 ns/op	 8211042 B/op	  200469 allocs/op
+PASS
+# sample=1 sparse=false variant=cursor
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMStorageEvidence/sparse=false/cursor-16         	       3	  11521500 ns/op	 3424130 B/op	  100459 allocs/op
+PASS
+# sample=1 sparse=true variant=point
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMStorageEvidence/sparse=true/point-16         	       3	    270681 ns/op	   43056 B/op	     277 allocs/op
+PASS
+# sample=1 sparse=true variant=cursor
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMStorageEvidence/sparse=true/cursor-16         	       3	    528597 ns/op	   28128 B/op	     569 allocs/op
+PASS
+# sample=2 sparse=false variant=cursor
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMStorageEvidence/sparse=false/cursor-16         	       3	  11913500 ns/op	 3423104 B/op	  100442 allocs/op
+PASS
+# sample=2 sparse=false variant=point
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMStorageEvidence/sparse=false/point-16         	       3	  96144972 ns/op	 8193416 B/op	  200438 allocs/op
+PASS
+# sample=2 sparse=true variant=cursor
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMStorageEvidence/sparse=true/cursor-16         	       3	    476083 ns/op	   45530 B/op	     586 allocs/op
+PASS
+# sample=2 sparse=true variant=point
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMStorageEvidence/sparse=true/point-16         	       3	    340250 ns/op	   22288 B/op	     265 allocs/op
+PASS
+# sample=3 sparse=false variant=point
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMStorageEvidence/sparse=false/point-16         	       3	  94416278 ns/op	 8202458 B/op	  200470 allocs/op
+PASS
+# sample=3 sparse=false variant=cursor
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMStorageEvidence/sparse=false/cursor-16         	       3	  12112708 ns/op	 3390312 B/op	  100423 allocs/op
+PASS
+# sample=3 sparse=true variant=point
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMStorageEvidence/sparse=true/point-16         	       3	    203681 ns/op	   21130 B/op	     274 allocs/op
+PASS
+# sample=3 sparse=true variant=cursor
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMStorageEvidence/sparse=true/cursor-16         	       3	    434000 ns/op	   44568 B/op	     652 allocs/op
+PASS
+# sample=4 sparse=false variant=cursor
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMStorageEvidence/sparse=false/cursor-16         	       3	  13056583 ns/op	 3400528 B/op	  100445 allocs/op
+PASS
+# sample=4 sparse=false variant=point
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMStorageEvidence/sparse=false/point-16         	       3	  95769792 ns/op	 8207776 B/op	  200455 allocs/op
+PASS
+# sample=4 sparse=true variant=cursor
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMStorageEvidence/sparse=true/cursor-16         	       3	    455542 ns/op	   48997 B/op	     587 allocs/op
+PASS
+# sample=4 sparse=true variant=point
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMStorageEvidence/sparse=true/point-16         	       3	    240500 ns/op	   64837 B/op	     290 allocs/op
+PASS
+# sample=5 sparse=false variant=point
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMStorageEvidence/sparse=false/point-16         	       3	  97879069 ns/op	 8219336 B/op	  200481 allocs/op
+PASS
+# sample=5 sparse=false variant=cursor
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMStorageEvidence/sparse=false/cursor-16         	       3	  11964667 ns/op	 3416946 B/op	  100435 allocs/op
+PASS
+# sample=5 sparse=true variant=point
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMStorageEvidence/sparse=true/point-16         	       3	    296889 ns/op	   42944 B/op	     276 allocs/op
+PASS
+# sample=5 sparse=true variant=cursor
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMStorageEvidence/sparse=true/cursor-16         	       3	    450986 ns/op	   66397 B/op	     637 allocs/op
+PASS
+# sample=6 sparse=false variant=cursor
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMStorageEvidence/sparse=false/cursor-16         	       3	  11897833 ns/op	 3418581 B/op	  100435 allocs/op
+PASS
+# sample=6 sparse=false variant=point
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMStorageEvidence/sparse=false/point-16         	       3	  96621069 ns/op	 8214928 B/op	  200467 allocs/op
+PASS
+# sample=6 sparse=true variant=cursor
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMStorageEvidence/sparse=true/cursor-16         	       3	    478264 ns/op	   49141 B/op	     589 allocs/op
+PASS
+# sample=6 sparse=true variant=point
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkOVMStorageEvidence/sparse=true/point-16         	       3	    262778 ns/op	   22930 B/op	     293 allocs/op
+PASS

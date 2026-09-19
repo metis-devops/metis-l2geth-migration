@@ -249,9 +249,16 @@ with `--temp-db memory`. Cache and handles must each be at least 64;
 four concurrent database allowances each receive one quarter. Independent node
 inventory checks also use the existing bounded temporary index.
 
+Balance classification orders fixed-size jobs by account hash in the temporary
+Pebble index to reduce repeated trie reads. This adds 117 logical bytes per
+indexed balance slot before database overhead and compression; actual temporary
+space also includes WALs and compaction. `--temp-db memory` holds these files in
+RAM. Account-reader windows and the worker/job limits remain bounded.
+
 With the default `--temp-db disk`, allow disk space for the original state, conversion scratch nodes, evidence and
 final target simultaneously. Standalone verification independently replays the
-original state and conversion in a temporary sibling directory, but does not
+original state and conversion under `verify --temp-dir PATH`, or the system
+temporary directory honoring `TMPDIR` by default, but does not
 write another final artifact. Its `replay_converted_state` phase recomputes the
 expected root and counts before the actual artifact receives full state and
 inventory verification. Source access and scratch space for original state,
@@ -259,6 +266,9 @@ conversion nodes, evidence and inventory indexes are still required. All supplie
 code, witness and alloc file digests are confirmed over raw bytes immediately
 before publication or verification success; confirmation neither reparses the
 inputs nor rewrites their evidence index.
+The chosen parent must exist outside all inputs. Verification no longer writes
+beside the artifact; its parent can be read-only. Memory mode may create an empty
+physical workspace there, while its temporary database files remain in RAM.
 
 See [OVM measurements](benchmarks/ovm.md) for the latest standalone
 verification comparison and separately labeled historical ancient-read results.

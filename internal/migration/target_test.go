@@ -66,11 +66,11 @@ func testTargetMatrixGoldenCanary(t *testing.T, tempMode TempDBMode) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if imported.Report.DBEngine != tc.engine || direct.Report.DBEngine != tc.engine {
-					t.Fatalf("unexpected engines: %q / %q", imported.Report.DBEngine, direct.Report.DBEngine)
+				if imported.Report.DBEngine != tc.engine || requireDirectReport(t, direct).DBEngine != tc.engine {
+					t.Fatalf("unexpected engines: %q / %q", imported.Report.DBEngine, requireDirectReport(t, direct).DBEngine)
 				}
-				if imported.Report.Counts != direct.Report.Counts || direct.Report.RecomputedRoot != exported.Manifest.Source.HeadBefore.StateRoot || string(direct.Report.StateLayout) != tc.layout {
-					t.Fatalf("reports disagree: %+v %+v", imported.Report, direct.Report)
+				if imported.Report.Counts != requireDirectReport(t, direct).Counts || requireDirectReport(t, direct).RecomputedRoot != exported.Manifest.Source.HeadBefore.StateRoot || string(requireDirectReport(t, direct).StateLayout) != tc.layout {
+					t.Fatalf("reports disagree: %+v %+v", imported.Report, requireDirectReport(t, direct))
 				}
 				for _, artifact := range []string{imported.ArtifactPath, direct.ArtifactPath} {
 					assertArtifactHeadMetadata(t, artifact, exported.Manifest.Source)

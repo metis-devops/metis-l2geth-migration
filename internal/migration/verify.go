@@ -21,6 +21,7 @@ import (
 
 // VerifyOptions configures independent bundle and optional artifact verification.
 type VerifyOptions struct {
+	TempDir  string
 	TempDB   TempDBMode
 	Bundle   string
 	Artifact string
@@ -51,19 +52,28 @@ func Verify(ctx context.Context, opts VerifyOptions) (result VerificationReport,
 	if opts.Bundle == "" {
 		return VerificationReport{}, errors.New("bundle path is required")
 	}
+	var stored VerificationReport
+	if opts.Artifact != "" {
+		var err error
+		stored, err = loadVerificationReport(opts.Artifact)
+		if err != nil {
+			return VerificationReport{}, err
+		}
+		if stored.Scheme != rawdb.HashScheme && stored.Scheme != rawdb.PathScheme {
+			return VerificationReport{}, fmt.Errorf("artifact report has invalid database scheme %q", stored.Scheme)
+		}
+	}
+	workspace, err := prepareVerificationWorkspace(opts.TempDir, opts.Bundle, opts.Artifact)
+	if err != nil {
+		return VerificationReport{}, err
+	}
+	defer func() { retErr = errors.Join(retErr, workspace.Close()) }()
 	bundleResult, err := scanBundle(ctx, opts.Bundle, bundleScanOptions{BorrowRecords: true}, reporter)
 	if err != nil {
 		return VerificationReport{}, err
 	}
 	if opts.Artifact == "" {
 		return newVerificationReport(bundleResult, "bundle"), nil
-	}
-	stored, err := loadVerificationReport(opts.Artifact)
-	if err != nil {
-		return VerificationReport{}, err
-	}
-	if stored.Scheme != rawdb.HashScheme && stored.Scheme != rawdb.PathScheme {
-		return VerificationReport{}, fmt.Errorf("artifact report has invalid database scheme %q", stored.Scheme)
 	}
 	if err := compareStoredReport(stored, bundleResult); err != nil {
 		return VerificationReport{}, err
@@ -72,7 +82,11 @@ func Verify(ctx context.Context, opts VerifyOptions) (result VerificationReport,
 	if err != nil {
 		return VerificationReport{}, err
 	}
-	state, err := verifyTargetDatabase(ctx, filepath.Join(opts.Artifact, artifactDatabaseDirName), stored.Scheme, target, bundleResult.Manifest.Source, bundleResult.State, opts.CacheMB, opts.Handles, reporter, trieNodeIndexOptions{Mode: opts.TempDB, CacheMB: opts.CacheMB, Handles: opts.Handles})
+	scratch, err := workspace.nodeIndex(ctx, opts.TempDB, stored.Scheme, opts.CacheMB, opts.Handles)
+	if err != nil {
+		return VerificationReport{}, err
+	}
+	state, err := verifyTargetDatabase(ctx, filepath.Join(opts.Artifact, artifactDatabaseDirName), stored.Scheme, target, bundleResult.Manifest.Source, bundleResult.State, opts.CacheMB, opts.Handles, reporter, scratch)
 	if err != nil {
 		return VerificationReport{}, err
 	}

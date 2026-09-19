@@ -66,7 +66,9 @@ for inventory, report and compatibility requirements.
 Progress goes to stderr; stdout contains one final JSON result. Use `--quiet`
 to suppress progress, or `<command> --help` for flags. Temporary databases use
 disk by default; `--temp-db memory` retains scratch files in RAM with no hard
-memory cap or automatic spill. See [resource and failure handling](docs/operations.md)
+memory cap or automatic spill. Independent verification accepts `--temp-dir PATH`
+to select an existing scratch parent; the default is the system temporary directory
+(including for OVM verification). See [resource and failure handling](docs/operations.md)
 before large runs.
 
 OVM conversion requires a reviewed, storage-compatible runtime and complete

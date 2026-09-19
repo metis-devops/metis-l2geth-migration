@@ -131,7 +131,7 @@ func TestOVMZeroTransferConvertsAllTargets(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					r := result.OVMReport
+					r := requireOVMReport(t, result)
 					if r.Target.Root != wantRoot || r.Target.Root == oldRoot || r.History.Transfers != 2 {
 						t.Fatalf("unexpected root or event count: %+v", r)
 					}

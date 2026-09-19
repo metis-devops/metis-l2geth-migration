@@ -94,7 +94,7 @@ func TestOVMAncientsPastExecutedHead(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			got, want := converted.OVMReport, baseline.OVMReport
+			got, want := requireOVMReport(t, converted), requireOVMReport(t, baseline)
 			if got.Target != want.Target || got.History != want.History {
 				t.Fatal("freezing later blocks changed selected state or history")
 			}
@@ -166,7 +166,7 @@ func testOVMEquivalentHotColdReceipts(t *testing.T, tempMode TempDBMode) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if converted.OVMReport.History != baseline.OVMReport.History || converted.OVMReport.Target != baseline.OVMReport.Target {
+				if requireOVMReport(t, converted).History != requireOVMReport(t, baseline).History || requireOVMReport(t, converted).Target != requireOVMReport(t, baseline).Target {
 					t.Fatal("equivalent hot receipt encoding changed selected cold evidence or target")
 				}
 				if _, err := VerifyOVM(t.Context(), OVMVerifyOptions{TempDB: tempMode, SourceChaindata: f.source, Artifact: opts.Output, CacheMB: 64, Handles: 64, Workers: 2, OVM: opts.OVM}); err != nil {

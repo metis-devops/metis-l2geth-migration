@@ -28,11 +28,11 @@ func TestOVMRetentionVerificationTampering(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			original, err := json.Marshal(r.OVMReport)
+			original, err := json.Marshal(requireOVMReport(t, r))
 			if err != nil {
 				t.Fatal(err)
 			}
-			verify := OVMVerifyOptions{TempDB: mode, SourceChaindata: f.source, Artifact: opts.Output, CacheMB: 64, Handles: 64, Workers: 2, OVM: opts.OVM}
+			verify := OVMVerifyOptions{TempDir: filepath.Dir(opts.Output), TempDB: mode, SourceChaindata: f.source, Artifact: opts.Output, CacheMB: 64, Handles: 64, Workers: 2, OVM: opts.OVM}
 			for _, kind := range []string{"missing-input", "different-input", "same-address-new-bytes", "missing-evidence", "missing-both", "null", "upper-null", "unknown", "missing-digest", "short-digest", "zero-digest"} {
 				t.Run(kind, func(t *testing.T) {
 					v := verify
@@ -88,7 +88,7 @@ func TestOVMRetentionVerificationTampering(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if without.OVMReport.ERC20Retention != nil {
+			if requireOVMReport(t, without).ERC20Retention != nil {
 				t.Fatal("absent list added evidence")
 			}
 			verify.Artifact = plain.Output
@@ -102,7 +102,7 @@ func TestOVMRetentionVerificationTampering(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if withEmpty.OVMReport.ERC20Retention == nil || withEmpty.OVMReport.Target != without.OVMReport.Target {
+			if requireOVMReport(t, withEmpty).ERC20Retention == nil || requireOVMReport(t, withEmpty).Target != requireOVMReport(t, without).Target {
 				t.Fatal("empty list lost presence or changed state")
 			}
 			verify.Artifact = empty.Output
@@ -173,11 +173,11 @@ func TestOVMRetentionCancellationAndMutation(t *testing.T) {
 							t.Fatal(err)
 						}
 					}}
-					_, err = VerifyOVM(t.Context(), OVMVerifyOptions{TempDB: mode, SourceChaindata: f.source, Artifact: opts.Output, CacheMB: 64, Handles: 64, Workers: 4, OVM: opts.OVM, Progress: ProgressOptions{Logger: log.NewLogger(log.NewTerminalHandler(&writer2, false))}})
+					_, err = VerifyOVM(t.Context(), OVMVerifyOptions{TempDir: filepath.Dir(opts.Output), TempDB: mode, SourceChaindata: f.source, Artifact: opts.Output, CacheMB: 64, Handles: 64, Workers: 4, OVM: opts.OVM, Progress: ProgressOptions{Logger: log.NewLogger(log.NewTerminalHandler(&writer2, false))}})
 					if err == nil || !strings.Contains(err.Error(), "retain list changed") {
 						t.Fatalf("late verification mutation not caught: %v", err)
 					}
-					matches, err := filepath.Glob(filepath.Join(filepath.Dir(opts.Output), ".l2state-ovm-verify-*"))
+					matches, err := filepath.Glob(filepath.Join(filepath.Dir(opts.Output), ".l2state-verify-*"))
 					if err != nil || len(matches) != 0 {
 						t.Fatalf("verification scratch leaked: %v %v", matches, err)
 					}

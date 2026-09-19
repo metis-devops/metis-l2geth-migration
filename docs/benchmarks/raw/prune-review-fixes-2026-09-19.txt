@@ -1,0 +1,1323 @@
+# macOS-27.0-arm64-arm-64bit-Mach-O CPUs=16
+# source-sha256=f45845978e3e5024d251f80e73cceda8bba716f3451965f98ad3a53ca8312c34 cache-mb=128 handles=128
+# Fresh process per workload/mode/repetition; caches are not flushed.
+# sample=1 workload=light mode=serial
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneSerial/light/collect-16 	       1	 146859584 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  26165248 peak-heap-B	   3413577 temp-disk-B	34406736 B/op	  443025 allocs/op
+BenchmarkPruneSerial/light/verify-16  	       1	  38127626 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  32546816 peak-heap-B	   3413580 temp-disk-B	10944024 B/op	  191101 allocs/op
+BenchmarkPruneSerial/light/scan-16    	       1	  38587168 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  32899072 peak-heap-B	   3413578 temp-disk-B	 4113896 B/op	   37145 allocs/op
+BenchmarkPruneSerial/light/delete-16  	       1	  34913041 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  47464448 peak-heap-B	   3413580 temp-disk-B	10578064 B/op	   25807 allocs/op
+BenchmarkPruneSerial/light/end-to-end-16         	       1	 367032457 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  98131968 peak-heap-B	112734504 B/op	 1154711 allocs/op
+PASS
+# sample=1 workload=light mode=workers=2
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=2/light/collect-16         	       1	 101684500 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  26664960 peak-heap-B	   2536878 temp-disk-B	34415400 B/op	  448799 allocs/op
+BenchmarkPruneOptimized/workers=2/light/verify-16          	       1	  23748458 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  32907264 peak-heap-B	   3413577 temp-disk-B	10744992 B/op	  195157 allocs/op
+BenchmarkPruneOptimized/workers=2/light/scan-16            	       1	  13192874 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  31137792 peak-heap-B	   3413580 temp-disk-B	 2100360 B/op	   20610 allocs/op
+BenchmarkPruneOptimized/workers=2/light/delete-16          	       1	   7604708 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  45924352 peak-heap-B	   3413577 temp-disk-B	 8562944 B/op	    9266 allocs/op
+BenchmarkPruneOptimized/workers=2/light/end-to-end-16      	       1	 221336667 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  97959936 peak-heap-B	106657856 B/op	 1100152 allocs/op
+PASS
+# sample=1 workload=light mode=workers=4
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=4/light/collect-16         	       1	  87708500 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  29564928 peak-heap-B	   2536924 temp-disk-B	34894696 B/op	  436552 allocs/op
+BenchmarkPruneOptimized/workers=4/light/verify-16          	       1	  15813208 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  32882688 peak-heap-B	   3413580 temp-disk-B	10738160 B/op	  195109 allocs/op
+BenchmarkPruneOptimized/workers=4/light/scan-16            	       1	  11917793 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  31031296 peak-heap-B	   3413580 temp-disk-B	 2099704 B/op	   20613 allocs/op
+BenchmarkPruneOptimized/workers=4/light/delete-16          	       1	   7192416 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  45793280 peak-heap-B	   3413580 temp-disk-B	 8552440 B/op	    9250 allocs/op
+BenchmarkPruneOptimized/workers=4/light/end-to-end-16      	       1	 189803334 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 100597760 peak-heap-B	106683816 B/op	 1075488 allocs/op
+PASS
+# sample=1 workload=light mode=workers=8
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=8/light/collect-16         	       1	  97703916 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  28540928 peak-heap-B	   2537016 temp-disk-B	36610920 B/op	  432819 allocs/op
+BenchmarkPruneOptimized/workers=8/light/verify-16          	       1	  13146458 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  33546240 peak-heap-B	   3413580 temp-disk-B	10773760 B/op	  195075 allocs/op
+BenchmarkPruneOptimized/workers=8/light/scan-16            	       1	  11358042 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  31195136 peak-heap-B	   3413580 temp-disk-B	 2109160 B/op	   20634 allocs/op
+BenchmarkPruneOptimized/workers=8/light/delete-16          	       1	   7563501 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  45760512 peak-heap-B	   3413580 temp-disk-B	 8568936 B/op	    9287 allocs/op
+BenchmarkPruneOptimized/workers=8/light/end-to-end-16      	       1	 208570583 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 102727680 peak-heap-B	108557544 B/op	 1069528 allocs/op
+PASS
+# sample=1 workload=light mode=workers=16
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=16/light/collect-16         	       1	 127718625 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  30908416 peak-heap-B	   4436302 temp-disk-B	40555496 B/op	  433100 allocs/op
+BenchmarkPruneOptimized/workers=16/light/verify-16          	       1	  12930583 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  34488320 peak-heap-B	   3413580 temp-disk-B	10803616 B/op	  195040 allocs/op
+BenchmarkPruneOptimized/workers=16/light/scan-16            	       1	  11382292 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  31416320 peak-heap-B	   3413580 temp-disk-B	 2108720 B/op	   20642 allocs/op
+BenchmarkPruneOptimized/workers=16/light/delete-16          	       1	   7403541 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  45842432 peak-heap-B	   3413580 temp-disk-B	 8571416 B/op	    9299 allocs/op
+BenchmarkPruneOptimized/workers=16/light/end-to-end-16      	       1	 213943583 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  99983360 peak-heap-B	112192688 B/op	 1068554 allocs/op
+PASS
+# sample=1 workload=dense-storage mode=serial
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneSerial/dense-storage/collect-16 	       1	 214392707 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  28385280 peak-heap-B	   5265761 temp-disk-B	43083088 B/op	  545076 allocs/op
+BenchmarkPruneSerial/dense-storage/verify-16  	       1	  62132208 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  36413440 peak-heap-B	   5265761 temp-disk-B	12427912 B/op	  198510 allocs/op
+BenchmarkPruneSerial/dense-storage/scan-16    	       1	  60775625 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  37683200 peak-heap-B	   5265761 temp-disk-B	 5576904 B/op	   51207 allocs/op
+BenchmarkPruneSerial/dense-storage/delete-16  	       1	  55639458 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  55386112 peak-heap-B	   5265761 temp-disk-B	12979672 B/op	   34508 allocs/op
+BenchmarkPruneSerial/dense-storage/end-to-end-16         	       1	 527298209 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 113385472 peak-heap-B	135645072 B/op	 1392039 allocs/op
+PASS
+# sample=1 workload=dense-storage mode=workers=2
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=2/dense-storage/collect-16 	       1	 140770333 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  28065792 peak-heap-B	   5273084 temp-disk-B	43446176 B/op	  551393 allocs/op
+BenchmarkPruneOptimized/workers=2/dense-storage/verify-16  	       1	  34982584 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  37470208 peak-heap-B	   5265761 temp-disk-B	13163728 B/op	  204600 allocs/op
+BenchmarkPruneOptimized/workers=2/dense-storage/scan-16    	       1	  15344667 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  35766272 peak-heap-B	   5265761 temp-disk-B	 3333456 B/op	   28637 allocs/op
+BenchmarkPruneOptimized/workers=2/dense-storage/delete-16  	       1	   9655375 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  53387264 peak-heap-B	   5265761 temp-disk-B	10755096 B/op	   11943 allocs/op
+BenchmarkPruneOptimized/workers=2/dense-storage/end-to-end-16         	       1	 312259333 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 114311168 peak-heap-B	130134328 B/op	 1315985 allocs/op
+PASS
+# sample=1 workload=dense-storage mode=workers=4
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=4/dense-storage/collect-16 	       1	 133565792 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  29982720 peak-heap-B	   5271051 temp-disk-B	44220840 B/op	  534069 allocs/op
+BenchmarkPruneOptimized/workers=4/dense-storage/verify-16  	       1	  22313125 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  38051840 peak-heap-B	   5265761 temp-disk-B	13467072 B/op	  204683 allocs/op
+BenchmarkPruneOptimized/workers=4/dense-storage/scan-16    	       1	  14145292 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  35856384 peak-heap-B	   5265761 temp-disk-B	 3343560 B/op	   28646 allocs/op
+BenchmarkPruneOptimized/workers=4/dense-storage/delete-16  	       1	   8904876 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  53673984 peak-heap-B	   5265761 temp-disk-B	10742136 B/op	   11935 allocs/op
+BenchmarkPruneOptimized/workers=4/dense-storage/end-to-end-16         	       1	 245165667 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 114294784 peak-heap-B	130666744 B/op	 1284261 allocs/op
+PASS
+# sample=1 workload=dense-storage mode=workers=8
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=8/dense-storage/collect-16 	       1	 144813250 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  32825344 peak-heap-B	   5271312 temp-disk-B	46292456 B/op	  530504 allocs/op
+BenchmarkPruneOptimized/workers=8/dense-storage/verify-16  	       1	  19183583 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  38805504 peak-heap-B	   5265761 temp-disk-B	13850672 B/op	  204800 allocs/op
+BenchmarkPruneOptimized/workers=8/dense-storage/scan-16    	       1	  13917875 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  35831808 peak-heap-B	   5265761 temp-disk-B	 3343768 B/op	   28660 allocs/op
+BenchmarkPruneOptimized/workers=8/dense-storage/delete-16  	       1	   8872750 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  53477376 peak-heap-B	   5265761 temp-disk-B	10754984 B/op	   11961 allocs/op
+BenchmarkPruneOptimized/workers=8/dense-storage/end-to-end-16         	       1	 257175583 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 118071296 peak-heap-B	133609624 B/op	 1277662 allocs/op
+PASS
+# sample=1 workload=dense-storage mode=workers=16
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=16/dense-storage/collect-16 	       1	 127236834 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  37429248 peak-heap-B	   4957933 temp-disk-B	49755952 B/op	  528811 allocs/op
+BenchmarkPruneOptimized/workers=16/dense-storage/verify-16  	       1	  20936834 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  40353792 peak-heap-B	   5265761 temp-disk-B	13965024 B/op	  204321 allocs/op
+BenchmarkPruneOptimized/workers=16/dense-storage/scan-16    	       1	  14129749 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  35610624 peak-heap-B	   5265761 temp-disk-B	 3345792 B/op	   28671 allocs/op
+BenchmarkPruneOptimized/workers=16/dense-storage/delete-16  	       1	   8871417 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  53387264 peak-heap-B	   5265761 temp-disk-B	10757224 B/op	   11966 allocs/op
+BenchmarkPruneOptimized/workers=16/dense-storage/end-to-end-16         	       1	 270606374 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 124010496 peak-heap-B	137207336 B/op	 1274725 allocs/op
+PASS
+# sample=1 workload=storage-1024 mode=serial
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneSerial/storage-1024/collect-16 	       1	 116859084 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  19841024 peak-heap-B	   2265981 temp-disk-B	20989752 B/op	  272624 allocs/op
+BenchmarkPruneSerial/storage-1024/verify-16  	       1	  22356541 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  20389888 peak-heap-B	   2265981 temp-disk-B	 6071360 B/op	  104598 allocs/op
+BenchmarkPruneSerial/storage-1024/scan-16    	       1	  26683667 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  21569536 peak-heap-B	   2265981 temp-disk-B	 3194056 B/op	   25418 allocs/op
+BenchmarkPruneSerial/storage-1024/delete-16  	       1	  23873542 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  29630464 peak-heap-B	   2265981 temp-disk-B	 6569992 B/op	   16999 allocs/op
+BenchmarkPruneSerial/storage-1024/end-to-end-16         	       1	 285877625 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  64880640 peak-heap-B	76112776 B/op	  702929 allocs/op
+PASS
+# sample=1 workload=storage-1024 mode=workers=2
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=2/storage-1024/collect-16 	       1	  87778666 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  20627456 peak-heap-B	   1360891 temp-disk-B	20368000 B/op	  258705 allocs/op
+BenchmarkPruneOptimized/workers=2/storage-1024/verify-16  	       1	  14539916 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  19619840 peak-heap-B	   2265981 temp-disk-B	 5300672 B/op	   90545 allocs/op
+BenchmarkPruneOptimized/workers=2/storage-1024/scan-16    	       1	   6905000 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  20447232 peak-heap-B	   2265981 temp-disk-B	 2091296 B/op	   14330 allocs/op
+BenchmarkPruneOptimized/workers=2/storage-1024/delete-16  	       1	   4336417 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  28655616 peak-heap-B	   2265981 temp-disk-B	 5436224 B/op	    5915 allocs/op
+BenchmarkPruneOptimized/workers=2/storage-1024/end-to-end-16         	       1	 181948500 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  59547648 peak-heap-B	71103096 B/op	  614712 allocs/op
+PASS
+# sample=1 workload=storage-1024 mode=workers=4
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=4/storage-1024/collect-16 	       1	  84048417 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  21200896 peak-heap-B	   1360313 temp-disk-B	21074312 B/op	  250442 allocs/op
+BenchmarkPruneOptimized/workers=4/storage-1024/verify-16  	       1	   9240250 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  20201472 peak-heap-B	   2265981 temp-disk-B	 5341632 B/op	   90701 allocs/op
+BenchmarkPruneOptimized/workers=4/storage-1024/scan-16    	       1	   7799375 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  20815872 peak-heap-B	   2265981 temp-disk-B	 2093544 B/op	   14339 allocs/op
+BenchmarkPruneOptimized/workers=4/storage-1024/delete-16  	       1	   4515542 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  28860416 peak-heap-B	   2265981 temp-disk-B	 5437624 B/op	    5923 allocs/op
+BenchmarkPruneOptimized/workers=4/storage-1024/end-to-end-16         	       1	 153288667 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  61448192 peak-heap-B	71548552 B/op	  599381 allocs/op
+PASS
+# sample=1 workload=storage-1024 mode=workers=8
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=8/storage-1024/collect-16 	       1	  81951583 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  25001984 peak-heap-B	   1359291 temp-disk-B	22808056 B/op	  248754 allocs/op
+BenchmarkPruneOptimized/workers=8/storage-1024/verify-16  	       1	   7551375 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  21225472 peak-heap-B	   2265981 temp-disk-B	 5413360 B/op	   90993 allocs/op
+BenchmarkPruneOptimized/workers=8/storage-1024/scan-16    	       1	   7209666 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  21086208 peak-heap-B	   2265981 temp-disk-B	 2093648 B/op	   14345 allocs/op
+BenchmarkPruneOptimized/workers=8/storage-1024/delete-16  	       1	   4612251 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  29024256 peak-heap-B	   2265981 temp-disk-B	 5439120 B/op	    5927 allocs/op
+BenchmarkPruneOptimized/workers=8/storage-1024/end-to-end-16         	       1	 162512750 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  65150976 peak-heap-B	73411296 B/op	  596652 allocs/op
+PASS
+# sample=1 workload=storage-1024 mode=workers=16
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=16/storage-1024/collect-16 	       1	  82939251 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  25714688 peak-heap-B	   1359291 temp-disk-B	23166824 B/op	  248653 allocs/op
+BenchmarkPruneOptimized/workers=16/storage-1024/verify-16  	       1	   7502626 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  21217280 peak-heap-B	   2265981 temp-disk-B	 5495920 B/op	   91092 allocs/op
+BenchmarkPruneOptimized/workers=16/storage-1024/scan-16    	       1	   6650458 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  20709376 peak-heap-B	   2265981 temp-disk-B	 2097072 B/op	   14359 allocs/op
+BenchmarkPruneOptimized/workers=16/storage-1024/delete-16  	       1	   4759957 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  28819456 peak-heap-B	   2265981 temp-disk-B	 5446336 B/op	    5943 allocs/op
+BenchmarkPruneOptimized/workers=16/storage-1024/end-to-end-16         	       1	 161406417 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  66977792 peak-heap-B	74394576 B/op	  596419 allocs/op
+PASS
+# sample=1 workload=storage-1025 mode=serial
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneSerial/storage-1025/collect-16 	       1	 118212750 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  19841024 peak-heap-B	   2267547 temp-disk-B	21011488 B/op	  273109 allocs/op
+BenchmarkPruneSerial/storage-1025/verify-16  	       1	  21386251 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  20471808 peak-heap-B	   2267547 temp-disk-B	 6084312 B/op	  104711 allocs/op
+BenchmarkPruneSerial/storage-1025/scan-16    	       1	  25149959 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  21643264 peak-heap-B	   2267547 temp-disk-B	 3182880 B/op	   25424 allocs/op
+BenchmarkPruneSerial/storage-1025/delete-16  	       1	  24414083 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  29999104 peak-heap-B	   2267547 temp-disk-B	 6604856 B/op	   17025 allocs/op
+BenchmarkPruneSerial/storage-1025/end-to-end-16         	       1	 264796500 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  65339392 peak-heap-B	76368544 B/op	  704227 allocs/op
+PASS
+# sample=1 workload=storage-1025 mode=workers=2
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=2/storage-1025/collect-16 	       1	 123172417 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  21037056 peak-heap-B	   3884345 temp-disk-B	38068600 B/op	  543656 allocs/op
+BenchmarkPruneOptimized/workers=2/storage-1025/verify-16  	       1	  30303417 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  27230208 peak-heap-B	   2267547 temp-disk-B	12124792 B/op	  199833 allocs/op
+BenchmarkPruneOptimized/workers=2/storage-1025/scan-16    	       1	   6811459 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  20652032 peak-heap-B	   2267547 temp-disk-B	 2092120 B/op	   14347 allocs/op
+BenchmarkPruneOptimized/workers=2/storage-1025/delete-16  	       1	   4829375 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  28983296 peak-heap-B	   2267547 temp-disk-B	 5474224 B/op	    5925 allocs/op
+BenchmarkPruneOptimized/workers=2/storage-1025/end-to-end-16         	       1	 251557501 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  74096640 peak-heap-B	110725184 B/op	 1264389 allocs/op
+PASS
+# sample=1 workload=storage-1025 mode=workers=4
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=4/storage-1025/collect-16 	       1	 111245959 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  22241280 peak-heap-B	   4197402 temp-disk-B	38435600 B/op	  525948 allocs/op
+BenchmarkPruneOptimized/workers=4/storage-1025/verify-16  	       1	  17188834 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  26918912 peak-heap-B	   2267547 temp-disk-B	12159512 B/op	  200026 allocs/op
+BenchmarkPruneOptimized/workers=4/storage-1025/scan-16    	       1	   7036750 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  20996096 peak-heap-B	   2267547 temp-disk-B	 2095904 B/op	   14354 allocs/op
+BenchmarkPruneOptimized/workers=4/storage-1025/delete-16  	       1	   4560959 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  29081600 peak-heap-B	   2267547 temp-disk-B	 5474584 B/op	    5931 allocs/op
+BenchmarkPruneOptimized/workers=4/storage-1025/end-to-end-16         	       1	 208757251 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  73859072 peak-heap-B	110433088 B/op	 1228950 allocs/op
+PASS
+# sample=1 workload=storage-1025 mode=workers=8
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=8/storage-1025/collect-16 	       1	 120199126 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  24502272 peak-heap-B	   4015687 temp-disk-B	40159800 B/op	  519962 allocs/op
+BenchmarkPruneOptimized/workers=8/storage-1025/verify-16  	       1	  17213333 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  26828800 peak-heap-B	   2267547 temp-disk-B	12244296 B/op	  200221 allocs/op
+BenchmarkPruneOptimized/workers=8/storage-1025/scan-16    	       1	   7224208 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  21463040 peak-heap-B	   2267547 temp-disk-B	 2094592 B/op	   14362 allocs/op
+BenchmarkPruneOptimized/workers=8/storage-1025/delete-16  	       1	   5234000 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  29302784 peak-heap-B	   2267547 temp-disk-B	 5476544 B/op	    5938 allocs/op
+BenchmarkPruneOptimized/workers=8/storage-1025/end-to-end-16         	       1	 237470749 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  75087872 peak-heap-B	112239424 B/op	 1220927 allocs/op
+PASS
+# sample=1 workload=storage-1025 mode=workers=16
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=16/storage-1025/collect-16 	       1	 106436875 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  27435008 peak-heap-B	   1360614 temp-disk-B	38975592 B/op	  509245 allocs/op
+BenchmarkPruneOptimized/workers=16/storage-1025/verify-16  	       1	  18342417 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  27279360 peak-heap-B	   2267547 temp-disk-B	12368456 B/op	  200695 allocs/op
+BenchmarkPruneOptimized/workers=16/storage-1025/scan-16    	       1	   7093041 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  21340160 peak-heap-B	   2267547 temp-disk-B	 2098608 B/op	   14365 allocs/op
+BenchmarkPruneOptimized/workers=16/storage-1025/delete-16  	       1	   4219375 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  29343744 peak-heap-B	   2267547 temp-disk-B	 5499704 B/op	    5967 allocs/op
+BenchmarkPruneOptimized/workers=16/storage-1025/end-to-end-16         	       1	 229274208 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  76242944 peak-heap-B	112541400 B/op	 1210027 allocs/op
+PASS
+# sample=1 workload=giant-storage mode=serial
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneSerial/giant-storage/collect-16 	       1	 362176625 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  40132608 peak-heap-B	  10708387 temp-disk-B	79096864 B/op	 1076338 allocs/op
+BenchmarkPruneSerial/giant-storage/verify-16  	       1	 115327334 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  58933248 peak-heap-B	  10708387 temp-disk-B	23431496 B/op	  414446 allocs/op
+BenchmarkPruneSerial/giant-storage/scan-16    	       1	 135720208 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  61128704 peak-heap-B	  10708387 temp-disk-B	12861728 B/op	   99819 allocs/op
+BenchmarkPruneSerial/giant-storage/delete-16  	       1	 127957083 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  81461248 peak-heap-B	  10708387 temp-disk-B	25715480 B/op	   66672 allocs/op
+BenchmarkPruneSerial/giant-storage/end-to-end-16         	       1	1033016749 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 144900096 peak-heap-B	243810208 B/op	 2769084 allocs/op
+PASS
+# sample=1 workload=giant-storage mode=workers=2
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=2/giant-storage/collect-16 	       1	 244795501 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  41271296 peak-heap-B	  11108401 temp-disk-B	77339576 B/op	 1045891 allocs/op
+BenchmarkPruneOptimized/workers=2/giant-storage/verify-16  	       1	  74108751 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  56213504 peak-heap-B	  10708387 temp-disk-B	20719912 B/op	  363817 allocs/op
+BenchmarkPruneOptimized/workers=2/giant-storage/scan-16    	       1	  30565459 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  57384960 peak-heap-B	  10708387 temp-disk-B	 8511400 B/op	   56293 allocs/op
+BenchmarkPruneOptimized/workers=2/giant-storage/delete-16  	       1	  22884500 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  77357056 peak-heap-B	  10708387 temp-disk-B	21371344 B/op	   23182 allocs/op
+BenchmarkPruneOptimized/workers=2/giant-storage/end-to-end-16         	       1	 484854042 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 181600256 peak-heap-B	222777328 B/op	 2472133 allocs/op
+PASS
+# sample=1 workload=giant-storage mode=workers=4
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=4/giant-storage/collect-16 	       1	 212701333 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  42508288 peak-heap-B	  11181654 temp-disk-B	77287280 B/op	 1013660 allocs/op
+BenchmarkPruneOptimized/workers=4/giant-storage/verify-16  	       1	  46981334 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  56090624 peak-heap-B	  10708387 temp-disk-B	20753432 B/op	  363996 allocs/op
+BenchmarkPruneOptimized/workers=4/giant-storage/scan-16    	       1	  28840126 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  57401344 peak-heap-B	  10708387 temp-disk-B	 8507024 B/op	   56282 allocs/op
+BenchmarkPruneOptimized/workers=4/giant-storage/delete-16  	       1	  21493541 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  77185024 peak-heap-B	  10708387 temp-disk-B	21380944 B/op	   23184 allocs/op
+BenchmarkPruneOptimized/workers=4/giant-storage/end-to-end-16         	       1	 396294999 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 180871168 peak-heap-B	221711848 B/op	 2413001 allocs/op
+PASS
+# sample=1 workload=giant-storage mode=workers=8
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=8/giant-storage/collect-16 	       1	 218029041 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  45719552 peak-heap-B	  11368672 temp-disk-B	79427880 B/op	 1007184 allocs/op
+BenchmarkPruneOptimized/workers=8/giant-storage/verify-16  	       1	  47446876 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  56762368 peak-heap-B	  10708387 temp-disk-B	20831568 B/op	  364497 allocs/op
+BenchmarkPruneOptimized/workers=8/giant-storage/scan-16    	       1	  27346292 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  57892864 peak-heap-B	  10708387 temp-disk-B	 8511944 B/op	   56299 allocs/op
+BenchmarkPruneOptimized/workers=8/giant-storage/delete-16  	       1	  22300458 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  77766656 peak-heap-B	  10708387 temp-disk-B	21385760 B/op	   23183 allocs/op
+BenchmarkPruneOptimized/workers=8/giant-storage/end-to-end-16         	       1	 433443625 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 183115776 peak-heap-B	223248600 B/op	 2401288 allocs/op
+PASS
+# sample=1 workload=giant-storage mode=workers=16
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=16/giant-storage/collect-16 	       1	 197899874 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  48275456 peak-heap-B	  10050348 temp-disk-B	82527816 B/op	 1005325 allocs/op
+BenchmarkPruneOptimized/workers=16/giant-storage/verify-16  	       1	  47513625 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  57729024 peak-heap-B	  10708387 temp-disk-B	20964784 B/op	  365368 allocs/op
+BenchmarkPruneOptimized/workers=16/giant-storage/scan-16    	       1	  29925000 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  58056704 peak-heap-B	  10708387 temp-disk-B	 8513008 B/op	   56316 allocs/op
+BenchmarkPruneOptimized/workers=16/giant-storage/delete-16  	       1	  22350917 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  77815808 peak-heap-B	  10708387 temp-disk-B	21381160 B/op	   23208 allocs/op
+BenchmarkPruneOptimized/workers=16/giant-storage/end-to-end-16         	       1	 432855376 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 186408960 peak-heap-B	226688080 B/op	 2399564 allocs/op
+PASS
+# sample=1 workload=shared-code mode=serial
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneSerial/shared-code/collect-16 	       1	 144097124 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  26148864 peak-heap-B	   3422030 temp-disk-B	34597376 B/op	  443021 allocs/op
+BenchmarkPruneSerial/shared-code/verify-16  	       1	  35773166 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  33177600 peak-heap-B	   3422030 temp-disk-B	10948976 B/op	  190975 allocs/op
+BenchmarkPruneSerial/shared-code/scan-16    	       1	  40727292 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  33333248 peak-heap-B	   3422030 temp-disk-B	 4234304 B/op	   37154 allocs/op
+BenchmarkPruneSerial/shared-code/delete-16  	       1	  35200999 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  48095232 peak-heap-B	   3422030 temp-disk-B	10787976 B/op	   25830 allocs/op
+BenchmarkPruneSerial/shared-code/end-to-end-16         	       1	 367825625 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  97058816 peak-heap-B	113473968 B/op	 1154949 allocs/op
+PASS
+# sample=1 workload=shared-code mode=workers=2
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=2/shared-code/collect-16 	       1	 103050709 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  27049984 peak-heap-B	   2569650 temp-disk-B	34579680 B/op	  449026 allocs/op
+BenchmarkPruneOptimized/workers=2/shared-code/verify-16  	       1	  24085875 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  33177600 peak-heap-B	   3422030 temp-disk-B	10770696 B/op	  195153 allocs/op
+BenchmarkPruneOptimized/workers=2/shared-code/scan-16    	       1	  12045583 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  31678464 peak-heap-B	   3422030 temp-disk-B	 2176120 B/op	   20606 allocs/op
+BenchmarkPruneOptimized/workers=2/shared-code/delete-16  	       1	   7350084 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  46489600 peak-heap-B	   3422030 temp-disk-B	 8724200 B/op	    9289 allocs/op
+BenchmarkPruneOptimized/workers=2/shared-code/end-to-end-16         	       1	 222945125 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 100016128 peak-heap-B	107467232 B/op	 1101456 allocs/op
+PASS
+# sample=1 workload=shared-code mode=workers=4
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=4/shared-code/collect-16 	       1	  86894459 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  28319744 peak-heap-B	   2569673 temp-disk-B	34955128 B/op	  435887 allocs/op
+BenchmarkPruneOptimized/workers=4/shared-code/verify-16  	       1	  14131958 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  32800768 peak-heap-B	   3422030 temp-disk-B	10785864 B/op	  195228 allocs/op
+BenchmarkPruneOptimized/workers=4/shared-code/scan-16    	       1	  11635209 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  31711232 peak-heap-B	   3422030 temp-disk-B	 2169472 B/op	   20600 allocs/op
+BenchmarkPruneOptimized/workers=4/shared-code/delete-16  	       1	   7220375 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  46465024 peak-heap-B	   3422030 temp-disk-B	 8716776 B/op	    9278 allocs/op
+BenchmarkPruneOptimized/workers=4/shared-code/end-to-end-16         	       1	 188594750 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 101654528 peak-heap-B	107303600 B/op	 1075544 allocs/op
+PASS
+# sample=1 workload=shared-code mode=workers=8
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=8/shared-code/collect-16 	       1	  92881125 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  30400512 peak-heap-B	   2569696 temp-disk-B	36904752 B/op	  432602 allocs/op
+BenchmarkPruneOptimized/workers=8/shared-code/verify-16  	       1	  15114374 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  33710080 peak-heap-B	   3422028 temp-disk-B	10804048 B/op	  195089 allocs/op
+BenchmarkPruneOptimized/workers=8/shared-code/scan-16    	       1	  13785375 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  31694848 peak-heap-B	   3422030 temp-disk-B	 2175632 B/op	   20613 allocs/op
+BenchmarkPruneOptimized/workers=8/shared-code/delete-16  	       1	   7264875 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  46538752 peak-heap-B	   3422030 temp-disk-B	 8719568 B/op	    9291 allocs/op
+BenchmarkPruneOptimized/workers=8/shared-code/end-to-end-16         	       1	 207194000 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 101163008 peak-heap-B	109144184 B/op	 1069620 allocs/op
+PASS
+# sample=1 workload=shared-code mode=workers=16
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=16/shared-code/collect-16 	       1	 124978168 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  30818304 peak-heap-B	   4430348 temp-disk-B	40874544 B/op	  433241 allocs/op
+BenchmarkPruneOptimized/workers=16/shared-code/verify-16  	       1	  13622376 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  34562048 peak-heap-B	   3422030 temp-disk-B	10830944 B/op	  194997 allocs/op
+BenchmarkPruneOptimized/workers=16/shared-code/scan-16    	       1	  11592500 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  31719424 peak-heap-B	   3422030 temp-disk-B	 2176328 B/op	   20621 allocs/op
+BenchmarkPruneOptimized/workers=16/shared-code/delete-16  	       1	   7281501 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  46399488 peak-heap-B	   3422030 temp-disk-B	 8723008 B/op	    9306 allocs/op
+BenchmarkPruneOptimized/workers=16/shared-code/end-to-end-16         	       1	 213109417 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 110051328 peak-heap-B	112753008 B/op	 1068936 allocs/op
+PASS
+# sample=1 workload=history-90pct mode=serial
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneSerial/history-90pct/collect-16 	       1	  50045750 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  11599872 peak-heap-B	    208898 temp-disk-B	 3722184 B/op	   37006 allocs/op
+BenchmarkPruneSerial/history-90pct/verify-16  	       1	   1227416 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  10469376 peak-heap-B	    208898 temp-disk-B	  929008 B/op	   15834 allocs/op
+BenchmarkPruneSerial/history-90pct/scan-16    	       1	  16894833 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  11149312 peak-heap-B	    208898 temp-disk-B	  883696 B/op	   19089 allocs/op
+BenchmarkPruneSerial/history-90pct/delete-16  	       1	  84308000 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  17653760 peak-heap-B	    208898 temp-disk-B	 7450832 B/op	   20968 allocs/op
+BenchmarkPruneSerial/history-90pct/end-to-end-16         	       1	 222031083 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  28172288 peak-heap-B	51344920 B/op	  142217 allocs/op
+PASS
+# sample=1 workload=history-90pct mode=workers=2
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=2/history-90pct/collect-16 	       1	  49704374 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  12025856 peak-heap-B	    208921 temp-disk-B	 4315216 B/op	   41520 allocs/op
+BenchmarkPruneOptimized/workers=2/history-90pct/verify-16  	       1	   1616667 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  10993664 peak-heap-B	    208898 temp-disk-B	 1189560 B/op	   19123 allocs/op
+BenchmarkPruneOptimized/workers=2/history-90pct/scan-16    	       1	   8352500 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  10911744 peak-heap-B	    208898 temp-disk-B	  719224 B/op	   17757 allocs/op
+BenchmarkPruneOptimized/workers=2/history-90pct/delete-16  	       1	  16199125 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  19210240 peak-heap-B	    208898 temp-disk-B	12378080 B/op	   19632 allocs/op
+BenchmarkPruneOptimized/workers=2/history-90pct/end-to-end-16         	       1	 135160333 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  28581888 peak-heap-B	58924496 B/op	  148338 allocs/op
+PASS
+# sample=1 workload=history-90pct mode=workers=4
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=4/history-90pct/collect-16 	       1	  47335458 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  12271616 peak-heap-B	    208933 temp-disk-B	 4169880 B/op	   40473 allocs/op
+BenchmarkPruneOptimized/workers=4/history-90pct/verify-16  	       1	    917458 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  10977280 peak-heap-B	    208898 temp-disk-B	 1180616 B/op	   19093 allocs/op
+BenchmarkPruneOptimized/workers=4/history-90pct/scan-16    	       1	   8260957 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  10993664 peak-heap-B	    208898 temp-disk-B	  725392 B/op	   17766 allocs/op
+BenchmarkPruneOptimized/workers=4/history-90pct/delete-16  	       1	  18102958 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  19308544 peak-heap-B	    208898 temp-disk-B	12379648 B/op	   19639 allocs/op
+BenchmarkPruneOptimized/workers=4/history-90pct/end-to-end-16         	       1	 134614583 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  29687808 peak-heap-B	58438728 B/op	  146460 allocs/op
+PASS
+# sample=1 workload=history-90pct mode=workers=8
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=8/history-90pct/collect-16 	       1	  47420417 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  13565952 peak-heap-B	    209025 temp-disk-B	 4636552 B/op	   40357 allocs/op
+BenchmarkPruneOptimized/workers=8/history-90pct/verify-16  	       1	   1262875 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  12328960 peak-heap-B	    208898 temp-disk-B	 1216272 B/op	   19137 allocs/op
+BenchmarkPruneOptimized/workers=8/history-90pct/scan-16    	       1	   8453376 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  10993664 peak-heap-B	    208898 temp-disk-B	  726920 B/op	   17776 allocs/op
+BenchmarkPruneOptimized/workers=8/history-90pct/delete-16  	       1	  16978541 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  19308544 peak-heap-B	    208898 temp-disk-B	12386184 B/op	   19651 allocs/op
+BenchmarkPruneOptimized/workers=8/history-90pct/end-to-end-16         	       1	 135333626 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  29728768 peak-heap-B	58809496 B/op	  146282 allocs/op
+PASS
+# sample=1 workload=history-90pct mode=workers=16
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=16/history-90pct/collect-16 	       1	  47596584 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  15106048 peak-heap-B	    209209 temp-disk-B	 5529968 B/op	   40315 allocs/op
+BenchmarkPruneOptimized/workers=16/history-90pct/verify-16  	       1	   1032375 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  13279232 peak-heap-B	    208898 temp-disk-B	 1215424 B/op	   18923 allocs/op
+BenchmarkPruneOptimized/workers=16/history-90pct/scan-16    	       1	   8577251 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  11165696 peak-heap-B	    208898 temp-disk-B	  730360 B/op	   17796 allocs/op
+BenchmarkPruneOptimized/workers=16/history-90pct/delete-16  	       1	  18304876 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  19464192 peak-heap-B	    208898 temp-disk-B	12378936 B/op	   19659 allocs/op
+BenchmarkPruneOptimized/workers=16/history-90pct/end-to-end-16         	       1	 135466751 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  37715968 peak-heap-B	59657672 B/op	  146079 allocs/op
+PASS
+# sample=1 workload=history-99pct mode=serial
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneSerial/history-99pct/collect-16 	       1	  57130832 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  14237696 peak-heap-B	    208898 temp-disk-B	 4649544 B/op	   51301 allocs/op
+BenchmarkPruneSerial/history-99pct/verify-16  	       1	   1386959 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  12804096 peak-heap-B	    208898 temp-disk-B	  921800 B/op	   15829 allocs/op
+BenchmarkPruneSerial/history-99pct/scan-16    	       1	 141534250 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  27615232 peak-heap-B	    208898 temp-disk-B	18469304 B/op	  181889 allocs/op
+BenchmarkPruneSerial/history-99pct/delete-16  	       1	 859157833 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  69148672 peak-heap-B	    208898 temp-disk-B	76981504 B/op	  203645 allocs/op
+BenchmarkPruneSerial/history-99pct/end-to-end-16         	       1	1211907332 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 111345664 peak-heap-B	198794200 B/op	  534110 allocs/op
+PASS
+# sample=1 workload=history-99pct mode=workers=2
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=2/history-99pct/collect-16 	       1	  52068125 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  14925824 peak-heap-B	    209039 temp-disk-B	 5340088 B/op	   56382 allocs/op
+BenchmarkPruneOptimized/workers=2/history-99pct/verify-16  	       1	   1510042 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  13156352 peak-heap-B	    208898 temp-disk-B	 1180168 B/op	   19080 allocs/op
+BenchmarkPruneOptimized/workers=2/history-99pct/scan-16    	       1	  73726834 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  27344896 peak-heap-B	    208898 temp-disk-B	18334016 B/op	  180550 allocs/op
+BenchmarkPruneOptimized/workers=2/history-99pct/delete-16  	       1	 178760833 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  73285632 peak-heap-B	    208898 temp-disk-B	74312616 B/op	  201870 allocs/op
+BenchmarkPruneOptimized/workers=2/history-99pct/end-to-end-16         	       1	 427225208 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 150274048 peak-heap-B	200483416 B/op	  538517 allocs/op
+PASS
+# sample=1 workload=history-99pct mode=workers=4
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=4/history-99pct/collect-16 	       1	  52665250 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  15196160 peak-heap-B	    208933 temp-disk-B	 5240664 B/op	   55503 allocs/op
+BenchmarkPruneOptimized/workers=4/history-99pct/verify-16  	       1	   1002250 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  13541376 peak-heap-B	    208898 temp-disk-B	 1195912 B/op	   19132 allocs/op
+BenchmarkPruneOptimized/workers=4/history-99pct/scan-16    	       1	  79796750 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  27508736 peak-heap-B	    208898 temp-disk-B	18328784 B/op	  180553 allocs/op
+BenchmarkPruneOptimized/workers=4/history-99pct/delete-16  	       1	 178859584 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  73392128 peak-heap-B	    208898 temp-disk-B	74356376 B/op	  201879 allocs/op
+BenchmarkPruneOptimized/workers=4/history-99pct/end-to-end-16         	       1	 432215459 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 150552576 peak-heap-B	200048168 B/op	  537132 allocs/op
+PASS
+# sample=1 workload=history-99pct mode=workers=8
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=8/history-99pct/collect-16 	       1	  49312583 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  16515072 peak-heap-B	    209025 temp-disk-B	 5648128 B/op	   55462 allocs/op
+BenchmarkPruneOptimized/workers=8/history-99pct/verify-16  	       1	   1327584 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  15032320 peak-heap-B	    208898 temp-disk-B	 1224096 B/op	   19136 allocs/op
+BenchmarkPruneOptimized/workers=8/history-99pct/scan-16    	       1	  74711917 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  27795456 peak-heap-B	    208898 temp-disk-B	18327472 B/op	  180562 allocs/op
+BenchmarkPruneOptimized/workers=8/history-99pct/delete-16  	       1	 178884667 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  73531392 peak-heap-B	    208898 temp-disk-B	74333184 B/op	  201888 allocs/op
+BenchmarkPruneOptimized/workers=8/history-99pct/end-to-end-16         	       1	 429671832 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 155230208 peak-heap-B	202538968 B/op	  537209 allocs/op
+PASS
+# sample=1 workload=history-99pct mode=workers=16
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=16/history-99pct/collect-16 	       1	  49288833 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  18554880 peak-heap-B	    209209 temp-disk-B	 6515328 B/op	   55522 allocs/op
+BenchmarkPruneOptimized/workers=16/history-99pct/verify-16  	       1	   1133375 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  15572992 peak-heap-B	    208898 temp-disk-B	 1221376 B/op	   19031 allocs/op
+BenchmarkPruneOptimized/workers=16/history-99pct/scan-16    	       1	  76992792 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  27648000 peak-heap-B	    208898 temp-disk-B	18346224 B/op	  180595 allocs/op
+BenchmarkPruneOptimized/workers=16/history-99pct/delete-16  	       1	 177649125 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  73433088 peak-heap-B	    208898 temp-disk-B	74336904 B/op	  201878 allocs/op
+BenchmarkPruneOptimized/workers=16/history-99pct/end-to-end-16         	       1	 429212376 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 152141824 peak-heap-B	201276464 B/op	  537126 allocs/op
+PASS
+# sample=2 workload=light mode=workers=2
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=2/light/collect-16         	       1	 100613292 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  27533312 peak-heap-B	   2536878 temp-disk-B	34389344 B/op	  448769 allocs/op
+BenchmarkPruneOptimized/workers=2/light/verify-16          	       1	  25606958 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  32382976 peak-heap-B	   3413577 temp-disk-B	10753008 B/op	  195264 allocs/op
+BenchmarkPruneOptimized/workers=2/light/scan-16            	       1	  12523751 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  31227904 peak-heap-B	   3413580 temp-disk-B	 2102464 B/op	   20616 allocs/op
+BenchmarkPruneOptimized/workers=2/light/delete-16          	       1	   7246792 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  45924352 peak-heap-B	   3413580 temp-disk-B	 8556224 B/op	    9266 allocs/op
+BenchmarkPruneOptimized/workers=2/light/end-to-end-16      	       1	 217170000 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  99270656 peak-heap-B	106685104 B/op	 1099794 allocs/op
+PASS
+# sample=2 workload=light mode=workers=4
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=4/light/collect-16         	       1	  85653082 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  28336128 peak-heap-B	   2536924 temp-disk-B	34819976 B/op	  436416 allocs/op
+BenchmarkPruneOptimized/workers=4/light/verify-16          	       1	  13368124 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  33062912 peak-heap-B	   3413580 temp-disk-B	10750960 B/op	  195194 allocs/op
+BenchmarkPruneOptimized/workers=4/light/scan-16            	       1	  11687875 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  31318016 peak-heap-B	   3413580 temp-disk-B	 2100720 B/op	   20615 allocs/op
+BenchmarkPruneOptimized/workers=4/light/delete-16          	       1	   7221499 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  45826048 peak-heap-B	   3413580 temp-disk-B	 8560872 B/op	    9271 allocs/op
+BenchmarkPruneOptimized/workers=4/light/end-to-end-16      	       1	 182694375 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  99778560 peak-heap-B	106763640 B/op	 1075788 allocs/op
+PASS
+# sample=2 workload=light mode=workers=8
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=8/light/collect-16         	       1	  91924168 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  30908416 peak-heap-B	   2537016 temp-disk-B	36660328 B/op	  432679 allocs/op
+BenchmarkPruneOptimized/workers=8/light/verify-16          	       1	  12727667 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  33021952 peak-heap-B	   3413577 temp-disk-B	10766272 B/op	  195065 allocs/op
+BenchmarkPruneOptimized/workers=8/light/scan-16            	       1	  11492125 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  31260672 peak-heap-B	   3413580 temp-disk-B	 2102136 B/op	   20619 allocs/op
+BenchmarkPruneOptimized/workers=8/light/delete-16          	       1	   7312416 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  45867008 peak-heap-B	   3413580 temp-disk-B	 8564656 B/op	    9291 allocs/op
+BenchmarkPruneOptimized/workers=8/light/end-to-end-16      	       1	 203807375 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 103178240 peak-heap-B	108385760 B/op	 1069439 allocs/op
+PASS
+# sample=2 workload=light mode=workers=16
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=16/light/collect-16         	       1	  99683042 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  32268288 peak-heap-B	   2537028 temp-disk-B	40210432 B/op	  432085 allocs/op
+BenchmarkPruneOptimized/workers=16/light/verify-16          	       1	  13433958 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  34398208 peak-heap-B	   3413580 temp-disk-B	10809448 B/op	  195035 allocs/op
+BenchmarkPruneOptimized/workers=16/light/scan-16            	       1	  11793584 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  31268864 peak-heap-B	   3413580 temp-disk-B	 2105600 B/op	   20637 allocs/op
+BenchmarkPruneOptimized/workers=16/light/delete-16          	       1	   7535250 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  45883392 peak-heap-B	   3413580 temp-disk-B	 8571480 B/op	    9302 allocs/op
+BenchmarkPruneOptimized/workers=16/light/end-to-end-16      	       1	 241230375 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 108257280 peak-heap-B	111244736 B/op	 1069815 allocs/op
+PASS
+# sample=2 workload=light mode=serial
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneSerial/light/collect-16 	       1	 147775708 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  26607616 peak-heap-B	   3413577 temp-disk-B	34351768 B/op	  442969 allocs/op
+BenchmarkPruneSerial/light/verify-16  	       1	  36538209 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  32989184 peak-heap-B	   3413580 temp-disk-B	10918832 B/op	  190960 allocs/op
+BenchmarkPruneSerial/light/scan-16    	       1	  40545418 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  32620544 peak-heap-B	   3413580 temp-disk-B	 4124856 B/op	   37152 allocs/op
+BenchmarkPruneSerial/light/delete-16  	       1	  35185208 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  47529984 peak-heap-B	   3413580 temp-disk-B	10577976 B/op	   25819 allocs/op
+BenchmarkPruneSerial/light/end-to-end-16         	       1	 366351251 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  95977472 peak-heap-B	112752648 B/op	 1154693 allocs/op
+PASS
+# sample=2 workload=dense-storage mode=workers=2
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=2/dense-storage/collect-16 	       1	 154631793 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  28729344 peak-heap-B	   5271785 temp-disk-B	43541976 B/op	  551359 allocs/op
+BenchmarkPruneOptimized/workers=2/dense-storage/verify-16  	       1	  34671999 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  37322752 peak-heap-B	   5265761 temp-disk-B	13175696 B/op	  204629 allocs/op
+BenchmarkPruneOptimized/workers=2/dense-storage/scan-16    	       1	  15025916 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  35577856 peak-heap-B	   5265761 temp-disk-B	 3343104 B/op	   28653 allocs/op
+BenchmarkPruneOptimized/workers=2/dense-storage/delete-16  	       1	   9240875 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  53452800 peak-heap-B	   5265761 temp-disk-B	10755376 B/op	   11961 allocs/op
+BenchmarkPruneOptimized/workers=2/dense-storage/end-to-end-16         	       1	 286794958 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 114245632 peak-heap-B	130017072 B/op	 1317308 allocs/op
+PASS
+# sample=2 workload=dense-storage mode=workers=4
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=4/dense-storage/collect-16 	       1	 129073542 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  30056448 peak-heap-B	   5270954 temp-disk-B	44167336 B/op	  534559 allocs/op
+BenchmarkPruneOptimized/workers=4/dense-storage/verify-16  	       1	  20180500 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  38076416 peak-heap-B	   5265761 temp-disk-B	13442632 B/op	  204640 allocs/op
+BenchmarkPruneOptimized/workers=4/dense-storage/scan-16    	       1	  15162583 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  35725312 peak-heap-B	   5265761 temp-disk-B	 3344416 B/op	   28659 allocs/op
+BenchmarkPruneOptimized/workers=4/dense-storage/delete-16  	       1	   9400791 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  53551104 peak-heap-B	   5265761 temp-disk-B	10743768 B/op	   11938 allocs/op
+BenchmarkPruneOptimized/workers=4/dense-storage/end-to-end-16         	       1	 252291626 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 114532352 peak-heap-B	130729496 B/op	 1284511 allocs/op
+PASS
+# sample=2 workload=dense-storage mode=workers=8
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=8/dense-storage/collect-16 	       1	 132638584 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  31014912 peak-heap-B	   5383160 temp-disk-B	46311456 B/op	  530310 allocs/op
+BenchmarkPruneOptimized/workers=8/dense-storage/verify-16  	       1	  19138000 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  39051264 peak-heap-B	   5265761 temp-disk-B	13900272 B/op	  204952 allocs/op
+BenchmarkPruneOptimized/workers=8/dense-storage/scan-16    	       1	  15097291 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  35815424 peak-heap-B	   5265761 temp-disk-B	 3337096 B/op	   28652 allocs/op
+BenchmarkPruneOptimized/workers=8/dense-storage/delete-16  	       1	   9243333 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  53534720 peak-heap-B	   5265761 temp-disk-B	10759592 B/op	   11960 allocs/op
+BenchmarkPruneOptimized/workers=8/dense-storage/end-to-end-16         	       1	 265605666 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 118153216 peak-heap-B	133452704 B/op	 1277558 allocs/op
+PASS
+# sample=2 workload=dense-storage mode=workers=16
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=16/dense-storage/collect-16 	       1	 135022583 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  36126720 peak-heap-B	   5114044 temp-disk-B	49898016 B/op	  529513 allocs/op
+BenchmarkPruneOptimized/workers=16/dense-storage/verify-16  	       1	  20829625 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  39657472 peak-heap-B	   5265761 temp-disk-B	13997640 B/op	  204383 allocs/op
+BenchmarkPruneOptimized/workers=16/dense-storage/scan-16    	       1	  15739542 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  35758080 peak-heap-B	   5265761 temp-disk-B	 3342008 B/op	   28650 allocs/op
+BenchmarkPruneOptimized/workers=16/dense-storage/delete-16  	       1	   9831625 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  53485568 peak-heap-B	   5265761 temp-disk-B	10754032 B/op	   11953 allocs/op
+BenchmarkPruneOptimized/workers=16/dense-storage/end-to-end-16         	       1	 270103292 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 119275520 peak-heap-B	137249048 B/op	 1275045 allocs/op
+PASS
+# sample=2 workload=dense-storage mode=serial
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneSerial/dense-storage/collect-16 	       1	 206768583 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  28573696 peak-heap-B	   5265761 temp-disk-B	42998440 B/op	  545057 allocs/op
+BenchmarkPruneSerial/dense-storage/verify-16  	       1	  54707958 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  36265984 peak-heap-B	   5265761 temp-disk-B	12417912 B/op	  198480 allocs/op
+BenchmarkPruneSerial/dense-storage/scan-16    	       1	  63296250 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  37593088 peak-heap-B	   5267557 temp-disk-B	 5579592 B/op	   51264 allocs/op
+BenchmarkPruneSerial/dense-storage/delete-16  	       1	  54587918 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  55640064 peak-heap-B	   5265761 temp-disk-B	12988152 B/op	   34497 allocs/op
+BenchmarkPruneSerial/dense-storage/end-to-end-16         	       1	 518137083 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 110821376 peak-heap-B	135622504 B/op	 1392126 allocs/op
+PASS
+# sample=2 workload=storage-1024 mode=workers=2
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=2/storage-1024/collect-16 	       1	  85120166 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  20021248 peak-heap-B	   1360891 temp-disk-B	20369200 B/op	  258744 allocs/op
+BenchmarkPruneOptimized/workers=2/storage-1024/verify-16  	       1	  14147458 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  19906560 peak-heap-B	   2265981 temp-disk-B	 5293584 B/op	   90490 allocs/op
+BenchmarkPruneOptimized/workers=2/storage-1024/scan-16    	       1	   7222416 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  20602880 peak-heap-B	   2265981 temp-disk-B	 2091152 B/op	   14329 allocs/op
+BenchmarkPruneOptimized/workers=2/storage-1024/delete-16  	       1	   4858083 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  28696576 peak-heap-B	   2265981 temp-disk-B	 5435488 B/op	    5913 allocs/op
+BenchmarkPruneOptimized/workers=2/storage-1024/end-to-end-16         	       1	 172172042 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  63840256 peak-heap-B	71158928 B/op	  614941 allocs/op
+PASS
+# sample=2 workload=storage-1024 mode=workers=4
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=4/storage-1024/collect-16 	       1	  78043500 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  20676608 peak-heap-B	   1360029 temp-disk-B	20966568 B/op	  250549 allocs/op
+BenchmarkPruneOptimized/workers=4/storage-1024/verify-16  	       1	   9129876 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  20119552 peak-heap-B	   2265981 temp-disk-B	 5344672 B/op	   90696 allocs/op
+BenchmarkPruneOptimized/workers=4/storage-1024/scan-16    	       1	   6937000 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  20717568 peak-heap-B	   2265981 temp-disk-B	 2093208 B/op	   14345 allocs/op
+BenchmarkPruneOptimized/workers=4/storage-1024/delete-16  	       1	   5078416 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  28860416 peak-heap-B	   2265981 temp-disk-B	 5442272 B/op	    5923 allocs/op
+BenchmarkPruneOptimized/workers=4/storage-1024/end-to-end-16         	       1	 156697499 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  65404928 peak-heap-B	71436072 B/op	  599016 allocs/op
+PASS
+# sample=2 workload=storage-1024 mode=workers=8
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=8/storage-1024/collect-16 	       1	  88073084 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  24428544 peak-heap-B	   1359291 temp-disk-B	22866768 B/op	  248700 allocs/op
+BenchmarkPruneOptimized/workers=8/storage-1024/verify-16  	       1	   7688541 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  21110784 peak-heap-B	   2265981 temp-disk-B	 5405832 B/op	   90973 allocs/op
+BenchmarkPruneOptimized/workers=8/storage-1024/scan-16    	       1	   6933833 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  21020672 peak-heap-B	   2265981 temp-disk-B	 2094248 B/op	   14349 allocs/op
+BenchmarkPruneOptimized/workers=8/storage-1024/delete-16  	       1	   4321875 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  29073408 peak-heap-B	   2265981 temp-disk-B	 5443016 B/op	    5926 allocs/op
+BenchmarkPruneOptimized/workers=8/storage-1024/end-to-end-16         	       1	 176508167 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  65191936 peak-heap-B	73375616 B/op	  596588 allocs/op
+PASS
+# sample=2 workload=storage-1024 mode=workers=16
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=16/storage-1024/collect-16 	       1	  86966167 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  25870336 peak-heap-B	   1359291 temp-disk-B	23215352 B/op	  248683 allocs/op
+BenchmarkPruneOptimized/workers=16/storage-1024/verify-16  	       1	   7821833 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  21200896 peak-heap-B	   2265981 temp-disk-B	 5482384 B/op	   91017 allocs/op
+BenchmarkPruneOptimized/workers=16/storage-1024/scan-16    	       1	   6985000 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  20963328 peak-heap-B	   2265981 temp-disk-B	 2097232 B/op	   14356 allocs/op
+BenchmarkPruneOptimized/workers=16/storage-1024/delete-16  	       1	   4740751 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  29007872 peak-heap-B	   2265981 temp-disk-B	 5446592 B/op	    5943 allocs/op
+BenchmarkPruneOptimized/workers=16/storage-1024/end-to-end-16         	       1	 170586708 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  67289088 peak-heap-B	74377912 B/op	  596596 allocs/op
+PASS
+# sample=2 workload=storage-1024 mode=serial
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneSerial/storage-1024/collect-16 	       1	 115301583 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  20250624 peak-heap-B	   2265981 temp-disk-B	20975424 B/op	  272583 allocs/op
+BenchmarkPruneSerial/storage-1024/verify-16  	       1	  21342292 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  20447232 peak-heap-B	   2265981 temp-disk-B	 6066032 B/op	  104587 allocs/op
+BenchmarkPruneSerial/storage-1024/scan-16    	       1	  25787001 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  21577728 peak-heap-B	   2265981 temp-disk-B	 3199736 B/op	   25420 allocs/op
+BenchmarkPruneSerial/storage-1024/delete-16  	       1	  27360834 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  29745152 peak-heap-B	   2265981 temp-disk-B	 6560544 B/op	   17012 allocs/op
+BenchmarkPruneSerial/storage-1024/end-to-end-16         	       1	 289009208 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  65093632 peak-heap-B	76171336 B/op	  702970 allocs/op
+PASS
+# sample=2 workload=storage-1025 mode=workers=2
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=2/storage-1025/collect-16 	       1	 136973291 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  21938176 peak-heap-B	   3976751 temp-disk-B	38183304 B/op	  544242 allocs/op
+BenchmarkPruneOptimized/workers=2/storage-1025/verify-16  	       1	  30207874 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  26181632 peak-heap-B	   2267547 temp-disk-B	12103536 B/op	  199742 allocs/op
+BenchmarkPruneOptimized/workers=2/storage-1025/scan-16    	       1	   6864876 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  20602880 peak-heap-B	   2267547 temp-disk-B	 2093888 B/op	   14356 allocs/op
+BenchmarkPruneOptimized/workers=2/storage-1025/delete-16  	       1	   4869375 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  28909568 peak-heap-B	   2267547 temp-disk-B	 5479072 B/op	    5928 allocs/op
+BenchmarkPruneOptimized/workers=2/storage-1025/end-to-end-16         	       1	 278771083 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  74088448 peak-heap-B	110628184 B/op	 1263622 allocs/op
+PASS
+# sample=2 workload=storage-1025 mode=workers=4
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=4/storage-1025/collect-16 	       1	 120121583 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  24494080 peak-heap-B	   4191367 temp-disk-B	38571120 B/op	  526112 allocs/op
+BenchmarkPruneOptimized/workers=4/storage-1025/verify-16  	       1	  17962791 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  26910720 peak-heap-B	   2267547 temp-disk-B	12161288 B/op	  199957 allocs/op
+BenchmarkPruneOptimized/workers=4/storage-1025/scan-16    	       1	   7513667 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  20996096 peak-heap-B	   2267547 temp-disk-B	 2091696 B/op	   14344 allocs/op
+BenchmarkPruneOptimized/workers=4/storage-1025/delete-16  	       1	   4962875 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  29343744 peak-heap-B	   2267547 temp-disk-B	 5479664 B/op	    5939 allocs/op
+BenchmarkPruneOptimized/workers=4/storage-1025/end-to-end-16         	       1	 237635084 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  74104832 peak-heap-B	110431664 B/op	 1228951 allocs/op
+PASS
+# sample=2 workload=storage-1025 mode=workers=8
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=8/storage-1025/collect-16 	       1	 125862083 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  26624000 peak-heap-B	   4015553 temp-disk-B	40084528 B/op	  519913 allocs/op
+BenchmarkPruneOptimized/workers=8/storage-1025/verify-16  	       1	  18629208 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  26689536 peak-heap-B	   2267547 temp-disk-B	12228840 B/op	  200216 allocs/op
+BenchmarkPruneOptimized/workers=8/storage-1025/scan-16    	       1	   7582041 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  21282816 peak-heap-B	   2267547 temp-disk-B	 2094952 B/op	   14346 allocs/op
+BenchmarkPruneOptimized/workers=8/storage-1025/delete-16  	       1	   6344375 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  29433856 peak-heap-B	   2267547 temp-disk-B	 5491840 B/op	    5946 allocs/op
+BenchmarkPruneOptimized/workers=8/storage-1025/end-to-end-16         	       1	 288491376 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  74866688 peak-heap-B	112179328 B/op	 1221001 allocs/op
+PASS
+# sample=2 workload=storage-1025 mode=workers=16
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=16/storage-1025/collect-16 	       1	 104629043 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  26755072 peak-heap-B	   1360614 temp-disk-B	39012984 B/op	  509357 allocs/op
+BenchmarkPruneOptimized/workers=16/storage-1025/verify-16  	       1	  19015125 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  27017216 peak-heap-B	   2267547 temp-disk-B	12361608 B/op	  200642 allocs/op
+BenchmarkPruneOptimized/workers=16/storage-1025/scan-16    	       1	   6987750 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  21307392 peak-heap-B	   2267547 temp-disk-B	 2097824 B/op	   14375 allocs/op
+BenchmarkPruneOptimized/workers=16/storage-1025/delete-16  	       1	   4474792 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  29392896 peak-heap-B	   2267547 temp-disk-B	 5483952 B/op	    5958 allocs/op
+BenchmarkPruneOptimized/workers=16/storage-1025/end-to-end-16         	       1	 260315459 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  75915264 peak-heap-B	112544472 B/op	 1209947 allocs/op
+PASS
+# sample=2 workload=storage-1025 mode=serial
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneSerial/storage-1025/collect-16 	       1	 133073708 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  19742720 peak-heap-B	   2267547 temp-disk-B	20954400 B/op	  273081 allocs/op
+BenchmarkPruneSerial/storage-1025/verify-16  	       1	  23057291 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  20619264 peak-heap-B	   2267547 temp-disk-B	 6075232 B/op	  104686 allocs/op
+BenchmarkPruneSerial/storage-1025/scan-16    	       1	  26908917 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  21905408 peak-heap-B	   2267547 temp-disk-B	 3186128 B/op	   25438 allocs/op
+BenchmarkPruneSerial/storage-1025/delete-16  	       1	  22837791 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  29982720 peak-heap-B	   2267547 temp-disk-B	 6612168 B/op	   17035 allocs/op
+BenchmarkPruneSerial/storage-1025/end-to-end-16         	       1	 276935917 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  65306624 peak-heap-B	76335680 B/op	  704160 allocs/op
+PASS
+# sample=2 workload=giant-storage mode=workers=2
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=2/giant-storage/collect-16 	       1	 230064750 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  42049536 peak-heap-B	  11106946 temp-disk-B	77586624 B/op	 1046562 allocs/op
+BenchmarkPruneOptimized/workers=2/giant-storage/verify-16  	       1	  72911626 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  56156160 peak-heap-B	  10708387 temp-disk-B	20732528 B/op	  363856 allocs/op
+BenchmarkPruneOptimized/workers=2/giant-storage/scan-16    	       1	  27538750 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  57327616 peak-heap-B	  10708387 temp-disk-B	 8506704 B/op	   56300 allocs/op
+BenchmarkPruneOptimized/workers=2/giant-storage/delete-16  	       1	  21228334 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  77406208 peak-heap-B	  10708387 temp-disk-B	21379096 B/op	   23163 allocs/op
+BenchmarkPruneOptimized/workers=2/giant-storage/end-to-end-16         	       1	 498378292 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 181764096 peak-heap-B	222607240 B/op	 2472478 allocs/op
+PASS
+# sample=2 workload=giant-storage mode=workers=4
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=4/giant-storage/collect-16 	       1	 215847418 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  42704896 peak-heap-B	  11008543 temp-disk-B	77220272 B/op	 1013849 allocs/op
+BenchmarkPruneOptimized/workers=4/giant-storage/verify-16  	       1	  52288125 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  56385536 peak-heap-B	  10708387 temp-disk-B	20756872 B/op	  364026 allocs/op
+BenchmarkPruneOptimized/workers=4/giant-storage/scan-16    	       1	  30074458 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  57360384 peak-heap-B	  10708387 temp-disk-B	 8505640 B/op	   56291 allocs/op
+BenchmarkPruneOptimized/workers=4/giant-storage/delete-16  	       1	  23134374 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  77307904 peak-heap-B	  10708387 temp-disk-B	21373944 B/op	   23164 allocs/op
+BenchmarkPruneOptimized/workers=4/giant-storage/end-to-end-16         	       1	 412040374 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 181354496 peak-heap-B	221317872 B/op	 2412627 allocs/op
+PASS
+# sample=2 workload=giant-storage mode=workers=8
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=8/giant-storage/collect-16 	       1	 220710249 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  45629440 peak-heap-B	  11370057 temp-disk-B	79116312 B/op	 1007039 allocs/op
+BenchmarkPruneOptimized/workers=8/giant-storage/verify-16  	       1	  48526708 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  56868864 peak-heap-B	  10708387 temp-disk-B	20826128 B/op	  364507 allocs/op
+BenchmarkPruneOptimized/workers=8/giant-storage/scan-16    	       1	  31345958 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  57761792 peak-heap-B	  10708387 temp-disk-B	 8509760 B/op	   56305 allocs/op
+BenchmarkPruneOptimized/workers=8/giant-storage/delete-16  	       1	  21081001 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  77537280 peak-heap-B	  10708387 temp-disk-B	21375192 B/op	   23172 allocs/op
+BenchmarkPruneOptimized/workers=8/giant-storage/end-to-end-16         	       1	 464388334 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 183263232 peak-heap-B	223231816 B/op	 2399935 allocs/op
+PASS
+# sample=2 workload=giant-storage mode=workers=16
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=16/giant-storage/collect-16 	       1	 238891500 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  51077120 peak-heap-B	  11009902 temp-disk-B	83033624 B/op	 1006222 allocs/op
+BenchmarkPruneOptimized/workers=16/giant-storage/verify-16  	       1	  53362208 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  57368576 peak-heap-B	  10708387 temp-disk-B	20943200 B/op	  365199 allocs/op
+BenchmarkPruneOptimized/workers=16/giant-storage/scan-16    	       1	  29428084 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  57835520 peak-heap-B	  10708387 temp-disk-B	 8512552 B/op	   56320 allocs/op
+BenchmarkPruneOptimized/workers=16/giant-storage/delete-16  	       1	  21298209 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  77848576 peak-heap-B	  10708387 temp-disk-B	21384720 B/op	   23192 allocs/op
+BenchmarkPruneOptimized/workers=16/giant-storage/end-to-end-16         	       1	 444691250 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 185376768 peak-heap-B	226802096 B/op	 2399967 allocs/op
+PASS
+# sample=2 workload=giant-storage mode=serial
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneSerial/giant-storage/collect-16 	       1	 364737666 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  39878656 peak-heap-B	  10708387 temp-disk-B	79170624 B/op	 1076489 allocs/op
+BenchmarkPruneSerial/giant-storage/verify-16  	       1	 121037875 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  59039744 peak-heap-B	  10708387 temp-disk-B	23420744 B/op	  414421 allocs/op
+BenchmarkPruneSerial/giant-storage/scan-16    	       1	 143634625 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  61251584 peak-heap-B	  10708387 temp-disk-B	12857448 B/op	   99802 allocs/op
+BenchmarkPruneSerial/giant-storage/delete-16  	       1	 135849750 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  80732160 peak-heap-B	  10708387 temp-disk-B	25744056 B/op	   66705 allocs/op
+BenchmarkPruneSerial/giant-storage/end-to-end-16         	       1	1018614376 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 163438592 peak-heap-B	243531992 B/op	 2769019 allocs/op
+PASS
+# sample=2 workload=shared-code mode=workers=2
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=2/shared-code/collect-16 	       1	  99863834 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  27549696 peak-heap-B	   2569650 temp-disk-B	34551920 B/op	  449234 allocs/op
+BenchmarkPruneOptimized/workers=2/shared-code/verify-16  	       1	  23710334 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  33005568 peak-heap-B	   3422030 temp-disk-B	10780144 B/op	  195165 allocs/op
+BenchmarkPruneOptimized/workers=2/shared-code/scan-16    	       1	  11474917 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  31563776 peak-heap-B	   3422030 temp-disk-B	 2178624 B/op	   20604 allocs/op
+BenchmarkPruneOptimized/workers=2/shared-code/delete-16  	       1	   7292583 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  46383104 peak-heap-B	   3422030 temp-disk-B	 8716528 B/op	    9280 allocs/op
+BenchmarkPruneOptimized/workers=2/shared-code/end-to-end-16         	       1	 210347458 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  98648064 peak-heap-B	107366864 B/op	 1101271 allocs/op
+PASS
+# sample=2 workload=shared-code mode=workers=4
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=4/shared-code/collect-16 	       1	  95812626 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  27418624 peak-heap-B	   2569673 temp-disk-B	34978408 B/op	  436313 allocs/op
+BenchmarkPruneOptimized/workers=4/shared-code/verify-16  	       1	  16575417 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  32800768 peak-heap-B	   3422030 temp-disk-B	10787472 B/op	  195232 allocs/op
+BenchmarkPruneOptimized/workers=4/shared-code/scan-16    	       1	  12075375 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  31793152 peak-heap-B	   3422030 temp-disk-B	 2175200 B/op	   20603 allocs/op
+BenchmarkPruneOptimized/workers=4/shared-code/delete-16  	       1	   8015208 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  46432256 peak-heap-B	   3422030 temp-disk-B	 8717696 B/op	    9286 allocs/op
+BenchmarkPruneOptimized/workers=4/shared-code/end-to-end-16         	       1	 197483333 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  99573760 peak-heap-B	107418064 B/op	 1075564 allocs/op
+PASS
+# sample=2 workload=shared-code mode=workers=8
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=8/shared-code/collect-16 	       1	  92237833 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  31580160 peak-heap-B	   2569696 temp-disk-B	36687992 B/op	  432547 allocs/op
+BenchmarkPruneOptimized/workers=8/shared-code/verify-16  	       1	  12275874 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  33931264 peak-heap-B	   3422030 temp-disk-B	10815320 B/op	  195086 allocs/op
+BenchmarkPruneOptimized/workers=8/shared-code/scan-16    	       1	  11360958 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  31768576 peak-heap-B	   3422030 temp-disk-B	 2173440 B/op	   20601 allocs/op
+BenchmarkPruneOptimized/workers=8/shared-code/delete-16  	       1	   7519458 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  46571520 peak-heap-B	   3422030 temp-disk-B	 8722024 B/op	    9277 allocs/op
+BenchmarkPruneOptimized/workers=8/shared-code/end-to-end-16         	       1	 224575668 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 102891520 peak-heap-B	109094256 B/op	 1069835 allocs/op
+PASS
+# sample=2 workload=shared-code mode=workers=16
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=16/shared-code/collect-16 	       1	 110686834 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  32071680 peak-heap-B	   2569788 temp-disk-B	40323720 B/op	  432131 allocs/op
+BenchmarkPruneOptimized/workers=16/shared-code/verify-16  	       1	  13017084 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  34545664 peak-heap-B	   3422030 temp-disk-B	10822304 B/op	  194943 allocs/op
+BenchmarkPruneOptimized/workers=16/shared-code/scan-16    	       1	  13683333 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  31817728 peak-heap-B	   3422030 temp-disk-B	 2187136 B/op	   20636 allocs/op
+BenchmarkPruneOptimized/workers=16/shared-code/delete-16  	       1	   7721875 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  46424064 peak-heap-B	   3422030 temp-disk-B	 8723088 B/op	    9310 allocs/op
+BenchmarkPruneOptimized/workers=16/shared-code/end-to-end-16         	       1	 220982749 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 110133248 peak-heap-B	112713264 B/op	 1068926 allocs/op
+PASS
+# sample=2 workload=shared-code mode=serial
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneSerial/shared-code/collect-16 	       1	 146511041 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  26968064 peak-heap-B	   3422030 temp-disk-B	34566184 B/op	  443026 allocs/op
+BenchmarkPruneSerial/shared-code/verify-16  	       1	  36473958 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  32653312 peak-heap-B	   3422030 temp-disk-B	10975232 B/op	  191103 allocs/op
+BenchmarkPruneSerial/shared-code/scan-16    	       1	  42201834 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  33292288 peak-heap-B	   3422030 temp-disk-B	 4216528 B/op	   37140 allocs/op
+BenchmarkPruneSerial/shared-code/delete-16  	       1	  38845709 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  48373760 peak-heap-B	   3422030 temp-disk-B	10770840 B/op	   25827 allocs/op
+BenchmarkPruneSerial/shared-code/end-to-end-16         	       1	 375082250 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  97861632 peak-heap-B	113586064 B/op	 1154963 allocs/op
+PASS
+# sample=2 workload=history-90pct mode=workers=2
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=2/history-90pct/collect-16 	       1	  56169041 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  12156928 peak-heap-B	    208921 temp-disk-B	 4266448 B/op	   41428 allocs/op
+BenchmarkPruneOptimized/workers=2/history-90pct/verify-16  	       1	   1831459 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  10854400 peak-heap-B	    208898 temp-disk-B	 1184800 B/op	   19113 allocs/op
+BenchmarkPruneOptimized/workers=2/history-90pct/scan-16    	       1	   9344459 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  10936320 peak-heap-B	    208898 temp-disk-B	  719440 B/op	   17759 allocs/op
+BenchmarkPruneOptimized/workers=2/history-90pct/delete-16  	       1	  18504375 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  19251200 peak-heap-B	    208898 temp-disk-B	12378256 B/op	   19634 allocs/op
+BenchmarkPruneOptimized/workers=2/history-90pct/end-to-end-16         	       1	 149053417 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  28426240 peak-heap-B	58939976 B/op	  148336 allocs/op
+PASS
+# sample=2 workload=history-90pct mode=workers=4
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=4/history-90pct/collect-16 	       1	  47641625 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  12378112 peak-heap-B	    208933 temp-disk-B	 4168344 B/op	   40522 allocs/op
+BenchmarkPruneOptimized/workers=4/history-90pct/verify-16  	       1	   1052917 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  11051008 peak-heap-B	    208898 temp-disk-B	 1175496 B/op	   19072 allocs/op
+BenchmarkPruneOptimized/workers=4/history-90pct/scan-16    	       1	   9159333 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  10993664 peak-heap-B	    208898 temp-disk-B	  725480 B/op	   17767 allocs/op
+BenchmarkPruneOptimized/workers=4/history-90pct/delete-16  	       1	  18340833 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  19275776 peak-heap-B	    208898 temp-disk-B	12379616 B/op	   19640 allocs/op
+BenchmarkPruneOptimized/workers=4/history-90pct/end-to-end-16         	       1	 135792167 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  28393472 peak-heap-B	58461256 B/op	  146533 allocs/op
+PASS
+# sample=2 workload=history-90pct mode=workers=8
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=8/history-90pct/collect-16 	       1	  52252458 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  14000128 peak-heap-B	    209025 temp-disk-B	 4619312 B/op	   40350 allocs/op
+BenchmarkPruneOptimized/workers=8/history-90pct/verify-16  	       1	   1497083 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  12288000 peak-heap-B	    208898 temp-disk-B	 1209432 B/op	   19071 allocs/op
+BenchmarkPruneOptimized/workers=8/history-90pct/scan-16    	       1	   9585001 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  11010048 peak-heap-B	    208898 temp-disk-B	  726712 B/op	   17772 allocs/op
+BenchmarkPruneOptimized/workers=8/history-90pct/delete-16  	       1	  19112583 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  19275776 peak-heap-B	    208898 temp-disk-B	12385848 B/op	   19649 allocs/op
+BenchmarkPruneOptimized/workers=8/history-90pct/end-to-end-16         	       1	 144948334 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  29499392 peak-heap-B	58823920 B/op	  146342 allocs/op
+PASS
+# sample=2 workload=history-90pct mode=workers=16
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=16/history-90pct/collect-16 	       1	  57601083 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  15237120 peak-heap-B	    209209 temp-disk-B	 5534624 B/op	   40378 allocs/op
+BenchmarkPruneOptimized/workers=16/history-90pct/verify-16  	       1	   1628876 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  13303808 peak-heap-B	    208898 temp-disk-B	 1220328 B/op	   18940 allocs/op
+BenchmarkPruneOptimized/workers=16/history-90pct/scan-16    	       1	   9435166 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  11124736 peak-heap-B	    208898 temp-disk-B	  730008 B/op	   17790 allocs/op
+BenchmarkPruneOptimized/workers=16/history-90pct/delete-16  	       1	  19361792 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  18817024 peak-heap-B	    208898 temp-disk-B	12384896 B/op	   19670 allocs/op
+BenchmarkPruneOptimized/workers=16/history-90pct/end-to-end-16         	       1	 147167374 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  35225600 peak-heap-B	59699592 B/op	  146098 allocs/op
+PASS
+# sample=2 workload=history-90pct mode=serial
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneSerial/history-90pct/collect-16 	       1	  54185875 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  11665408 peak-heap-B	    208898 temp-disk-B	 3679512 B/op	   37020 allocs/op
+BenchmarkPruneSerial/history-90pct/verify-16  	       1	   1498750 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  10543104 peak-heap-B	    208898 temp-disk-B	  921760 B/op	   15828 allocs/op
+BenchmarkPruneSerial/history-90pct/scan-16    	       1	  18941958 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  11223040 peak-heap-B	    208898 temp-disk-B	  872800 B/op	   19093 allocs/op
+BenchmarkPruneSerial/history-90pct/delete-16  	       1	  91786042 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  17661952 peak-heap-B	    208898 temp-disk-B	 7454544 B/op	   20975 allocs/op
+BenchmarkPruneSerial/history-90pct/end-to-end-16         	       1	 210497459 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  28049408 peak-heap-B	51344000 B/op	  142226 allocs/op
+PASS
+# sample=2 workload=history-99pct mode=workers=2
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=2/history-99pct/collect-16 	       1	  52681834 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  14794752 peak-heap-B	    209039 temp-disk-B	 5293448 B/op	   56325 allocs/op
+BenchmarkPruneOptimized/workers=2/history-99pct/verify-16  	       1	   1570874 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  13164544 peak-heap-B	    208898 temp-disk-B	 1191608 B/op	   19147 allocs/op
+BenchmarkPruneOptimized/workers=2/history-99pct/scan-16    	       1	  79149042 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  27402240 peak-heap-B	    208898 temp-disk-B	18323840 B/op	  180550 allocs/op
+BenchmarkPruneOptimized/workers=2/history-99pct/delete-16  	       1	 181714499 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  71319552 peak-heap-B	    208898 temp-disk-B	74339216 B/op	  201822 allocs/op
+BenchmarkPruneOptimized/workers=2/history-99pct/end-to-end-16         	       1	 461900417 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 153763840 peak-heap-B	200523568 B/op	  538545 allocs/op
+PASS
+# sample=2 workload=history-99pct mode=workers=4
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=4/history-99pct/collect-16 	       1	  47414292 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  15171584 peak-heap-B	    208933 temp-disk-B	 5240616 B/op	   55502 allocs/op
+BenchmarkPruneOptimized/workers=4/history-99pct/verify-16  	       1	   1043583 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  13426688 peak-heap-B	    208898 temp-disk-B	 1194184 B/op	   19105 allocs/op
+BenchmarkPruneOptimized/workers=4/history-99pct/scan-16    	       1	  84148375 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  27451392 peak-heap-B	    208898 temp-disk-B	18336536 B/op	  180556 allocs/op
+BenchmarkPruneOptimized/workers=4/history-99pct/delete-16  	       1	 200513126 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  73244672 peak-heap-B	    208898 temp-disk-B	76408920 B/op	  201813 allocs/op
+BenchmarkPruneOptimized/workers=4/history-99pct/end-to-end-16         	       1	 479325709 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 153092096 peak-heap-B	200108000 B/op	  537201 allocs/op
+PASS
+# sample=2 workload=history-99pct mode=workers=8
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=8/history-99pct/collect-16 	       1	  50783749 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  16523264 peak-heap-B	    209025 temp-disk-B	 5643544 B/op	   55436 allocs/op
+BenchmarkPruneOptimized/workers=8/history-99pct/verify-16  	       1	   1355375 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  14499840 peak-heap-B	    208898 temp-disk-B	 1215152 B/op	   19092 allocs/op
+BenchmarkPruneOptimized/workers=8/history-99pct/scan-16    	       1	  75192042 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  27525120 peak-heap-B	    208898 temp-disk-B	18325536 B/op	  180561 allocs/op
+BenchmarkPruneOptimized/workers=8/history-99pct/delete-16  	       1	 170652249 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  68804608 peak-heap-B	    208898 temp-disk-B	72218072 B/op	  201805 allocs/op
+BenchmarkPruneOptimized/workers=8/history-99pct/end-to-end-16         	       1	 422437541 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 158842880 peak-heap-B	202522176 B/op	  537070 allocs/op
+PASS
+# sample=2 workload=history-99pct mode=workers=16
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=16/history-99pct/collect-16 	       1	  53913667 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  18481152 peak-heap-B	    209209 temp-disk-B	 6523256 B/op	   55472 allocs/op
+BenchmarkPruneOptimized/workers=16/history-99pct/verify-16  	       1	   1079500 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  15499264 peak-heap-B	    208898 temp-disk-B	 1225608 B/op	   19013 allocs/op
+BenchmarkPruneOptimized/workers=16/history-99pct/scan-16    	       1	  78044250 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  27418624 peak-heap-B	    208898 temp-disk-B	18340976 B/op	  180590 allocs/op
+BenchmarkPruneOptimized/workers=16/history-99pct/delete-16  	       1	 180527291 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  73318400 peak-heap-B	    208898 temp-disk-B	74246424 B/op	  201846 allocs/op
+BenchmarkPruneOptimized/workers=16/history-99pct/end-to-end-16         	       1	 444450000 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 141082624 peak-heap-B	199098680 B/op	  536960 allocs/op
+PASS
+# sample=2 workload=history-99pct mode=serial
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneSerial/history-99pct/collect-16 	       1	  53446667 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  14278656 peak-heap-B	    208898 temp-disk-B	 4660528 B/op	   51318 allocs/op
+BenchmarkPruneSerial/history-99pct/verify-16  	       1	   1334459 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  12771328 peak-heap-B	    208898 temp-disk-B	  928776 B/op	   15835 allocs/op
+BenchmarkPruneSerial/history-99pct/scan-16    	       1	 136137791 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  27631616 peak-heap-B	    208898 temp-disk-B	18501928 B/op	  181916 allocs/op
+BenchmarkPruneSerial/history-99pct/delete-16  	       1	 841237791 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  70008832 peak-heap-B	    208898 temp-disk-B	74873504 B/op	  203570 allocs/op
+BenchmarkPruneSerial/history-99pct/end-to-end-16         	       1	1148659999 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 114851840 peak-heap-B	200877176 B/op	  534022 allocs/op
+PASS
+# sample=3 workload=light mode=workers=4
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=4/light/collect-16         	       1	  94728749 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  27058176 peak-heap-B	   2536924 temp-disk-B	34944360 B/op	  436173 allocs/op
+BenchmarkPruneOptimized/workers=4/light/verify-16          	       1	  14070042 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  32776192 peak-heap-B	   3413580 temp-disk-B	10736488 B/op	  195188 allocs/op
+BenchmarkPruneOptimized/workers=4/light/scan-16            	       1	  11683375 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  31080448 peak-heap-B	   3413580 temp-disk-B	 2097136 B/op	   20616 allocs/op
+BenchmarkPruneOptimized/workers=4/light/delete-16          	       1	   7576457 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  45678592 peak-heap-B	   3413577 temp-disk-B	 8560424 B/op	    9271 allocs/op
+BenchmarkPruneOptimized/workers=4/light/end-to-end-16      	       1	 184490084 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 100040704 peak-heap-B	106774920 B/op	 1075938 allocs/op
+PASS
+# sample=3 workload=light mode=workers=8
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=8/light/collect-16         	       1	 102781625 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  29401088 peak-heap-B	   2537016 temp-disk-B	36595744 B/op	  432824 allocs/op
+BenchmarkPruneOptimized/workers=8/light/verify-16          	       1	  12899333 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  33783808 peak-heap-B	   3413578 temp-disk-B	10800784 B/op	  195146 allocs/op
+BenchmarkPruneOptimized/workers=8/light/scan-16            	       1	  11964833 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  31277056 peak-heap-B	   3413577 temp-disk-B	 2101712 B/op	   20617 allocs/op
+BenchmarkPruneOptimized/workers=8/light/delete-16          	       1	   7785333 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  45973504 peak-heap-B	   3413580 temp-disk-B	 8564792 B/op	    9282 allocs/op
+BenchmarkPruneOptimized/workers=8/light/end-to-end-16      	       1	 214533209 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  97796096 peak-heap-B	108646784 B/op	 1069636 allocs/op
+PASS
+# sample=3 workload=light mode=workers=16
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=16/light/collect-16         	       1	 124722041 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  30875648 peak-heap-B	   4356360 temp-disk-B	40626744 B/op	  433162 allocs/op
+BenchmarkPruneOptimized/workers=16/light/verify-16          	       1	  13127125 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  34127872 peak-heap-B	   3413580 temp-disk-B	10807216 B/op	  195061 allocs/op
+BenchmarkPruneOptimized/workers=16/light/scan-16            	       1	  12605875 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  31301632 peak-heap-B	   3413580 temp-disk-B	 2103464 B/op	   20633 allocs/op
+BenchmarkPruneOptimized/workers=16/light/delete-16          	       1	   8009792 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  45883392 peak-heap-B	   3413580 temp-disk-B	 8569416 B/op	    9295 allocs/op
+BenchmarkPruneOptimized/workers=16/light/end-to-end-16      	       1	 246426375 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 104595456 peak-heap-B	111302064 B/op	 1069709 allocs/op
+PASS
+# sample=3 workload=light mode=serial
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneSerial/light/collect-16 	       1	 150632417 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  25911296 peak-heap-B	   3413579 temp-disk-B	34381784 B/op	  443049 allocs/op
+BenchmarkPruneSerial/light/verify-16  	       1	  36127042 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  32448512 peak-heap-B	   3413580 temp-disk-B	10941656 B/op	  191091 allocs/op
+BenchmarkPruneSerial/light/scan-16    	       1	  43147417 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  32792576 peak-heap-B	   3413577 temp-disk-B	 4130496 B/op	   37170 allocs/op
+BenchmarkPruneSerial/light/delete-16  	       1	  38364375 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  47480832 peak-heap-B	   3413580 temp-disk-B	10576328 B/op	   25798 allocs/op
+BenchmarkPruneSerial/light/end-to-end-16         	       1	 392910875 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  95494144 peak-heap-B	112713144 B/op	 1154728 allocs/op
+PASS
+# sample=3 workload=light mode=workers=2
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=2/light/collect-16         	       1	  99674208 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  26714112 peak-heap-B	   2536878 temp-disk-B	34402128 B/op	  449159 allocs/op
+BenchmarkPruneOptimized/workers=2/light/verify-16          	       1	  23544666 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  32858112 peak-heap-B	   3413580 temp-disk-B	10743088 B/op	  195168 allocs/op
+BenchmarkPruneOptimized/workers=2/light/scan-16            	       1	  11302792 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  31211520 peak-heap-B	   3413580 temp-disk-B	 2101576 B/op	   20617 allocs/op
+BenchmarkPruneOptimized/workers=2/light/delete-16          	       1	   7289917 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  45842432 peak-heap-B	   3413580 temp-disk-B	 8565776 B/op	    9272 allocs/op
+BenchmarkPruneOptimized/workers=2/light/end-to-end-16      	       1	 213313458 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  95567872 peak-heap-B	106783544 B/op	 1101080 allocs/op
+PASS
+# sample=3 workload=dense-storage mode=workers=4
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=4/dense-storage/collect-16 	       1	 125721792 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  31596544 peak-heap-B	   5270967 temp-disk-B	44225896 B/op	  534423 allocs/op
+BenchmarkPruneOptimized/workers=4/dense-storage/verify-16  	       1	  19677874 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  38117376 peak-heap-B	   5265761 temp-disk-B	13467368 B/op	  204740 allocs/op
+BenchmarkPruneOptimized/workers=4/dense-storage/scan-16    	       1	  13920791 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  35684352 peak-heap-B	   5267557 temp-disk-B	 3351960 B/op	   28714 allocs/op
+BenchmarkPruneOptimized/workers=4/dense-storage/delete-16  	       1	   9358875 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  53379072 peak-heap-B	   5265761 temp-disk-B	10748728 B/op	   11948 allocs/op
+BenchmarkPruneOptimized/workers=4/dense-storage/end-to-end-16         	       1	 270026000 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 114524160 peak-heap-B	130687776 B/op	 1284662 allocs/op
+PASS
+# sample=3 workload=dense-storage mode=workers=8
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=8/dense-storage/collect-16 	       1	 134608291 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  32604160 peak-heap-B	   5157534 temp-disk-B	46365392 B/op	  530408 allocs/op
+BenchmarkPruneOptimized/workers=8/dense-storage/verify-16  	       1	  19639417 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  39116800 peak-heap-B	   5265761 temp-disk-B	13887968 B/op	  204853 allocs/op
+BenchmarkPruneOptimized/workers=8/dense-storage/scan-16    	       1	  13934626 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  35594240 peak-heap-B	   5267557 temp-disk-B	 3355120 B/op	   28713 allocs/op
+BenchmarkPruneOptimized/workers=8/dense-storage/delete-16  	       1	  10099000 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  53542912 peak-heap-B	   5267557 temp-disk-B	10769608 B/op	   12011 allocs/op
+BenchmarkPruneOptimized/workers=8/dense-storage/end-to-end-16         	       1	 261505876 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 116867072 peak-heap-B	133549880 B/op	 1277579 allocs/op
+PASS
+# sample=3 workload=dense-storage mode=workers=16
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=16/dense-storage/collect-16 	       1	 159532417 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  34496512 peak-heap-B	   5114702 temp-disk-B	49988560 B/op	  529092 allocs/op
+BenchmarkPruneOptimized/workers=16/dense-storage/verify-16  	       1	  20093834 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  40173568 peak-heap-B	   5265761 temp-disk-B	13968752 B/op	  204374 allocs/op
+BenchmarkPruneOptimized/workers=16/dense-storage/scan-16    	       1	  15427750 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  35667968 peak-heap-B	   5267557 temp-disk-B	 3349840 B/op	   28726 allocs/op
+BenchmarkPruneOptimized/workers=16/dense-storage/delete-16  	       1	  10793292 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  53714944 peak-heap-B	   5265761 temp-disk-B	10760896 B/op	   11986 allocs/op
+BenchmarkPruneOptimized/workers=16/dense-storage/end-to-end-16         	       1	 302888333 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 126828544 peak-heap-B	137304024 B/op	 1275009 allocs/op
+PASS
+# sample=3 workload=dense-storage mode=serial
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneSerial/dense-storage/collect-16 	       1	 214879125 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  29278208 peak-heap-B	   5265761 temp-disk-B	42988720 B/op	  545008 allocs/op
+BenchmarkPruneSerial/dense-storage/verify-16  	       1	  55122374 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  36306944 peak-heap-B	   5265761 temp-disk-B	12420752 B/op	  198505 allocs/op
+BenchmarkPruneSerial/dense-storage/scan-16    	       1	  63202750 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  37527552 peak-heap-B	   5267557 temp-disk-B	 5588808 B/op	   51274 allocs/op
+BenchmarkPruneSerial/dense-storage/delete-16  	       1	  55663834 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  55263232 peak-heap-B	   5265761 temp-disk-B	12984408 B/op	   34516 allocs/op
+BenchmarkPruneSerial/dense-storage/end-to-end-16         	       1	 544084000 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 112721920 peak-heap-B	135481512 B/op	 1392058 allocs/op
+PASS
+# sample=3 workload=dense-storage mode=workers=2
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=2/dense-storage/collect-16 	       1	 151775207 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  28925952 peak-heap-B	   5272400 temp-disk-B	43523840 B/op	  551232 allocs/op
+BenchmarkPruneOptimized/workers=2/dense-storage/verify-16  	       1	  37455291 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  37330944 peak-heap-B	   5267557 temp-disk-B	13186352 B/op	  204736 allocs/op
+BenchmarkPruneOptimized/workers=2/dense-storage/scan-16    	       1	  14423749 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  35487744 peak-heap-B	   5267557 temp-disk-B	 3353560 B/op	   28713 allocs/op
+BenchmarkPruneOptimized/workers=2/dense-storage/delete-16  	       1	  10233208 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  53493760 peak-heap-B	   5265761 temp-disk-B	10747376 B/op	   11950 allocs/op
+BenchmarkPruneOptimized/workers=2/dense-storage/end-to-end-16         	       1	 307985667 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 113631232 peak-heap-B	130066896 B/op	 1317202 allocs/op
+PASS
+# sample=3 workload=storage-1024 mode=workers=4
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=4/storage-1024/collect-16 	       1	  89421042 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  20201472 peak-heap-B	   1360171 temp-disk-B	21105512 B/op	  250561 allocs/op
+BenchmarkPruneOptimized/workers=4/storage-1024/verify-16  	       1	  10046250 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  20430848 peak-heap-B	   2265981 temp-disk-B	 5328568 B/op	   90649 allocs/op
+BenchmarkPruneOptimized/workers=4/storage-1024/scan-16    	       1	   7544833 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  20553728 peak-heap-B	   2265981 temp-disk-B	 2092896 B/op	   14348 allocs/op
+BenchmarkPruneOptimized/workers=4/storage-1024/delete-16  	       1	   5431625 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  28827648 peak-heap-B	   2265981 temp-disk-B	 5442008 B/op	    5924 allocs/op
+BenchmarkPruneOptimized/workers=4/storage-1024/end-to-end-16         	       1	 158216416 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  65454080 peak-heap-B	71487104 B/op	  599019 allocs/op
+PASS
+# sample=3 workload=storage-1024 mode=workers=8
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=8/storage-1024/collect-16 	       1	  94055333 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  23969792 peak-heap-B	   1359433 temp-disk-B	22837552 B/op	  248717 allocs/op
+BenchmarkPruneOptimized/workers=8/storage-1024/verify-16  	       1	   8466791 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  21012480 peak-heap-B	   2265981 temp-disk-B	 5437688 B/op	   91105 allocs/op
+BenchmarkPruneOptimized/workers=8/storage-1024/scan-16    	       1	   7205542 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  20635648 peak-heap-B	   2265981 temp-disk-B	 2097264 B/op	   14358 allocs/op
+BenchmarkPruneOptimized/workers=8/storage-1024/delete-16  	       1	   4970416 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  28884992 peak-heap-B	   2265981 temp-disk-B	 5438880 B/op	    5928 allocs/op
+BenchmarkPruneOptimized/workers=8/storage-1024/end-to-end-16         	       1	 171709501 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  64937984 peak-heap-B	73386048 B/op	  596598 allocs/op
+PASS
+# sample=3 workload=storage-1024 mode=workers=16
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=16/storage-1024/collect-16 	       1	  91000334 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  25182208 peak-heap-B	   1359291 temp-disk-B	23135320 B/op	  248590 allocs/op
+BenchmarkPruneOptimized/workers=16/storage-1024/verify-16  	       1	   8152084 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  21250048 peak-heap-B	   2265981 temp-disk-B	 5478560 B/op	   91014 allocs/op
+BenchmarkPruneOptimized/workers=16/storage-1024/scan-16    	       1	   7842000 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  20979712 peak-heap-B	   2265981 temp-disk-B	 2099776 B/op	   14363 allocs/op
+BenchmarkPruneOptimized/workers=16/storage-1024/delete-16  	       1	   5578333 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  28958720 peak-heap-B	   2265981 temp-disk-B	 5456424 B/op	    5949 allocs/op
+BenchmarkPruneOptimized/workers=16/storage-1024/end-to-end-16         	       1	 167002251 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  67133440 peak-heap-B	74330448 B/op	  596511 allocs/op
+PASS
+# sample=3 workload=storage-1024 mode=serial
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneSerial/storage-1024/collect-16 	       1	 117888542 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  19628032 peak-heap-B	   2265981 temp-disk-B	20920328 B/op	  272571 allocs/op
+BenchmarkPruneSerial/storage-1024/verify-16  	       1	  21498457 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  20414464 peak-heap-B	   2265981 temp-disk-B	 6064816 B/op	  104586 allocs/op
+BenchmarkPruneSerial/storage-1024/scan-16    	       1	  27169250 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  21372928 peak-heap-B	   2265981 temp-disk-B	 3199712 B/op	   25417 allocs/op
+BenchmarkPruneSerial/storage-1024/delete-16  	       1	  26089833 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  29581312 peak-heap-B	   2265981 temp-disk-B	 6549272 B/op	   16998 allocs/op
+BenchmarkPruneSerial/storage-1024/end-to-end-16         	       1	 275432249 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  65044480 peak-heap-B	76151320 B/op	  702935 allocs/op
+PASS
+# sample=3 workload=storage-1024 mode=workers=2
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=2/storage-1024/collect-16 	       1	  90143875 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  21086208 peak-heap-B	   1360891 temp-disk-B	20400624 B/op	  258586 allocs/op
+BenchmarkPruneOptimized/workers=2/storage-1024/verify-16  	       1	  15192249 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  20103168 peak-heap-B	   2265981 temp-disk-B	 5302848 B/op	   90495 allocs/op
+BenchmarkPruneOptimized/workers=2/storage-1024/scan-16    	       1	   7228292 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  20480000 peak-heap-B	   2265981 temp-disk-B	 2090656 B/op	   14328 allocs/op
+BenchmarkPruneOptimized/workers=2/storage-1024/delete-16  	       1	   5573958 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  28606464 peak-heap-B	   2265981 temp-disk-B	 5450088 B/op	    5920 allocs/op
+BenchmarkPruneOptimized/workers=2/storage-1024/end-to-end-16         	       1	 177995584 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  59596800 peak-heap-B	71019160 B/op	  614694 allocs/op
+PASS
+# sample=3 workload=storage-1025 mode=workers=4
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=4/storage-1025/collect-16 	       1	 115260875 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  23126016 peak-heap-B	   4192284 temp-disk-B	38498904 B/op	  525771 allocs/op
+BenchmarkPruneOptimized/workers=4/storage-1025/verify-16  	       1	  16951834 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  27148288 peak-heap-B	   2267547 temp-disk-B	12157352 B/op	  199871 allocs/op
+BenchmarkPruneOptimized/workers=4/storage-1025/scan-16    	       1	   7227292 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  20946944 peak-heap-B	   2267547 temp-disk-B	 2092336 B/op	   14348 allocs/op
+BenchmarkPruneOptimized/workers=4/storage-1025/delete-16  	       1	   5419334 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  29040640 peak-heap-B	   2267547 temp-disk-B	 5489400 B/op	    5933 allocs/op
+BenchmarkPruneOptimized/workers=4/storage-1025/end-to-end-16         	       1	 225260333 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  73908224 peak-heap-B	110452456 B/op	 1229080 allocs/op
+PASS
+# sample=3 workload=storage-1025 mode=workers=8
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=8/storage-1025/collect-16 	       1	 132056583 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  26468352 peak-heap-B	   4004719 temp-disk-B	40101600 B/op	  519883 allocs/op
+BenchmarkPruneOptimized/workers=8/storage-1025/verify-16  	       1	  17595543 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  26648576 peak-heap-B	   2267547 temp-disk-B	12248904 B/op	  200216 allocs/op
+BenchmarkPruneOptimized/workers=8/storage-1025/scan-16    	       1	   7561626 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  21225472 peak-heap-B	   2267547 temp-disk-B	 2094696 B/op	   14356 allocs/op
+BenchmarkPruneOptimized/workers=8/storage-1025/delete-16  	       1	   5335708 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  29302784 peak-heap-B	   2267547 temp-disk-B	 5481968 B/op	    5943 allocs/op
+BenchmarkPruneOptimized/workers=8/storage-1025/end-to-end-16         	       1	 234320166 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  74629120 peak-heap-B	112150912 B/op	 1220772 allocs/op
+PASS
+# sample=3 workload=storage-1025 mode=workers=16
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=16/storage-1025/collect-16 	       1	 106097542 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  27099136 peak-heap-B	   1360614 temp-disk-B	39088928 B/op	  509280 allocs/op
+BenchmarkPruneOptimized/workers=16/storage-1025/verify-16  	       1	  18368167 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  27860992 peak-heap-B	   2267547 temp-disk-B	12352928 B/op	  200540 allocs/op
+BenchmarkPruneOptimized/workers=16/storage-1025/scan-16    	       1	   7515917 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  21348352 peak-heap-B	   2267547 temp-disk-B	 2100040 B/op	   14381 allocs/op
+BenchmarkPruneOptimized/workers=16/storage-1025/delete-16  	       1	   5134334 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  29458432 peak-heap-B	   2267547 temp-disk-B	 5484016 B/op	    5956 allocs/op
+BenchmarkPruneOptimized/workers=16/storage-1025/end-to-end-16         	       1	 227180459 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  76120064 peak-heap-B	112489104 B/op	 1210045 allocs/op
+PASS
+# sample=3 workload=storage-1025 mode=serial
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneSerial/storage-1025/collect-16 	       1	 118743501 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  19767296 peak-heap-B	   2267547 temp-disk-B	21004088 B/op	  273106 allocs/op
+BenchmarkPruneSerial/storage-1025/verify-16  	       1	  21433250 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  20512768 peak-heap-B	   2267547 temp-disk-B	 6076128 B/op	  104704 allocs/op
+BenchmarkPruneSerial/storage-1025/scan-16    	       1	  25854459 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  21913600 peak-heap-B	   2267547 temp-disk-B	 3182200 B/op	   25414 allocs/op
+BenchmarkPruneSerial/storage-1025/delete-16  	       1	  25463000 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  29999104 peak-heap-B	   2267547 temp-disk-B	 6600832 B/op	   17029 allocs/op
+BenchmarkPruneSerial/storage-1025/end-to-end-16         	       1	 271057000 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  65290240 peak-heap-B	76327832 B/op	  704211 allocs/op
+PASS
+# sample=3 workload=storage-1025 mode=workers=2
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=2/storage-1025/collect-16 	       1	 138780208 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  21774336 peak-heap-B	   3976656 temp-disk-B	38209672 B/op	  543896 allocs/op
+BenchmarkPruneOptimized/workers=2/storage-1025/verify-16  	       1	  31097458 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  27025408 peak-heap-B	   2267547 temp-disk-B	12092424 B/op	  199785 allocs/op
+BenchmarkPruneOptimized/workers=2/storage-1025/scan-16    	       1	   7496874 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  20750336 peak-heap-B	   2267547 temp-disk-B	 2090720 B/op	   14343 allocs/op
+BenchmarkPruneOptimized/workers=2/storage-1025/delete-16  	       1	   5012416 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  29147136 peak-heap-B	   2267547 temp-disk-B	 5479536 B/op	    5931 allocs/op
+BenchmarkPruneOptimized/workers=2/storage-1025/end-to-end-16         	       1	 263235958 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  73940992 peak-heap-B	110601944 B/op	 1263802 allocs/op
+PASS
+# sample=3 workload=giant-storage mode=workers=4
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=4/giant-storage/collect-16 	       1	 549674041 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  45293568 peak-heap-B	  11124193 temp-disk-B	77918680 B/op	 1022856 allocs/op
+BenchmarkPruneOptimized/workers=4/giant-storage/verify-16  	       1	  64139708 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  56909824 peak-heap-B	  10708387 temp-disk-B	20747376 B/op	  364040 allocs/op
+BenchmarkPruneOptimized/workers=4/giant-storage/scan-16    	       1	  28863374 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  57458688 peak-heap-B	  10708387 temp-disk-B	 8505496 B/op	   56291 allocs/op
+BenchmarkPruneOptimized/workers=4/giant-storage/delete-16  	       1	  25367666 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  77398016 peak-heap-B	  10708387 temp-disk-B	21390064 B/op	   23174 allocs/op
+BenchmarkPruneOptimized/workers=4/giant-storage/end-to-end-16         	       1	 414288709 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 181821440 peak-heap-B	221693704 B/op	 2413186 allocs/op
+PASS
+# sample=3 workload=giant-storage mode=workers=8
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=8/giant-storage/collect-16 	       1	 215163458 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  47415296 peak-heap-B	  11369996 temp-disk-B	79328072 B/op	 1007404 allocs/op
+BenchmarkPruneOptimized/workers=8/giant-storage/verify-16  	       1	  47529292 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  56754176 peak-heap-B	  10708387 temp-disk-B	20814728 B/op	  364427 allocs/op
+BenchmarkPruneOptimized/workers=8/giant-storage/scan-16    	       1	  27449417 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  57720832 peak-heap-B	  10708387 temp-disk-B	 8514104 B/op	   56300 allocs/op
+BenchmarkPruneOptimized/workers=8/giant-storage/delete-16  	       1	  23264876 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  77619200 peak-heap-B	  10708387 temp-disk-B	21386456 B/op	   23183 allocs/op
+BenchmarkPruneOptimized/workers=8/giant-storage/end-to-end-16         	       1	 405713583 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 183328768 peak-heap-B	222797776 B/op	 2398940 allocs/op
+PASS
+# sample=3 workload=giant-storage mode=workers=16
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=16/giant-storage/collect-16 	       1	 247721834 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  48644096 peak-heap-B	  11018502 temp-disk-B	82617536 B/op	 1006895 allocs/op
+BenchmarkPruneOptimized/workers=16/giant-storage/verify-16  	       1	  46425375 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  57491456 peak-heap-B	  10708387 temp-disk-B	20952008 B/op	  365248 allocs/op
+BenchmarkPruneOptimized/workers=16/giant-storage/scan-16    	       1	  28608958 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  57876480 peak-heap-B	  10708387 temp-disk-B	 8517040 B/op	   56314 allocs/op
+BenchmarkPruneOptimized/workers=16/giant-storage/delete-16  	       1	  23279124 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  77611008 peak-heap-B	  10708387 temp-disk-B	21378800 B/op	   23191 allocs/op
+BenchmarkPruneOptimized/workers=16/giant-storage/end-to-end-16         	       1	 450656291 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 185245696 peak-heap-B	226760680 B/op	 2400242 allocs/op
+PASS
+# sample=3 workload=giant-storage mode=serial
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneSerial/giant-storage/collect-16 	       1	 387224583 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  39911424 peak-heap-B	  10708387 temp-disk-B	79086928 B/op	 1076379 allocs/op
+BenchmarkPruneSerial/giant-storage/verify-16  	       1	 107300834 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  58941440 peak-heap-B	  10708387 temp-disk-B	23429152 B/op	  414442 allocs/op
+BenchmarkPruneSerial/giant-storage/scan-16    	       1	 139668916 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  61300736 peak-heap-B	  10708387 temp-disk-B	12875848 B/op	   99830 allocs/op
+BenchmarkPruneSerial/giant-storage/delete-16  	       1	 137798791 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  81330176 peak-heap-B	  10708387 temp-disk-B	25749648 B/op	   66707 allocs/op
+BenchmarkPruneSerial/giant-storage/end-to-end-16         	       1	1018733666 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 144883712 peak-heap-B	243681728 B/op	 2769056 allocs/op
+PASS
+# sample=3 workload=giant-storage mode=workers=2
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=2/giant-storage/collect-16 	       1	 257733292 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  40574976 peak-heap-B	  11221485 temp-disk-B	77307184 B/op	 1044665 allocs/op
+BenchmarkPruneOptimized/workers=2/giant-storage/verify-16  	       1	  76841584 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  56098816 peak-heap-B	  10708387 temp-disk-B	20717368 B/op	  363841 allocs/op
+BenchmarkPruneOptimized/workers=2/giant-storage/scan-16    	       1	  29868750 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  57171968 peak-heap-B	  10708387 temp-disk-B	 8507128 B/op	   56289 allocs/op
+BenchmarkPruneOptimized/workers=2/giant-storage/delete-16  	       1	  24743666 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  77520896 peak-heap-B	  10708387 temp-disk-B	21382704 B/op	   23165 allocs/op
+BenchmarkPruneOptimized/workers=2/giant-storage/end-to-end-16         	       1	 490800249 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 181633024 peak-heap-B	222654816 B/op	 2473512 allocs/op
+PASS
+# sample=3 workload=shared-code mode=workers=4
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=4/shared-code/collect-16 	       1	  88768041 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  27869184 peak-heap-B	   2569673 temp-disk-B	34915464 B/op	  436816 allocs/op
+BenchmarkPruneOptimized/workers=4/shared-code/verify-16  	       1	  14789208 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  33153024 peak-heap-B	   3422030 temp-disk-B	10781512 B/op	  195100 allocs/op
+BenchmarkPruneOptimized/workers=4/shared-code/scan-16    	       1	  11969416 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  31694848 peak-heap-B	   3422030 temp-disk-B	 2175624 B/op	   20608 allocs/op
+BenchmarkPruneOptimized/workers=4/shared-code/delete-16  	       1	   7482667 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  46440448 peak-heap-B	   3422030 temp-disk-B	 8723688 B/op	    9290 allocs/op
+BenchmarkPruneOptimized/workers=4/shared-code/end-to-end-16         	       1	 186638333 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 100220928 peak-heap-B	107298624 B/op	 1075784 allocs/op
+PASS
+# sample=3 workload=shared-code mode=workers=8
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=8/shared-code/collect-16 	       1	  93798875 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  29958144 peak-heap-B	   2569696 temp-disk-B	36850504 B/op	  432681 allocs/op
+BenchmarkPruneOptimized/workers=8/shared-code/verify-16  	       1	  12671292 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  33677312 peak-heap-B	   3422030 temp-disk-B	10786264 B/op	  194980 allocs/op
+BenchmarkPruneOptimized/workers=8/shared-code/scan-16    	       1	  11214125 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  31760384 peak-heap-B	   3422030 temp-disk-B	 2176488 B/op	   20612 allocs/op
+BenchmarkPruneOptimized/workers=8/shared-code/delete-16  	       1	   7606541 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  46489600 peak-heap-B	   3422030 temp-disk-B	 8723024 B/op	    9291 allocs/op
+BenchmarkPruneOptimized/workers=8/shared-code/end-to-end-16         	       1	 202369001 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 105381888 peak-heap-B	109011008 B/op	 1069706 allocs/op
+PASS
+# sample=3 workload=shared-code mode=workers=16
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=16/shared-code/collect-16 	       1	  98512875 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  30785536 peak-heap-B	   2569777 temp-disk-B	40285600 B/op	  432207 allocs/op
+BenchmarkPruneOptimized/workers=16/shared-code/verify-16  	       1	  13191625 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  34562048 peak-heap-B	   3422030 temp-disk-B	10830824 B/op	  195045 allocs/op
+BenchmarkPruneOptimized/workers=16/shared-code/scan-16    	       1	  12096750 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  31481856 peak-heap-B	   3422030 temp-disk-B	 2175496 B/op	   20620 allocs/op
+BenchmarkPruneOptimized/workers=16/shared-code/delete-16  	       1	   7727250 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  46374912 peak-heap-B	   3422030 temp-disk-B	 8724888 B/op	    9302 allocs/op
+BenchmarkPruneOptimized/workers=16/shared-code/end-to-end-16         	       1	 217220542 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 110575616 peak-heap-B	112661320 B/op	 1068999 allocs/op
+PASS
+# sample=3 workload=shared-code mode=serial
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneSerial/shared-code/collect-16 	       1	 153194125 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  27582464 peak-heap-B	   3422028 temp-disk-B	34613816 B/op	  443063 allocs/op
+BenchmarkPruneSerial/shared-code/verify-16  	       1	  34855999 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  33325056 peak-heap-B	   3422030 temp-disk-B	10957096 B/op	  190967 allocs/op
+BenchmarkPruneSerial/shared-code/scan-16    	       1	  39785833 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  33251328 peak-heap-B	   3422030 temp-disk-B	 4228952 B/op	   37147 allocs/op
+BenchmarkPruneSerial/shared-code/delete-16  	       1	  35511542 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  48144384 peak-heap-B	   3422030 temp-disk-B	10771744 B/op	   25818 allocs/op
+BenchmarkPruneSerial/shared-code/end-to-end-16         	       1	 370988792 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  97648640 peak-heap-B	113545816 B/op	 1154960 allocs/op
+PASS
+# sample=3 workload=shared-code mode=workers=2
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=2/shared-code/collect-16 	       1	 102675416 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  26886144 peak-heap-B	   2569650 temp-disk-B	34541440 B/op	  449149 allocs/op
+BenchmarkPruneOptimized/workers=2/shared-code/verify-16  	       1	  24721000 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  32874496 peak-heap-B	   3422030 temp-disk-B	10766120 B/op	  195154 allocs/op
+BenchmarkPruneOptimized/workers=2/shared-code/scan-16    	       1	  11803668 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  31703040 peak-heap-B	   3422030 temp-disk-B	 2170816 B/op	   20589 allocs/op
+BenchmarkPruneOptimized/workers=2/shared-code/delete-16  	       1	   8445958 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  46505984 peak-heap-B	   3422030 temp-disk-B	 8720952 B/op	    9278 allocs/op
+BenchmarkPruneOptimized/workers=2/shared-code/end-to-end-16         	       1	 220281666 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  98230272 peak-heap-B	107309400 B/op	 1100679 allocs/op
+PASS
+# sample=3 workload=history-90pct mode=workers=4
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=4/history-90pct/collect-16 	       1	  50379291 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  12460032 peak-heap-B	    208933 temp-disk-B	 4215568 B/op	   40483 allocs/op
+BenchmarkPruneOptimized/workers=4/history-90pct/verify-16  	       1	   1257667 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  11100160 peak-heap-B	    208898 temp-disk-B	 1190656 B/op	   19100 allocs/op
+BenchmarkPruneOptimized/workers=4/history-90pct/scan-16    	       1	   9411375 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  10903552 peak-heap-B	    208898 temp-disk-B	  725088 B/op	   17765 allocs/op
+BenchmarkPruneOptimized/workers=4/history-90pct/delete-16  	       1	  18972375 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  19243008 peak-heap-B	    208898 temp-disk-B	12379120 B/op	   19638 allocs/op
+BenchmarkPruneOptimized/workers=4/history-90pct/end-to-end-16         	       1	 133634917 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  28565504 peak-heap-B	58484304 B/op	  146416 allocs/op
+PASS
+# sample=3 workload=history-90pct mode=workers=8
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=8/history-90pct/collect-16 	       1	  50100417 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  14123008 peak-heap-B	    209025 temp-disk-B	 4616112 B/op	   40368 allocs/op
+BenchmarkPruneOptimized/workers=8/history-90pct/verify-16  	       1	   1553708 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  12419072 peak-heap-B	    208898 temp-disk-B	 1219128 B/op	   19157 allocs/op
+BenchmarkPruneOptimized/workers=8/history-90pct/scan-16    	       1	   9993292 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  11059200 peak-heap-B	    208898 temp-disk-B	  726896 B/op	   17774 allocs/op
+BenchmarkPruneOptimized/workers=8/history-90pct/delete-16  	       1	  16138708 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  19341312 peak-heap-B	    208898 temp-disk-B	12375656 B/op	   19642 allocs/op
+BenchmarkPruneOptimized/workers=8/history-90pct/end-to-end-16         	       1	 134997750 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  30121984 peak-heap-B	58855240 B/op	  146535 allocs/op
+PASS
+# sample=3 workload=history-90pct mode=workers=16
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=16/history-90pct/collect-16 	       1	  52465000 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  14786560 peak-heap-B	    209209 temp-disk-B	 5500696 B/op	   40304 allocs/op
+BenchmarkPruneOptimized/workers=16/history-90pct/verify-16  	       1	   1321000 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  13172736 peak-heap-B	    208898 temp-disk-B	 1217440 B/op	   18964 allocs/op
+BenchmarkPruneOptimized/workers=16/history-90pct/scan-16    	       1	   9299041 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  11034624 peak-heap-B	    208898 temp-disk-B	  729784 B/op	   17789 allocs/op
+BenchmarkPruneOptimized/workers=16/history-90pct/delete-16  	       1	  19252417 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  19300352 peak-heap-B	    208898 temp-disk-B	12383360 B/op	   19659 allocs/op
+BenchmarkPruneOptimized/workers=16/history-90pct/end-to-end-16         	       1	 136785208 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  36085760 peak-heap-B	59600464 B/op	  145876 allocs/op
+PASS
+# sample=3 workload=history-90pct mode=serial
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneSerial/history-90pct/collect-16 	       1	  50921750 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  11378688 peak-heap-B	    208898 temp-disk-B	 3724088 B/op	   37050 allocs/op
+BenchmarkPruneSerial/history-90pct/verify-16  	       1	   1453166 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  10248192 peak-heap-B	    208898 temp-disk-B	  928928 B/op	   15833 allocs/op
+BenchmarkPruneSerial/history-90pct/scan-16    	       1	  18168042 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  10821632 peak-heap-B	    208898 temp-disk-B	  880592 B/op	   19090 allocs/op
+BenchmarkPruneSerial/history-90pct/delete-16  	       1	  93290334 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  17358848 peak-heap-B	    208898 temp-disk-B	 7455024 B/op	   20975 allocs/op
+BenchmarkPruneSerial/history-90pct/end-to-end-16         	       1	 217339708 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  26591232 peak-heap-B	51336392 B/op	  142201 allocs/op
+PASS
+# sample=3 workload=history-90pct mode=workers=2
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=2/history-90pct/collect-16 	       1	  51680041 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  12165120 peak-heap-B	    209039 temp-disk-B	 4282416 B/op	   41558 allocs/op
+BenchmarkPruneOptimized/workers=2/history-90pct/verify-16  	       1	   1662292 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  10813440 peak-heap-B	    208898 temp-disk-B	 1187992 B/op	   19121 allocs/op
+BenchmarkPruneOptimized/workers=2/history-90pct/scan-16    	       1	   9129584 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  10960896 peak-heap-B	    208898 temp-disk-B	  724648 B/op	   17763 allocs/op
+BenchmarkPruneOptimized/workers=2/history-90pct/delete-16  	       1	  19185417 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  19316736 peak-heap-B	    208898 temp-disk-B	12377840 B/op	   19631 allocs/op
+BenchmarkPruneOptimized/workers=2/history-90pct/end-to-end-16         	       1	 146614292 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  27992064 peak-heap-B	58941408 B/op	  148358 allocs/op
+PASS
+# sample=3 workload=history-99pct mode=workers=4
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=4/history-99pct/collect-16 	       1	  50570792 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  15065088 peak-heap-B	    208933 temp-disk-B	 5197520 B/op	   55500 allocs/op
+BenchmarkPruneOptimized/workers=4/history-99pct/verify-16  	       1	   1041875 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  13369344 peak-heap-B	    208898 temp-disk-B	 1192648 B/op	   19108 allocs/op
+BenchmarkPruneOptimized/workers=4/history-99pct/scan-16    	       1	  82124542 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  27467776 peak-heap-B	    208898 temp-disk-B	18324448 B/op	  180549 allocs/op
+BenchmarkPruneOptimized/workers=4/history-99pct/delete-16  	       1	 174707208 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  73342976 peak-heap-B	    208898 temp-disk-B	74342936 B/op	  201867 allocs/op
+BenchmarkPruneOptimized/workers=4/history-99pct/end-to-end-16         	       1	 437844333 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 154451968 peak-heap-B	200097808 B/op	  537118 allocs/op
+PASS
+# sample=3 workload=history-99pct mode=workers=8
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=8/history-99pct/collect-16 	       1	  51888625 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  16596992 peak-heap-B	    209025 temp-disk-B	 5644784 B/op	   55392 allocs/op
+BenchmarkPruneOptimized/workers=8/history-99pct/verify-16  	       1	   1433209 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  14393344 peak-heap-B	    208898 temp-disk-B	 1218768 B/op	   19122 allocs/op
+BenchmarkPruneOptimized/workers=8/history-99pct/scan-16    	       1	  79346792 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  27451392 peak-heap-B	    208898 temp-disk-B	18326576 B/op	  180559 allocs/op
+BenchmarkPruneOptimized/workers=8/history-99pct/delete-16  	       1	 178622833 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  73310208 peak-heap-B	    208898 temp-disk-B	76465656 B/op	  201923 allocs/op
+BenchmarkPruneOptimized/workers=8/history-99pct/end-to-end-16         	       1	 430342458 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 151289856 peak-heap-B	200366040 B/op	  537130 allocs/op
+PASS
+# sample=3 workload=history-99pct mode=workers=16
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=16/history-99pct/collect-16 	       1	  53004084 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  16424960 peak-heap-B	    209209 temp-disk-B	 6548816 B/op	   55562 allocs/op
+BenchmarkPruneOptimized/workers=16/history-99pct/verify-16  	       1	   1063250 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  15638528 peak-heap-B	    208898 temp-disk-B	 1227032 B/op	   19022 allocs/op
+BenchmarkPruneOptimized/workers=16/history-99pct/scan-16    	       1	  76693750 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  27459584 peak-heap-B	    208898 temp-disk-B	18332008 B/op	  180572 allocs/op
+BenchmarkPruneOptimized/workers=16/history-99pct/delete-16  	       1	 176523334 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  71254016 peak-heap-B	    208898 temp-disk-B	72204720 B/op	  201865 allocs/op
+BenchmarkPruneOptimized/workers=16/history-99pct/end-to-end-16         	       1	 425014376 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 159358976 peak-heap-B	205423904 B/op	  536865 allocs/op
+PASS
+# sample=3 workload=history-99pct mode=serial
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneSerial/history-99pct/collect-16 	       1	  53875375 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  14245888 peak-heap-B	    208898 temp-disk-B	 4660880 B/op	   51318 allocs/op
+BenchmarkPruneSerial/history-99pct/verify-16  	       1	   1375292 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  12804096 peak-heap-B	    208898 temp-disk-B	  928336 B/op	   15831 allocs/op
+BenchmarkPruneSerial/history-99pct/scan-16    	       1	 137161958 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  27508736 peak-heap-B	    208898 temp-disk-B	18485144 B/op	  181901 allocs/op
+BenchmarkPruneSerial/history-99pct/delete-16  	       1	 843331001 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  69050368 peak-heap-B	    208898 temp-disk-B	74857400 B/op	  203615 allocs/op
+BenchmarkPruneSerial/history-99pct/end-to-end-16         	       1	1202848791 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 109559808 peak-heap-B	198767792 B/op	  534030 allocs/op
+PASS
+# sample=3 workload=history-99pct mode=workers=2
+goos: darwin
+goarch: arm64
+pkg: github.com/metis-devops/metis-l2geth-migration/internal/migration
+cpu: Apple M3 Max
+BenchmarkPruneOptimized/workers=2/history-99pct/collect-16 	       1	  51578167 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  14745600 peak-heap-B	    210503 temp-disk-B	 5286080 B/op	   56335 allocs/op
+BenchmarkPruneOptimized/workers=2/history-99pct/verify-16  	       1	   1620708 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  13008896 peak-heap-B	    208898 temp-disk-B	 1186120 B/op	   19121 allocs/op
+BenchmarkPruneOptimized/workers=2/history-99pct/scan-16    	       1	  73142125 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  27295744 peak-heap-B	    208898 temp-disk-B	18328592 B/op	  180543 allocs/op
+BenchmarkPruneOptimized/workers=2/history-99pct/delete-16  	       1	 176799292 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	  71131136 peak-heap-B	    208898 temp-disk-B	74346344 B/op	  201879 allocs/op
+BenchmarkPruneOptimized/workers=2/history-99pct/end-to-end-16         	       1	 424139666 ns/op	         0 fs-read-blocks/op	         0 fs-write-blocks/op	 150249472 peak-heap-B	200489872 B/op	  538613 allocs/op
+PASS

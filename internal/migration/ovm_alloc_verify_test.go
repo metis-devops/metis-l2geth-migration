@@ -35,8 +35,8 @@ func testOVMGenesisAllocVerificationTampering(t *testing.T, tempMode TempDBMode)
 	if err != nil {
 		t.Fatal(err)
 	}
-	verify := OVMVerifyOptions{TempDB: tempMode, SourceChaindata: f.source, Artifact: opts.Output, CacheMB: 64, Handles: 64, Workers: 2, OVM: opts.OVM}
-	original, err := json.Marshal(result.OVMReport)
+	verify := OVMVerifyOptions{TempDir: filepath.Dir(opts.Output), TempDB: tempMode, SourceChaindata: f.source, Artifact: opts.Output, CacheMB: 64, Handles: 64, Workers: 2, OVM: opts.OVM}
+	original, err := json.Marshal(requireOVMReport(t, result))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +62,7 @@ func testOVMGenesisAllocVerificationTampering(t *testing.T, tempMode TempDBMode)
 			case "converted_root":
 				alloc["converted_state"].(map[string]any)["state_root"] = common.HexToHash("0x01")
 			case "converted_counts":
-				alloc["converted_state"].(map[string]any)["counts"].(map[string]any)["payload_bytes"] = float64(result.OVMReport.GenesisAlloc.Converted.Counts.PayloadBytes + 1)
+				alloc["converted_state"].(map[string]any)["counts"].(map[string]any)["payload_bytes"] = float64(requireOVMReport(t, result).GenesisAlloc.Converted.Counts.PayloadBytes + 1)
 			case "null_evidence":
 				data["genesis_alloc"] = nil
 			case "unknown_field":
@@ -297,7 +297,7 @@ func TestOVMGenesisAllocMutationDuringActualArtifactVerification(t *testing.T) {
 			t.Error(err)
 		}
 	}}}
-	v := OVMVerifyOptions{SourceChaindata: f.source, Artifact: opts.Output, CacheMB: 64, Handles: 64, Workers: 2, OVM: opts.OVM,
+	v := OVMVerifyOptions{TempDir: filepath.Dir(opts.Output), SourceChaindata: f.source, Artifact: opts.Output, CacheMB: 64, Handles: 64, Workers: 2, OVM: opts.OVM,
 		Progress: ProgressOptions{Logger: log.NewLogger(log.NewTerminalHandler(&writer, false))}}
 	if _, err := VerifyOVM(t.Context(), v); err == nil || !strings.Contains(err.Error(), "GenesisAlloc input changed") {
 		t.Fatalf("input change during actual artifact verification was missed: %v", err)

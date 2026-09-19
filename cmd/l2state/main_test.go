@@ -30,6 +30,7 @@ func TestCLIEndToEnd(t *testing.T) {
 func runCLIEndToEnd(t *testing.T, engine, scheme, mode string) {
 	source := loadGoldenSource(t)
 	root := t.TempDir()
+	verifyTemp := t.TempDir()
 	bundlePath := filepath.Join(root, "bundle")
 	artifactPath := filepath.Join(root, "artifact")
 	directArtifactPath := filepath.Join(root, "direct-artifact")
@@ -66,7 +67,7 @@ func runCLIEndToEnd(t *testing.T, engine, scheme, mode string) {
 	stdout.Reset()
 	stderr.Reset()
 	if err := run(context.Background(), []string{
-		"verify", "--temp-db", mode, "--bundle", bundlePath, "--artifact", artifactPath,
+		"verify", "--temp-dir", verifyTemp, "--temp-db", mode, "--bundle", bundlePath, "--artifact", artifactPath,
 		"--cache-mb", "16", "--handles", "16",
 	}, &stdout, &stderr); err != nil {
 		t.Fatalf("verify command: %v stderr=%s", err, stderr.String())
@@ -106,7 +107,7 @@ func runCLIEndToEnd(t *testing.T, engine, scheme, mode string) {
 	stdout.Reset()
 	stderr.Reset()
 	if err := run(context.Background(), []string{
-		"verify", "--temp-db", mode, "--source-chaindata", source, "--artifact", directArtifactPath,
+		"verify", "--temp-dir", verifyTemp, "--temp-db", mode, "--source-chaindata", source, "--artifact", directArtifactPath,
 		"--cache-mb", "16", "--handles", "16",
 	}, &stdout, &stderr); err != nil {
 		t.Fatalf("direct verify command: %v stderr=%s", err, stderr.String())
@@ -119,6 +120,10 @@ func runCLIEndToEnd(t *testing.T, engine, scheme, mode string) {
 		"phase=verify_state",
 		"phase=inspect_database",
 	)
+	entries, err := os.ReadDir(verifyTemp)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("verification scratch survived: %v %v", entries, err)
+	}
 }
 
 func TestCLIQuiet(t *testing.T) {
