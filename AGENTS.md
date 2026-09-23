@@ -47,7 +47,7 @@ stated otherwise; run command examples from that root.
 - Preserve stdout JSON / stderr progress separation and strict artifact layouts.
 - Standalone verification scratch belongs under `--temp-dir` or the system
   temporary directory, outside every input; never require a writable artifact parent.
-- Do not incidentally change the Go 1.27 requirement, geth v1.17.5 pin,
+- Do not incidentally change the Go 1.27 requirement, geth v1.17.6 pin,
   format v1 contracts, encoding, supported engines/schemes or compression.
   Do not restore legacy target generation or historical-format readers.
 - Do not regenerate the legacy canary or frozen compatibility corpus during

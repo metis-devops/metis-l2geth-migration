@@ -74,7 +74,7 @@ func (s SourceEvidence) ValidatedHeader() (*types.Header, error) {
 	}
 	var header types.Header
 	if err := rlp.DecodeBytes(s.HeaderRLP, &header); err != nil {
-		return nil, fmt.Errorf("decode header RLP as geth v1.17.5 header: %w", err)
+		return nil, fmt.Errorf("decode header RLP as geth v1.17.6 header: %w", err)
 	}
 	if header.Number == nil || !header.Number.IsUint64() {
 		return nil, errors.New("header block number is missing or exceeds uint64")

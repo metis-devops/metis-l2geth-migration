@@ -131,7 +131,7 @@ func readLegacyHead(db ethdb.Database) (bundle.Head, []byte, error) {
 	}
 	var header types.Header
 	if err := rlp.DecodeBytes(headerRLP, &header); err != nil {
-		return bundle.Head{}, nil, fmt.Errorf("decode legacy header with geth v1.17.5: %w", err)
+		return bundle.Head{}, nil, fmt.Errorf("decode legacy header with geth v1.17.6: %w", err)
 	}
 	if header.Number == nil || !header.Number.IsUint64() {
 		return bundle.Head{}, nil, errors.New("legacy head header number is missing or exceeds uint64")

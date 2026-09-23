@@ -16,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm/runtime"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/holiman/uint256"
@@ -98,7 +99,7 @@ func commitOVMContinuation(t *testing.T, opts MigrateOptions, root common.Hash, 
 		t.Fatal(err)
 	}
 	s.SetBalance(address, uint256.NewInt(12), tracing.BalanceChangeUnspecified)
-	root, err = s.Commit(3, false, true)
+	root, err = s.Commit(params.Rules{IsCancun: true}, 3)
 	if err != nil {
 		t.Fatal(err)
 	}

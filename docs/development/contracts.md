@@ -54,7 +54,7 @@
 ### Target artifacts
 
 - Support `--db-engine pebble|leveldb` (default Pebble) with explicit `hash`
-  and `path` schemes using pinned geth v1.17.5. The target layout is always geth.
+  and `path` schemes using pinned geth v1.17.6. The target layout is always geth.
   Do not restore the removed `--state-layout` flag or legacy target generation.
 - Reports record `db_engine` as `pebble|leveldb` (where `pebble` means Pebble v2).
   Reject the retired engine identifier. New artifact reports explicitly record
@@ -74,7 +74,7 @@
   receipts, history, orphan trie nodes, unreferenced code, malformed path
   metadata, and any other unexpected database key.
 - Hash artifacts must contain no temporary flat state. Path artifacts must
-  preserve geth v1.17.5 completion metadata, `SnapshotRoot`, and state ID 0,
+  preserve geth v1.17.6 completion metadata, `SnapshotRoot`, and state ID 0,
   with no historical layers.
 - Direct-migrate partition roots must reproduce the serial trie node set.
   Handle empty, single-populated, and multi-populated partitions with the
@@ -106,7 +106,7 @@
   and return `PublicationDurabilityError`. Never report success, remove it, or
   attempt an automatic rollback; operators must verify it before deciding what
   to retain.
-- The root module requires Go 1.27 and pins go-ethereum v1.17.5 at commit
-  `9621c6ad10934a01b5514886fb6fbd87640b6c05`. Do not change the geth pin,
+- The root module requires Go 1.27 and pins go-ethereum v1.17.6 at commit
+  `3d84c6b2e3e9be032f8f2dcd9e900f89391fcdab`. Do not change the geth pin,
   bundle/report versions, record encoding, database layout, supported schemes,
   or compression choices as incidental cleanup.

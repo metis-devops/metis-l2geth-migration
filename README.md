@@ -1,7 +1,7 @@
 # l2state
 
 `l2state` migrates the latest executed state from a legacy Optimism/Metis
-l2geth LevelDB into a state database compatible with go-ethereum v1.17.5.
+l2geth LevelDB into a state database compatible with go-ethereum v1.17.6.
 
 > [!IMPORTANT]
 > The output is a **state-only artifact**, not bootable geth `chaindata`.

@@ -3,7 +3,7 @@
 [Documentation index](README.md) · [Project overview](../README.md)
 
 `l2state` migrates the latest executed state from a legacy Optimism/Metis
-l2geth LevelDB into a state database compatible with go-ethereum v1.17.5.
+l2geth LevelDB into a state database compatible with go-ethereum v1.17.6.
 
 > [!IMPORTANT]
 > The output is a state-only artifact, not bootable geth `chaindata`. It
@@ -138,7 +138,7 @@ metis-state-12345/
 └── state.records.zst
 ```
 
-Account records use geth v1.17.5's canonical slim encoding: an empty storage
+Account records use geth v1.17.6's canonical slim encoding: an empty storage
 root and empty code hash are encoded as empty byte strings. Import and verify
 strictly expand every account back to full consensus RLP before rebuilding the
 account trie. In `manifest.json`, `state_file.record_payload_bytes` measures

@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/holiman/uint256"
 	"github.com/metis-devops/metis-l2geth-migration/internal/bundle"
@@ -75,7 +76,7 @@ func captureCompatContinuation(t *testing.T, entries []compatKV, tc targetTestCa
 	sdb.SetBalance(contract, uint256.NewInt(1001), tracing.BalanceChangeUnspecified)
 	sdb.SetState(contract, slot, common.HexToHash("0xbeef"))
 	sdb.SetCode(contract, common.FromHex("0x6003600055"), tracing.CodeChangeUnspecified)
-	newRoot, err := sdb.Commit(12346, false, true)
+	newRoot, err := sdb.Commit(params.Rules{IsCancun: true}, 12346)
 	if err == nil {
 		err = tdb.Commit(newRoot, false)
 	}

@@ -94,7 +94,7 @@ make test-race
 The tests cover both engines and all supported layout/scheme combinations,
 zstd and uncompressed bundles, direct and
 portable migrations, independent verification, continued state access through
-geth v1.17.5 APIs, corruption and ordering failures, exact database inventory,
+geth v1.17.6 APIs, corruption and ordering failures, exact database inventory,
 strict top-level layouts, read-only source handling, cancellation, atomic
 publication fault injection, a GenerateTrie reference build, parser fuzzing,
 and supported cross-build targets.

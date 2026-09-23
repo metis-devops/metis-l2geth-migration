@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	gethleveldb "github.com/ethereum/go-ethereum/ethdb/leveldb"
 	"github.com/ethereum/go-ethereum/ethdb/pebble"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
@@ -1435,7 +1436,7 @@ func mutateAndCommitArtifact(t *testing.T, artifact, scheme string, fixture lega
 	}
 	account := fixture.accounts[0]
 	sdb.SetNonce(account.address, account.nonce+1, tracing.NonceChangeUnspecified)
-	newRoot, err := sdb.Commit(fixture.head.BlockNumber+1, false, true)
+	newRoot, err := sdb.Commit(params.Rules{IsCancun: true}, fixture.head.BlockNumber+1)
 	if err != nil {
 		t.Fatal(err)
 	}

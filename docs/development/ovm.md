@@ -110,7 +110,7 @@
   (three total), verify file identity/size/mtime on rotation and close, and
   propagate validation/close errors. Do not introduce freezer constructors.
 - `--ovm-genesis-alloc` is an optional OVM-only post-conversion overlay. Accept a
-  GenesisAlloc address map with geth v1.17.5 field encodings, additionally allowing
+  GenesisAlloc address map with geth v1.17.6 field encodings, additionally allowing
   omitted balance. Preserve omitted fields, merge storage by slot (zero deletes),
   apply explicit code/balance/nonce including empty code and zero, and reject
   OVM_ETH even for empty entries. Empty account/storage objects do nothing;

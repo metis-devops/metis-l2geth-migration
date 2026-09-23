@@ -89,7 +89,7 @@ Use the following change-sensitive checks:
 - Import or database-layout changes: test both schemes, exact inventory,
   independent reopening, full logical comparison with the test-only
   `GenerateTrie` reference, and a subsequent state commit/read through geth
-  v1.17.5 APIs.
+  v1.17.6 APIs.
 - Backend/layout changes: cover all four engine/scheme combinations,
   both compression modes, report field strictness, old omitted-layout reports,
   physical-engine mismatch, rejected legacy reports, RLP-shaped code,

@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	gethleveldb "github.com/ethereum/go-ethereum/ethdb/leveldb"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
@@ -313,7 +314,7 @@ func ovmReferenceWithAllocDB(t testing.TB, f ovmFixture, apply func(*state.State
 	if apply != nil {
 		apply(s)
 	}
-	root, err = s.Commit(2, false, false)
+	root, err = s.Commit(params.Rules{}, 2)
 	if err != nil {
 		t.Fatal(err)
 	}

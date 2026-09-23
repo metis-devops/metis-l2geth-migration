@@ -151,7 +151,7 @@ account leaf, even if all resulting values are zero; empty objects alone do not
 create accounts. There is no whole-account deletion or whole-storage replacement.
 Unlike geth's genesis decoder, this overlay permits omitting `balance`, so code
 and storage can be changed without overwriting a converted balance. Other field
-encodings follow pinned geth v1.17.5: 20-byte addresses with or without `0x`,
+encodings follow pinned geth v1.17.6: 20-byte addresses with or without `0x`,
 `0x`-prefixed even-length code hex, hexadecimal or decimal balance/nonce, and
 even-length storage hex of at most 32 bytes, optionally prefixed with lowercase
 `0x` and left-padded to 32 bytes. Storage JSON fields must be strings.

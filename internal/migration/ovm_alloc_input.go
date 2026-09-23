@@ -276,7 +276,7 @@ func (l *ovmAllocLoader) field(owner common.Hash, patch *ovmAllocAccount, field 
 	return nil
 }
 
-// This matches geth v1.17.5 types.storageJSON: optional lowercase 0x, even hex
+// This matches geth v1.17.6 types.storageJSON: optional lowercase 0x, even hex
 // length, at most 32 bytes, left padded. Account/storage keys are hashed once.
 func decodeOVMAllocWord(text string) (word common.Hash, err error) {
 	text = strings.TrimPrefix(text, "0x")
