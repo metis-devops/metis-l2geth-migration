@@ -32,7 +32,11 @@ def configurations(args, repetition):
                     retention_modes.reverse()
                 for retention in retention_modes:
                     name = f"BenchmarkOVM{operation}" + ("Alloc" if alloc else "") + ("Retain" if retention else "")
-                    yield name, workers, alloc
+                    audit_modes = ["", "Audit", "AuditHistory"] if args.with_historical_audit else (["", "Audit"] if args.with_audit_summary else [""])
+                    if repetition % 2:
+                        audit_modes.reverse()
+                    for audit in audit_modes:
+                        yield name + audit, workers, alloc
     if args.with_ancient:
         yield "BenchmarkOVMAncientRead", None, False
 
@@ -57,6 +61,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--count", type=int, default=3)
+    parser.add_argument("--with-historical-audit", action="store_true",
+                        help="compare no audit, same-height audit and historical audit on the same later source")
+    parser.add_argument("--with-audit-summary", action="store_true",
+                        help="pair strict conversion with matching zero-discrepancy mvm summary input")
     parser.add_argument("--with-alloc", action="store_true",
                         help="pair ordinary conversion with 1000 GenesisAlloc account overrides")
     parser.add_argument("--with-retain-list", action="store_true",
@@ -110,8 +118,12 @@ def main():
             output.write(f"# {platform.platform()} CPUs={os.cpu_count()}\n")
             for label, source in sources.items():
                 output.write(f"# {label} source-sha256={source_digest(source)} cache-mb=128 handles=128\n")
-            output.write(f"# Synthetic holders={args.holders}, two-block history, hash/Pebble; temp-dbs={args.temp_dbs}.\n")
+            output.write(f"# Synthetic holders={args.holders}, {5 if args.with_historical_audit else 2}-block history, hash/Pebble; temp-dbs={args.temp_dbs}.\n")
             output.write(f"# Holder address preimages: {args.with_preimages}.\n")
+            if args.with_historical_audit:
+                output.write("# Historical audit: H=1, L=4; balanced mint/transfer/burn after H, same later source in every variant.\n")
+            if args.with_audit_summary or args.with_historical_audit:
+                output.write("# Audit: same source, matching synthetic v1 summary with zero discrepancy; no mainnet cause evidence.\n")
             if args.with_alloc:
                 output.write("# Alloc: first 1000 holders receive code, balance and one storage override.\n")
             if args.with_retain_list:
@@ -141,6 +153,7 @@ def main():
                                 env = dict(os.environ, L2STATE_BENCH_HOLDERS=str(holders),
                                            L2STATE_BENCH_PREIMAGES="1" if args.with_preimages else "0",
                                            L2STATE_BENCH_TEMP_DB=mode,
+                                           L2STATE_BENCH_HISTORY_FIXTURE="1" if args.with_historical_audit else "0",
                                            L2STATE_BENCH_RETAIN_FIXTURE="1" if args.with_retain_list else "0")
                                 subprocess.run(timed_command(binaries[label], name, workers), env=env,
                                                cwd=sources[label] / "internal/migration", stdout=output,

@@ -107,10 +107,16 @@ func replayOVMState(ctx context.Context, opts MigrateOptions, root string, repor
 		return report, err
 	}
 	phase := reporter.StartPhase("convert_ovm_balances", nil)
-	newRoot, balances, err := transformOVMState(ctx, w.base, w.original.Root, w.index, w.inputs, opts.Workers, w.limiter)
+	newRoot, balances, err := transformOVMState(ctx, w.base, w.source.head, w.index, w.inputs, opts.Workers, w.limiter)
 	phase.Finish(err)
 	if err != nil {
 		return report, err
+	}
+	if w.inputs.audit != nil {
+		w.inputs.auditEvidence, err = w.inputs.audit.conversionEvidence(w.inputs.auditDigest, w.source.head, balances)
+		if err != nil {
+			return report, err
+		}
 	}
 	newRoot, allocEvidence, err := w.applyGenesisAlloc(newRoot)
 	if err != nil {
@@ -159,6 +165,12 @@ func (w *ovmWork) close() error {
 
 func (w *ovmWork) prepare() error {
 	var err error
+	if w.opts.OVM.AuditSummary != "" {
+		w.inputs.audit, w.inputs.auditDigest, err = readOVMAuditSummary(w.ctx, w.opts.OVM.AuditSummary)
+		if err != nil {
+			return fmt.Errorf("read OVM audit summary: %w", err)
+		}
+	}
 	w.inputs.code, w.inputs.codeFileDigest, err = readWrappedCode(w.ctx, w.opts.OVM.WrappedEtherCode)
 	if err != nil {
 		return err
@@ -168,6 +180,11 @@ func (w *ovmWork) prepare() error {
 	w.source, err = openLegacySource(w.opts.SourceChaindata, cache, handles, w.reporter)
 	if err != nil {
 		return err
+	}
+	if w.inputs.audit != nil {
+		if err := w.inputs.audit.matchHead(w.source.head); err != nil {
+			return err
+		}
 	}
 	if _, err := ovmCheckpoint(w.sourceEvidence(), w.source.head.StateRoot); err != nil {
 		return err
@@ -236,7 +253,7 @@ func (w *ovmWork) migrateOriginalAndHistory() error {
 	})
 	wg.Go(func() {
 		// This lane exclusively owns w.index, including any pending inputs.
-		w.history, historyErr = scanOVMHistory(ctx, w.source, w.opts, w.index, w.limiter, w.reporter)
+		w.history, historyErr = scanOVMHistory(ctx, w.source, w.opts, w.index, w.limiter, w.reporter, w.inputs.audit)
 		if historyErr != nil {
 			cancel()
 		}

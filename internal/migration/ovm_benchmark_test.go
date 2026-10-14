@@ -14,19 +14,19 @@ import (
 )
 
 func BenchmarkOVMMigration(b *testing.B) {
-	benchmarkOVMMigration(b, false, false)
+	benchmarkOVMMigration(b, false, false, false, false)
 }
 
 func BenchmarkOVMMigrationAlloc(b *testing.B) {
-	benchmarkOVMMigration(b, true, false)
+	benchmarkOVMMigration(b, true, false, false, false)
 }
 
-func benchmarkOVMMigration(b *testing.B, withAlloc, withRetention bool) {
+func benchmarkOVMMigration(b *testing.B, withAlloc, withRetention, withAudit, historical bool) {
 	count, mode := ovmBenchmarkSettings(b)
 	for _, workers := range []int{2, 8} {
 		b.Run(fmt.Sprintf("workers=%d", workers), func(b *testing.B) {
 			setup := time.Now()
-			f := ovmBenchmarkFixture(b, count, withRetention)
+			f, auditPath := ovmBenchmarkAuditFixture(b, count, withRetention, withAudit, historical)
 			retainList := ""
 			if withRetention {
 				retainList = writeOVMBenchmarkRetainList(b, f)
@@ -42,7 +42,7 @@ func benchmarkOVMMigration(b *testing.B, withAlloc, withRetention bool) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for n := range b.N {
-				opts := MigrateOptions{TempDB: mode, SourceChaindata: f.source, Output: filepath.Join(root, fmt.Sprint(n)), Scheme: "hash", DBEngine: DBEnginePebble, CacheMB: 128, Handles: 128, Workers: workers, OVM: OVMOptions{Enabled: true, WrappedEtherCode: f.code, StateWitness: f.witness, GenesisAlloc: alloc, ERC20RetainList: retainList}}
+				opts := MigrateOptions{TempDB: mode, SourceChaindata: f.source, Output: filepath.Join(root, fmt.Sprint(n)), Scheme: "hash", DBEngine: DBEnginePebble, CacheMB: 128, Handles: 128, Workers: workers, OVM: OVMOptions{Enabled: true, WrappedEtherCode: f.code, StateWitness: f.witness, GenesisAlloc: alloc, ERC20RetainList: retainList, AuditSummary: auditPath}}
 				if _, err := Migrate(ctx, opts); err != nil {
 					b.Fatal(err)
 				}
@@ -109,5 +109,37 @@ func TestWriteOVMFixtureCandidate(t *testing.T) {
 	}
 }
 
-func BenchmarkOVMMigrationRetain(b *testing.B)      { benchmarkOVMMigration(b, false, true) }
-func BenchmarkOVMMigrationAllocRetain(b *testing.B) { benchmarkOVMMigration(b, true, true) }
+func BenchmarkOVMMigrationRetain(b *testing.B) { benchmarkOVMMigration(b, false, true, false, false) }
+func BenchmarkOVMMigrationAllocRetain(b *testing.B) {
+	benchmarkOVMMigration(b, true, true, false, false)
+}
+
+func BenchmarkOVMMigrationAudit(b *testing.B) { benchmarkOVMMigration(b, false, false, true, false) }
+
+func BenchmarkOVMMigrationRetainAudit(b *testing.B) {
+	benchmarkOVMMigration(b, false, true, true, false)
+}
+
+func BenchmarkOVMMigrationAllocAudit(b *testing.B) {
+	benchmarkOVMMigration(b, true, false, true, false)
+}
+
+func BenchmarkOVMMigrationAllocRetainAudit(b *testing.B) {
+	benchmarkOVMMigration(b, true, true, true, false)
+}
+
+func BenchmarkOVMMigrationAuditHistory(b *testing.B) {
+	benchmarkOVMMigration(b, false, false, true, true)
+}
+
+func BenchmarkOVMMigrationRetainAuditHistory(b *testing.B) {
+	benchmarkOVMMigration(b, false, true, true, true)
+}
+
+func BenchmarkOVMMigrationAllocAuditHistory(b *testing.B) {
+	benchmarkOVMMigration(b, true, false, true, true)
+}
+
+func BenchmarkOVMMigrationAllocRetainAuditHistory(b *testing.B) {
+	benchmarkOVMMigration(b, true, true, true, true)
+}

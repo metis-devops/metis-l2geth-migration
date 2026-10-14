@@ -1,15 +1,140 @@
 # OVM benchmark results
 
-Updated on 2026-09-19. [Dataset index and raw-file checksums](README.md).
+Updated on 2026-09-23. [Dataset index and raw-file checksums](README.md).
 
 ## Measurement boundaries
 
-- The latest measured source is the ordered-balance/evidence-cursor optimization on top of the uncommitted input-reader and review fixes, identified by the fingerprint below. Parallel-evidence, retention and earlier optimization datasets remain separate historical snapshots; these measurements do not apply to arbitrary future HEAD.
-- All OVM end-to-end results use an Apple M3 Max (16 logical CPUs), macOS 27.0 arm64, a two-block synthetic history, Pebble/hash targets, 128 MiB cache allowance and 128 handles. Alloc adds code, native balance and one storage override to 1,000 holders.
+- The latest dataset compares no audit, same-height audit and historical audit on an identical later source. The ordered-balance/evidence-cursor and earlier optimization datasets remain separate historical snapshots; none of these measurements apply to arbitrary future HEAD.
+- All OVM end-to-end results use an Apple M3 Max (16 logical CPUs), macOS 27.0 arm64, a synthetic history (five blocks for historical audit reuse, two for older datasets), Pebble/hash targets, 128 MiB cache allowance and 128 handles. Alloc adds code, native balance and one storage override to 1,000 holders.
 - The locality comparison uses six fresh-process samples per configuration with alternating order. Historical end-to-end comparisons use three, and input-reader components use five. Paired runs follow CI/race without concurrent benchmarks. Tables are medians calculated from their named raw dataset. Samples from different runs or source versions are never pooled.
 - Operation time and allocation counters exclude setup. Process RSS includes setup and, for verification, the initial disk-mode migration. `setup-s` is separate. OS caches were not flushed.
 - Heap and file lengths are sampled every 20 ms and can miss peaks. Heap excludes some native allocations; memory-file lengths exclude allocation capacity. Temporary disk excludes the final artifact. Neither cache allowances nor these samples bound total memory or disk requirements.
 - No production throughput, long-history, cold-disk, LevelDB or path-scheme performance claim follows from these fixtures. Historical results below have not been rerun on the latest source.
+
+## Historical audit reuse — 2026-09-23
+
+[Raw observations](raw/ovm-historical-audit-2026-09-23.txt), source fingerprint
+`82451d68ad73372a5cf0cd703469459633b75532bfdc699864e2b7153c42f394`.
+This snapshot uses geth v1.17.6 and the five-block historical-audit fixture.
+Do not pool it with the geth v1.17.5/two-block measurements below.
+
+All variants use the identical current source at L=4. After H=1 the fixture
+mints to a previously zero-balance holder, transfers away an entire balance,
+and burns another balance. B, S, holder count and state root change while B-S
+remains zero. Compare no audit, a summary at L=4, and the unchanged summary at
+H=1. These are same-binary input-mode comparisons, not before/after revision
+measurements. Positive discrepancy and M > S are covered by correctness tests,
+not this performance fixture.
+
+The run has 72 fresh-process observations: three alternating samples for each
+operation, input mode, temporary backend and worker count, using 10,000 holders,
+Pebble/hash targets, 128 MiB cache and 128 handles, with no alloc or manual
+retention. CI/race completed before measurement; no checks or other benchmarks
+were run concurrently. Reported values are medians.
+
+| Operation | Temp | Workers | No audit ms | Same-height ms | Historical ms | Historical vs none | Historical vs same |
+|---|---|---:|---:|---:|---:|---:|---:|
+| Migration | disk | 2 | 807.24 | 801.97 | 827.93 | +2.6% | +3.2% |
+| Migration | disk | 8 | 734.07 | 745.38 | 723.39 | -1.5% | -3.0% |
+| Migration | memory | 2 | 508.21 | 493.82 | 504.02 | -0.8% | +2.1% |
+| Migration | memory | 8 | 466.34 | 438.06 | 467.23 | +0.2% | +6.7% |
+| Verification | disk | 2 | 725.00 | 720.56 | 733.46 | +1.2% | +1.8% |
+| Verification | disk | 8 | 654.31 | 670.74 | 650.99 | -0.5% | -2.9% |
+| Verification | memory | 2 | 427.68 | 433.98 | 427.26 | -0.1% | -1.5% |
+| Verification | memory | 8 | 380.70 | 374.74 | 388.69 | +2.1% | +3.7% |
+
+| Operation | Temp | Workers | RSS MiB (none/same/history) | Alloc MiB/op | Setup ms |
+|---|---|---:|---:|---:|---:|
+| Migration | disk | 2 | 83.5/82.7/83.6 | 133.8/133.6/133.8 | 640.4/664.9/654.8 |
+| Migration | disk | 8 | 83.8/86.3/84.8 | 137.3/136.4/136.8 | 703.8/675.8/647.7 |
+| Migration | memory | 2 | 113.5/110.3/111.4 | 240.5/251.0/240.3 | 642.6/670.9/654.2 |
+| Migration | memory | 8 | 103.3/104.8/105.7 | 219.5/219.5/218.8 | 648.9/649.5/661.0 |
+| Verification | disk | 2 | 94.5/89.4/90.7 | 127.6/128.0/127.6 | 1463.0/1450.0/1490.0 |
+| Verification | disk | 8 | 93.8/93.3/91.3 | 130.7/130.4/130.6 | 1407.0/1395.0/1428.0 |
+| Verification | memory | 2 | 118.1/118.7/123.8 | 245.1/244.4/234.1 | 1431.0/1433.0/1423.0 |
+| Verification | memory | 8 | 113.4/112.8/112.2 | 211.7/211.9/213.3 | 1375.0/1439.0/1410.0 |
+
+Historical-mode time changes range from -1.5% to +2.6% versus no audit and -3.0%
+to +6.7% versus same-height audit. Memory migration with eight workers shows the
+largest same-height comparison regression (+6.7%); memory verification with
+eight workers is +3.7%. These mixed three-sample observations do not establish a
+speedup or a persistent causal regression. Historical-mode RSS increases by up
+to about 5.7 MiB versus no audit in memory verification with two workers; allocation
+medians and setup costs are shown separately above. Reuse avoids a new external
+node execution audit; l2state still scans all canonical history through L.
+
+Setup constructs the five-block source and, for verify, performs an initial
+disk-mode migration. Setup is excluded from operation time but included in RSS.
+Sampled heap peaks across the run are 23.5–60.2 MiB, memory temporary files
+0–14.3 MiB and temporary disk 0–14.4 MiB. Sampling every 20 ms can miss peaks;
+file lengths exclude allocation capacity and OS caches were not flushed. No
+production, long-history, larger-state, path/LevelDB or mainnet acceptance claim
+follows from this synthetic fixture. Real snapshot acceptance is deferred until
+the operator supplies the historical report and a newer stopped snapshot.
+
+```sh
+python3 scripts/benchmark-ovm.py \
+  --out /absolute/new/historical-audit.txt --holders 10000 \
+  --temp-dbs disk memory --with-verify --with-historical-audit --count 3
+```
+
+## Exact audit summary acceptance — 2026-09-22
+
+[Historical raw observations](raw/ovm-audit-summary-validation-2026-09-22.txt), source
+fingerprint `e5f4d75d76aac654b55a167948efb384286d9fcd4cbc1cc16b0e6eebc7b63f8e`.
+This snapshot includes duplicate top-level report-field rejection and the CLI
+rule treating an empty audit path as omitted. The [earlier same-day dataset](raw/ovm-audit-summary-2026-09-22.txt),
+fingerprint `ce17a32eeaade11ca00dd0711b0cce637aa63ce97b5e93de0c0056073b6ab95c`,
+is retained as historical evidence; do not pool its observations with this run.
+
+This compares the same updated binary without an audit input (Strict) and with
+an exactly matching synthetic summary (Audit). It is not a before/after revision
+comparison. The source has zero discrepancy and identical balances, code and
+history in both cases; tests separately cover positive discrepancies and M > S.
+There are 48 fresh-process observations: three samples per operation/temp-mode/
+worker/input combination, alternating order, after CI/race with no concurrent
+checks or benchmarks. The fixture has 10,000 holders, two blocks, no alloc or
+manual retention, and Pebble/hash targets. No real audit run or mainnet source is
+included. Medians are descriptive, not statistical evidence of a fixed overhead.
+
+| Operation | Temp | Workers | Strict ms | Audit ms | Change | Strict/Audit RSS MiB | Strict/Audit setup ms |
+|---|---|---:|---:|---:|---:|---:|---:|
+| Migration | disk | 2 | 848.37 | 838.33 | -1.2% | 79.5/81.1 | 155.3/172.2 |
+| Migration | disk | 8 | 802.51 | 773.57 | -3.6% | 82.3/83.4 | 159.9/177.9 |
+| Migration | memory | 2 | 538.10 | 540.47 | +0.4% | 110.9/108.9 | 154.4/171.9 |
+| Migration | memory | 8 | 511.37 | 508.59 | -0.5% | 103.8/103.2 | 165.1/185.7 |
+| Verification | disk | 2 | 751.07 | 770.14 | +2.5% | 91.3/93.6 | 1028.0/1010.0 |
+| Verification | disk | 8 | 690.98 | 687.95 | -0.4% | 94.5/92.5 | 902.6/938.1 |
+| Verification | memory | 2 | 440.83 | 463.24 | +5.1% | 121.2/122.2 | 988.0/1021.0 |
+| Verification | memory | 8 | 400.20 | 398.49 | -0.4% | 109.2/111.6 | 910.0/937.2 |
+
+Observed operation-time changes range from -3.6% to +5.1%. The largest observed
+regression is memory verification with two workers (+5.1%); disk verification
+with two workers is +2.5%, while other configurations vary in both directions.
+These mixed results do not establish a speedup or a persistent regression.
+Allocation-byte medians change by -2.78% to +0.14%; for example, memory migration
+with two workers measures 249.4/242.4 MiB/op (Strict/Audit). These allocation
+results do not reproduce the earlier snapshot's +12.04% median in that pair,
+and three observations per case are insufficient to attribute the difference.
+The largest paired RSS increase is about 2.4 MiB (memory verification, eight
+workers). Setup includes fixture/input construction and, for verification, the
+initial disk-mode migration; it is not part of the operation timer. Audit fixture
+generation adds roughly 17–21 ms to migration setup in these medians. The matched
+audit adds no state-sized index or additional historical traversal.
+
+Across all samples, observed heap peaks are 24.7–54.7 MiB, memory temporary-file
+peaks 0–13.9 MiB and temporary disk peaks 0–14.4 MiB. The 20 ms sampler can miss
+peaks and file lengths exclude allocator capacity; RSS includes setup. OS caches
+were not flushed. These results do not predict long-history, production-snapshot,
+path/LevelDB or larger-state performance, or prove historical attribution.
+
+Reproduce from the repository root, without concurrent tests or benchmarks:
+
+```sh
+python3 scripts/benchmark-ovm.py \
+  --out /absolute/new/audit-pairs.txt --holders 10000 \
+  --temp-dbs disk memory --with-verify --with-audit-summary --count 3
+```
 
 ## Ordered balance reads and evidence cursors — 2026-09-19
 

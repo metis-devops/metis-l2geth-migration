@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/holiman/uint256"
+	"github.com/metis-devops/metis-l2geth-migration/internal/bundle"
 )
 
 // OVMBalanceEvidence records nonzero holders and the conserved token amounts.
@@ -29,17 +30,18 @@ type OVMBalanceEvidence struct {
 }
 
 type ovmTransformer struct {
-	ctx      context.Context
-	db       ethdb.Database
-	trieDB   *triedb.Database
-	root     common.Hash
-	index    *ovmIndex
-	inputs   ovmInputs
-	account  *types.StateAccount
-	evidence OVMBalanceEvidence
-	total    uint256.Int
-	workers  int
-	limiter  *migrateWorkLimiter
+	ctx          context.Context
+	db           ethdb.Database
+	trieDB       *triedb.Database
+	root         common.Hash
+	index        *ovmIndex
+	inputs       ovmInputs
+	account      *types.StateAccount
+	evidence     OVMBalanceEvidence
+	total        uint256.Int
+	balanceSlots uint64
+	workers      int
+	limiter      *migrateWorkLimiter
 }
 
 func readOVMAccount(db *triedb.Database, root, hash common.Hash) (*types.StateAccount, error) {
@@ -120,7 +122,8 @@ func (t *ovmTransformer) storageValue(slot common.Hash) (*uint256.Int, error) {
 	return decodeOVMValue(blob)
 }
 
-func transformOVMState(ctx context.Context, db ethdb.Database, root common.Hash, index *ovmIndex, inputs ovmInputs, workers int, limiter *migrateWorkLimiter) (newRoot common.Hash, evidence OVMBalanceEvidence, retErr error) {
+func transformOVMState(ctx context.Context, db ethdb.Database, head bundle.Head, index *ovmIndex, inputs ovmInputs, workers int, limiter *migrateWorkLimiter) (newRoot common.Hash, evidence OVMBalanceEvidence, retErr error) {
+	root := head.StateRoot
 	tdb := triedb.NewDatabase(db, triedb.HashDefaults)
 	defer func() { retErr = errors.Join(retErr, tdb.Close()) }()
 	t := ovmTransformer{ctx: ctx, db: db, trieDB: tdb, root: root, index: index, inputs: inputs, workers: workers, limiter: limiter}
@@ -149,13 +152,17 @@ func transformOVMState(ctx context.Context, db ethdb.Database, root common.Hash,
 	if err := t.classifyStorage(); err != nil {
 		return newRoot, evidence, err
 	}
-	if !t.total.Eq(supply) {
+	if inputs.audit != nil {
+		if err := inputs.audit.matchAccounting(head.BlockNumber, common.BytesToHash(account.CodeHash), t.balanceSlots, &t.total, supply); err != nil {
+			return newRoot, evidence, err
+		}
+	} else if !t.total.Eq(supply) {
 		return newRoot, evidence, fmt.Errorf("OVM totalSupply mismatch: balances sum %s, totalSupply %s", &t.total, supply)
 	}
-	if _, underflow := new(uint256.Int).SubOverflow(supply, t.evidence.MigratedNative); underflow {
+	if _, underflow := new(uint256.Int).SubOverflow(&t.total, t.evidence.MigratedNative); underflow {
 		return newRoot, evidence, errors.New("OVM supply subtraction underflow")
 	}
-	if !new(uint256.Int).Sub(supply, t.evidence.MigratedNative).Eq(t.evidence.RemainingSupply) {
+	if !new(uint256.Int).Sub(&t.total, t.evidence.MigratedNative).Eq(t.evidence.RemainingSupply) {
 		return newRoot, evidence, errors.New("OVM balance conservation mismatch")
 	}
 	if err := t.index.flush(); err != nil {
@@ -337,6 +344,7 @@ func (t *ovmTransformer) applyBalance(b *ovmBalanceJob) error {
 	if value.IsZero() {
 		return nil
 	}
+	t.balanceSlots++
 	if b.address == ovmETHAddress {
 		t.evidence.SelfBalance.Set(value)
 		t.evidence.RemainingSupply.Add(t.evidence.RemainingSupply, value)

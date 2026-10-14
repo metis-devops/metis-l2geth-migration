@@ -37,16 +37,18 @@ type OVMHistoryEvidence struct {
 }
 
 type ovmHistoryScanner struct {
-	source   *legacySource
-	ancient  *legacyAncient
-	index    *ovmIndex
-	history  hash.Hash
-	events   hash.Hash
-	evidence OVMHistoryEvidence
-	previous common.Hash
+	source       *legacySource
+	ancient      *legacyAncient
+	index        *ovmIndex
+	history      hash.Hash
+	events       hash.Hash
+	evidence     OVMHistoryEvidence
+	previous     common.Hash
+	audit        *ovmAuditSummary
+	auditMatched bool
 }
 
-func scanOVMHistory(ctx context.Context, source *legacySource, opts MigrateOptions, index *ovmIndex, limiter *migrateWorkLimiter, reporter *progressReporter) (evidence OVMHistoryEvidence, retErr error) {
+func scanOVMHistory(ctx context.Context, source *legacySource, opts MigrateOptions, index *ovmIndex, limiter *migrateWorkLimiter, reporter *progressReporter, audit *ovmAuditSummary) (evidence OVMHistoryEvidence, retErr error) {
 	var completed atomic.Uint64
 	phase := reporter.StartPhase("scan_ovm_history", counterProgressSnapshot(&completed, "blocks", "blocks_per_second"))
 	defer func() { phase.Finish(retErr) }()
@@ -59,13 +61,16 @@ func scanOVMHistory(ctx context.Context, source *legacySource, opts MigrateOptio
 		return evidence, err
 	}
 	defer func() { retErr = errors.Join(retErr, ancient.Close()) }()
-	s := ovmHistoryScanner{source: source, ancient: ancient, index: index, history: sha256.New(), events: sha256.New()}
+	s := ovmHistoryScanner{source: source, ancient: ancient, index: index, history: sha256.New(), events: sha256.New(), audit: audit}
 	s.history.Write([]byte("metis-l2state-ovm-history/v1"))
 	s.events.Write([]byte("metis-l2state-ovm-events/v1"))
 	// Fast sync can freeze blocks beyond the executed LastBlock. Only the
 	// canonical prefix ending at the selected head contributes evidence.
 	if err := s.scanParallel(ctx, opts, limiter, &completed); err != nil {
 		return evidence, err
+	}
+	if audit != nil && !s.auditMatched {
+		return evidence, errors.New("OVM audit target missing from canonical history")
 	}
 	if s.previous != source.head.BlockHash {
 		return evidence, errors.New("OVM history does not terminate at selected head")
@@ -157,6 +162,15 @@ func (s *ovmHistoryScanner) readBlock(ctx context.Context, number uint64) (*ovmH
 	}
 	if header.Number == nil || !header.Number.IsUint64() || header.Number.Uint64() != number || !bytes.Equal(crypto.Keccak256(blob), hashBytes) {
 		return nil, errors.New("canonical header hash or number mismatch")
+	}
+	if number == 0 && s.audit != nil && (common.Hash(hashBytes) != s.audit.Identity.Genesis || header.Root != s.audit.Genesis.Root) {
+		return nil, errors.New("OVM audit genesis does not match canonical history")
+	}
+	if s.audit != nil && number == s.audit.Identity.To {
+		if common.Hash(hashBytes) != s.audit.Identity.ToHash || header.Root != s.audit.Target.Root {
+			return nil, errors.New("OVM audit target does not match canonical history")
+		}
+		s.auditMatched = true
 	}
 	if header.ParentHash != s.previous {
 		return nil, errors.New("canonical header parent mismatch")

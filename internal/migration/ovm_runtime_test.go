@@ -26,17 +26,31 @@ import (
 
 func TestOVMWrappedRuntimeAndContinuation(t *testing.T) {
 	for _, mode := range []TempDBMode{TempDBDisk, TempDBMemory} {
-		t.Run(string(mode), func(t *testing.T) { testOVMWrappedRuntimeAndContinuation(t, mode) })
+		t.Run(string(mode), func(t *testing.T) { testOVMWrappedRuntimeAndContinuation(t, mode, "") })
 	}
 }
 
-func testOVMWrappedRuntimeAndContinuation(t *testing.T, tempMode TempDBMode) {
-	f := newOVMFixture(t, nil)
+func testOVMWrappedRuntimeAndContinuation(t *testing.T, tempMode TempDBMode, audit string) {
+	var extra uint64
+	if audit != "" {
+		extra = 300
+	}
+	f := auditFixture(t, extra)
+	auditPath := ""
+	if audit != "" {
+		auditPath = writeAudit(t, fixtureAudit(t, f))
+	}
+	if audit == "historical" {
+		evolveAuditFixture(t, &f)
+	}
 	for _, engine := range []string{DBEnginePebble, DBEngineLevelDB} {
 		for _, scheme := range []string{"hash", "path"} {
 			t.Run(engine+"/"+scheme, func(t *testing.T) {
 				opts := f.options(t, engine, scheme, 2)
 				opts.TempDB = tempMode
+				if audit != "" {
+					opts.OVM.AuditSummary = auditPath
+				}
 				result, err := Migrate(t.Context(), opts)
 				if err != nil {
 					t.Fatal(err)
@@ -67,7 +81,7 @@ func testOVMWrappedRuntimeAndContinuation(t *testing.T, tempMode TempDBMode) {
 						t.Fatal("deposit backing mismatch")
 					}
 					call(f.holders[0], 0, "withdraw(uint256)", []byte{3})
-					if read("totalSupply()") != 101 || s.GetBalance(ovmETHAddress).Uint64() != 101 || s.GetBalance(f.holders[0]).Uint64() != 9 {
+					if read("totalSupply()") != 101 || s.GetBalance(ovmETHAddress).Uint64() != 101 || s.GetBalance(f.holders[0]).Uint64() != 9+extra {
 						t.Fatal("withdraw backing mismatch")
 					}
 					call(f.holders[1], 0, "transfer(address,uint256)", f.holders[0][:], []byte{2})
@@ -99,7 +113,11 @@ func commitOVMContinuation(t *testing.T, opts MigrateOptions, root common.Hash, 
 		t.Fatal(err)
 	}
 	s.SetBalance(address, uint256.NewInt(12), tracing.BalanceChangeUnspecified)
-	root, err = s.Commit(params.Rules{IsCancun: true}, 3)
+	number, found := rawdb.ReadHeaderNumber(db, rawdb.ReadHeadBlockHash(db))
+	if !found {
+		t.Fatal("missing checkpoint height")
+	}
+	root, err = s.Commit(params.Rules{IsCancun: true}, number+1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -328,5 +346,17 @@ func TestOVMReceiptFormats(t *testing.T) {
 		if err := s.event(0, 0, 0, l); err == nil {
 			t.Fatal("malformed event accepted")
 		}
+	}
+}
+
+func TestOVMAuditRuntimeAndContinuation(t *testing.T) {
+	for _, mode := range []TempDBMode{TempDBDisk, TempDBMemory} {
+		t.Run(string(mode), func(t *testing.T) { testOVMWrappedRuntimeAndContinuation(t, mode, "exact") })
+	}
+}
+
+func TestOVMAuditHistoricalRuntime(t *testing.T) {
+	for _, mode := range []TempDBMode{TempDBDisk, TempDBMemory} {
+		t.Run(string(mode), func(t *testing.T) { testOVMWrappedRuntimeAndContinuation(t, mode, "historical") })
 	}
 }

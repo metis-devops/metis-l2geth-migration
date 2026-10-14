@@ -100,7 +100,7 @@ func TestOVMEvidenceParallel(t *testing.T) {
 				if err := collectOVMPreimages(t.Context(), w.source.db, reference, w.limiter); err != nil {
 					t.Fatal(err)
 				}
-				history, err := scanOVMHistory(t.Context(), w.source, w.opts, reference, w.limiter, w.reporter)
+				history, err := scanOVMHistory(t.Context(), w.source, w.opts, reference, w.limiter, w.reporter, nil)
 				if err != nil {
 					t.Fatal(err)
 				}

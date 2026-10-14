@@ -64,6 +64,9 @@ func VerifyOVM(ctx context.Context, opts OVMVerifyOptions) (report OVMVerificati
 	if err := validateOVMOptions(opts.OVM); err != nil {
 		return report, err
 	}
+	if err := confirmOVMAuditEvidence(ctx, opts.OVM.AuditSummary, stored.AuditSummary); err != nil {
+		return report, err
+	}
 	if err := confirmOVMAllocEvidence(ctx, opts.OVM.GenesisAlloc, stored.GenesisAlloc); err != nil {
 		return report, err
 	}

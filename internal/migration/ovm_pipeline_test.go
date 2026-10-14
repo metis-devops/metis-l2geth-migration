@@ -102,7 +102,7 @@ func TestOVMGoldenSupplyMismatch(t *testing.T) {
 	if err := idx.flush(); err != nil {
 		t.Fatal(err)
 	}
-	_, _, err = transformOVMState(t.Context(), s.db, s.head.StateRoot, idx, ovmInputs{code: []byte{0}}, 2, newMigrateWorkLimiter(2))
+	_, _, err = transformOVMState(t.Context(), s.db, s.head, idx, ovmInputs{code: []byte{0}}, 2, newMigrateWorkLimiter(2))
 	if err == nil || !strings.Contains(err.Error(), "totalSupply mismatch") {
 		t.Fatalf("golden canary must fail source supply reconciliation: %v", err)
 	}

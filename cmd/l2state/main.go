@@ -94,6 +94,7 @@ func runMigrate(ctx context.Context, args []string, stdout, stderr io.Writer) er
 	ancient := flags.String("source-ancient", "", "legacy ancient directory (default: source-chaindata/ancient)")
 	witness := flags.String("ovm-state-witness", "", "OVM address/allowance ownership JSONL file")
 	alloc := flags.String("ovm-genesis-alloc", "", "GenesisAlloc JSON overrides applied after OVM balance conversion")
+	auditSummary := flags.String("ovm-audit-summary", "", "mvm v1 accounting audit summary matching the source snapshot")
 	retainList := flags.String("ovm-erc20-retain-list", "", "file listing source contracts whose OVM ERC20 balances must be retained")
 	if err := parseFlags(flags, args, "migrate"); err != nil {
 		return err
@@ -108,7 +109,7 @@ func runMigrate(ctx context.Context, args []string, stdout, stderr io.Writer) er
 		Handles:         *target.handles,
 		Workers:         *workers,
 		Progress:        newProgressOptions(stderr, *target.quiet),
-		OVM:             migration.OVMOptions{Enabled: *ovmEnabled, WrappedEtherCode: *wrappedCode, SourceAncient: *ancient, StateWitness: *witness, GenesisAlloc: *alloc, ERC20RetainList: *retainList},
+		OVM:             migration.OVMOptions{Enabled: *ovmEnabled, WrappedEtherCode: *wrappedCode, SourceAncient: *ancient, StateWitness: *witness, GenesisAlloc: *alloc, ERC20RetainList: *retainList, AuditSummary: *auditSummary},
 	})
 	if err != nil {
 		return err
@@ -208,6 +209,7 @@ func runVerify(ctx context.Context, args []string, stdout, stderr io.Writer) err
 	ancient := flags.String("source-ancient", "", "legacy ancient directory for OVM verification")
 	witness := flags.String("ovm-state-witness", "", "original OVM ownership JSONL file")
 	alloc := flags.String("ovm-genesis-alloc", "", "original GenesisAlloc JSON overrides for OVM verification")
+	auditSummary := flags.String("ovm-audit-summary", "", "mvm v1 accounting audit summary matching the source snapshot")
 	retainList := flags.String("ovm-erc20-retain-list", "", "original manual ERC20 retention address file")
 	workers := flags.Int("workers", defaultMigrateWorkers(), "global workers for OVM verification, maximum 16")
 	if err := parseFlags(flags, args, "verify"); err != nil {
@@ -229,13 +231,13 @@ func runVerify(ctx context.Context, args []string, stdout, stderr io.Writer) err
 		}
 		if format == migration.OVMVerificationFormat {
 			report, err := migration.VerifyOVM(ctx, migration.OVMVerifyOptions{TempDir: *tempDir, TempDB: migration.TempDBMode(*tempDB), SourceChaindata: *source, Artifact: *artifact, CacheMB: *cache, Handles: *handles, Workers: *workers,
-				OVM: migration.OVMOptions{Enabled: true, WrappedEtherCode: *wrappedCode, SourceAncient: *ancient, StateWitness: *witness, GenesisAlloc: *alloc, ERC20RetainList: *retainList}, Progress: newProgressOptions(stderr, *quiet)})
+				OVM: migration.OVMOptions{Enabled: true, WrappedEtherCode: *wrappedCode, SourceAncient: *ancient, StateWitness: *witness, GenesisAlloc: *alloc, ERC20RetainList: *retainList, AuditSummary: *auditSummary}, Progress: newProgressOptions(stderr, *quiet)})
 			if err != nil {
 				return err
 			}
 			return writeJSON(stdout, report)
 		}
-		if *wrappedCode != "" || *ancient != "" || *witness != "" || *alloc != "" || *retainList != "" {
+		if *wrappedCode != "" || *ancient != "" || *witness != "" || *alloc != "" || *retainList != "" || *auditSummary != "" {
 			return errors.New("OVM input flags require an OVM artifact")
 		}
 		report, err := migration.VerifyDirect(ctx, migration.DirectVerifyOptions{TempDir: *tempDir, TempDB: migration.TempDBMode(*tempDB),
@@ -250,7 +252,7 @@ func runVerify(ctx context.Context, args []string, stdout, stderr io.Writer) err
 		}
 		return writeJSON(stdout, report)
 	}
-	if *wrappedCode != "" || *ancient != "" || *witness != "" || *alloc != "" || *retainList != "" {
+	if *wrappedCode != "" || *ancient != "" || *witness != "" || *alloc != "" || *retainList != "" || *auditSummary != "" {
 		return errors.New("OVM input flags cannot be used with --bundle")
 	}
 	report, err := migration.Verify(ctx, migration.VerifyOptions{TempDir: *tempDir, TempDB: migration.TempDBMode(*tempDB),

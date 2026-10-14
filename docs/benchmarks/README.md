@@ -11,6 +11,9 @@ source fingerprints. A recent date alone does not make a dataset current.
 
 | Dataset | Status and purpose | Coverage | Observations |
 |---|---|---|---:|
+| [Historical OVM audit reuse](raw/ovm-historical-audit-2026-09-23.txt) | Latest geth v1.17.6 snapshot; no/same-height/historical audit on identical later state | 10k holders; 5-block history; disk/memory; 2/8 workers; migrate/verify; 3 samples | 72 |
+| [OVM audit validation pairs](raw/ovm-audit-summary-validation-2026-09-22.txt) | Historical geth v1.17.5 snapshot after duplicate-report rejection and optional empty CLI path | 10k holders; disk/memory; 2/8 workers; migrate/verify; 3 alternating samples | 48 |
+| [OVM audit summary pairs](raw/ovm-audit-summary-2026-09-22.txt) | Historical snapshot before duplicate-report rejection and optional empty CLI path; audit input versus strict conversion | 10k holders; disk/memory; 2/8 workers; migrate/verify; audit absent/present; 3 alternating samples | 48 |
 | [Locality OVM pairs](raw/ovm-locality-pairs-2026-09-19.txt) | Latest ordered balance reads and evidence cursors versus the starting working tree | 10k holders; disk/memory; 2/8 workers; migrate/verify; alloc/no alloc; 6 alternating samples | 192 |
 | [Locality scale pairs](raw/ovm-locality-scale-2026-09-19.txt) | Separate latest 100k comparison; no memory/alloc scale claim | 100k holders; disk; 2/8 workers; migrate/verify; 6 alternating samples | 48 |
 | [Locality components](raw/ovm-locality-components-2026-09-19.txt) | Isolated dense/sparse evidence lookups versus point reads | 100k indexed keys; full scan or stride 1000; 6 alternating processes, 3 iterations/process | 24 |
@@ -98,6 +101,9 @@ the measured Go-source fingerprints inside each raw log.
 
 | File | SHA-256 |
 |---|---|
+| [raw/ovm-historical-audit-2026-09-23.txt](raw/ovm-historical-audit-2026-09-23.txt) | `08289effcdd3ee2c622d71d98f7667ca148731d9646c154b803f3be9c5c11a94` |
+| [raw/ovm-audit-summary-validation-2026-09-22.txt](raw/ovm-audit-summary-validation-2026-09-22.txt) | `b58c4ab47e56144ef1c4c64d9bde8c0dc1f85b078c4bad1f7afe6f0f9d5ccba8` |
+| [raw/ovm-audit-summary-2026-09-22.txt](raw/ovm-audit-summary-2026-09-22.txt) | `601e01f6bc183803100911c59daa4200c00b74d1b126f6fba3b73895a25c05c0` |
 | [raw/ovm-locality-pairs-2026-09-19.txt](raw/ovm-locality-pairs-2026-09-19.txt) | `060380c680b4b7703241a907e3c580c16b49227f1d4e4806767956d2417a0572` |
 | [raw/ovm-locality-scale-2026-09-19.txt](raw/ovm-locality-scale-2026-09-19.txt) | `003978fd3b39b60e56533061ee932d5e01c1c5f7495383852183cf4b16b46edb` |
 | [raw/ovm-locality-components-2026-09-19.txt](raw/ovm-locality-components-2026-09-19.txt) | `6311f546982aaa498aedb93b35d2728c6703c48820c6945d06e933fedfc33785` |

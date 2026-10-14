@@ -292,16 +292,24 @@ func ovmReferenceWithAllocDB(t testing.TB, f ovmFixture, apply func(*state.State
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, n := range []int{0, 2, 3, 4, 5} {
-		s.SetBalance(f.holders[n], uint256.NewInt(uint64((n+1)*11)), tracing.BalanceChangeUnspecified)
-		s.SetState(ovmETHAddress, ovmBalanceSlot(f.holders[n]), common.Hash{})
-	}
-	for _, address := range f.holders[8:] {
-		s.SetBalance(address, uint256.NewInt(1), tracing.BalanceChangeUnspecified)
+	// The synthetic fixture's only automatically retained contract is holder 1.
+	// Read actual fixture amounts so later transfers/mints/burns can be checked
+	// independently of the production classification and balance worker pipeline.
+	for n, address := range f.holders {
+		value := f.accounts[0].storage[ovmBalanceSlot(address)]
+		if n == 1 || value == (common.Hash{}) {
+			continue
+		}
+		s.SetBalance(address, new(uint256.Int).SetBytes(value[:]), tracing.BalanceChangeUnspecified)
 		s.SetState(ovmETHAddress, ovmBalanceSlot(address), common.Hash{})
 	}
-	s.SetBalance(ovmETHAddress, uint256.NewInt(99), tracing.BalanceChangeUnspecified)
-	s.SetState(ovmETHAddress, common.HexToHash("0x02"), common.HexToHash("0x63"))
+	retained := new(big.Int).Add(f.accounts[0].storage[ovmBalanceSlot(f.holders[1])].Big(), f.accounts[0].storage[ovmBalanceSlot(ovmETHAddress)].Big())
+	backing, overflow := uint256.FromBig(retained)
+	if overflow {
+		t.Fatal("reference backing overflow")
+	}
+	s.SetBalance(ovmETHAddress, backing, tracing.BalanceChangeUnspecified)
+	s.SetState(ovmETHAddress, common.HexToHash("0x02"), common.BigToHash(retained))
 	runtime, err := os.ReadFile(f.code)
 	if err != nil {
 		t.Fatal(err)

@@ -53,10 +53,109 @@ under this rule produces a different result; the report format remains v1.
 At `0xDeadDeAddeAddEAddeadDEaDDEAdDeaDDeAD0000`, the original self-held ERC20
 balance is always retained. The contract's native backing and totalSupply both
 become the sum of retained ERC20 balances. Converted balance slots are deleted.
-Source balances must sum exactly to the original totalSupply. Any discrepancy,
-nonzero source native balance, or uint256 overflow fails the operation; l2state
-never repairs the source accounting. The old canary has inconsistent synthetic
+By default, source balances must sum exactly to the original totalSupply.
+A discrepancy requires the exact, fully explained audit evidence described below.
+Nonzero source native balances and uint256 overflow always fail; l2state never
+repairs source accounting. The old canary has inconsistent synthetic
 supply and is not an eligible conversion snapshot.
+
+### Matching an mvm accounting audit
+
+Use `--ovm-audit-summary /inputs/summary.json` with OVM `migrate` and subsequent
+`verify` to accept an exactly matching historical accounting discrepancy without
+subtracting any holder balance. This reads the existing mvm audit v1 summary
+(identity v1); no mvm changes, event-file reader or historical EVM execution in
+l2state are required. Keep the stopped source and the original summary for
+verification. A nonempty path is only accepted for OVM conversion/verification.
+Omitting the option or passing `--ovm-audit-summary=""` means no audit input and
+retains the strict equality rule. An empty path cannot verify an artifact that
+records audit evidence: that artifact still requires its original summary.
+
+Let H be the audit endpoint and L the selected LastBlock. The summary must
+cover blocks 1 through H, with H <= L and all of
+`executionVerified`, `accountingReconciled`, `intervalCausesFullyExplained` and
+`genesisDifferenceExplained` true. `unexplainedEvents`,
+`totals.unexplainedDeltaWei` and `genesisState.differenceWei` must be zero.
+Opposite unexplained events cannot cancel into an accepted summary. Gas shortfall
+and legacy SELFDESTRUCT contributions must be nonnegative and fully explain the
+cumulative discrepancy. Nonzero genesis discrepancies and other unexplained
+causes have no override. Matching zero-discrepancy summaries are accepted and
+still recorded as required inputs.
+
+l2state validates the summary's genesis/target arithmetic and cumulative
+changes, rejecting future audit endpoints before expensive migration. The
+existing canonical history scan authenticates genesis and the audit endpoint's
+block hash/state root, then continues through L for normal history evidence and
+retention eligibility. H must be a canonical ancestor of L (or L itself).
+Neither the historical state trie nor another history scan is required.
+
+When H == L, the source head, root, OVM code hash, balance-slot count, balance
+sum, supply and discrepancy must all exactly match the summary, as before.
+When H < L, the current independently verified state must have the same OVM code
+hash and the exact same discrepancy B_L - S_L as the audit's B_H - S_H. Current
+balances, totalSupply, holder count and state root may change through normal
+transfers/mints/burns; they are not compared to the old snapshot. Any one-wei
+change in discrepancy or any OVM code change fails and requires updated evidence.
+Height determines the branch even if the two state roots happen to be identical.
+No Shanghai height or cause amount is hardcoded, and the input is never rewritten.
+
+Audit `configHash`, `witnessHash`, client version and sequencer settings remain
+provenance, not l2state configuration or migration witness hashes. Genesis
+accounting is internally reconciled from the report, while genesis identity/root
+is authenticated from source history. The optional prior-diagnosis fields are
+informational, never acceptance conditions or allowances.
+
+Let S be the current source supply at L, B its actual balance sum, M the converted
+native amount and R the retained ERC20 amount (including self holdings):
+
+```text
+B = M + R
+accepted difference = B - S
+wrappedEther.totalSupply = wrappedEther native backing = R
+```
+
+Every holder receives its full amount under the existing conversion/retention
+policy. The discrepancy is already included in B; no additional coins are
+awarded and no account is debited to offset it. The original S remains unchanged
+in `balances.original_supply`. Conversion can validly have M greater than S.
+GenesisAlloc applies afterward, with any explicit balance overrides separately
+represented by its existing evidence. The summary does not identify storage slots
+or grant retention eligibility; unknown storage, missing data/code, nonzero
+source native balance and root/inventory failures still reject migration.
+
+The input is a non-symlink regular file, at most 1 MiB. All required fields must
+be present; nulls, duplicate/unknown fields, trailing data, invalid hashes/types
+and noncanonical decimal integers fail. State balances/supplies must fit uint256;
+changes and differences use exact signed integer arithmetic. Both optional
+previous-diagnosis fields in current mvm output are understood. The file's raw
+bytes are SHA-256 hashed and confirmed again before publication or verification
+success, so even whitespace changes require the original input to be restored.
+
+OVM report v1 optionally includes `audit_summary` with `file_sha256`,
+`balance_sum` (the existing uint256 JSON encoding) and `supply_difference` (a
+signed decimal string). Both amounts are computed from conversion at L, before
+GenesisAlloc, never copied from the historical summary's target amounts. For
+H < L it additionally records `audit_head` with `block_number`, `block_hash` and
+`state_root`. This object is omitted when H == L, preserving same-height report
+encoding. When present it must identify a nonzero height strictly below L and
+have all required valid fields; null, duplicates and incomplete objects fail.
+Verification reconstructs the historical head from the original summary and
+canonical history and rejects removed or altered report evidence.
+Absence of `audit_summary` preserves strict supply equality; explicit null
+fails. Duplicate top-level report fields, including case-folded aliases, are
+rejected before typed decoding. `verify` requires the input exactly when recorded, recomputes amounts and
+conversion from source, and independently checks the actual target. No audit file
+is copied into the artifact. Older binaries that do not understand this optional
+field reject such artifacts; keep the updated verifier and original inputs.
+
+**Trust boundary:** l2state proves source-amount agreement and conversion
+consistency. Historical execution and cause attribution are assertions supplied
+by the operator's audit run; a file hash fixes the input but is not a proof of
+historical execution. Preserve `run.json` and `events.jsonl` externally for
+investigation. A completed audit with unexplained causes is not eligible here.
+For a reused report, complete historical attribution ends at H. Equality of the
+current and audited net discrepancies does not prove that no offsetting anomalies
+occurred between H and L. The summary is reusable only within these boundaries.
 
 ### Manual ERC20 retention
 

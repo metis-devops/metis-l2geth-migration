@@ -96,3 +96,29 @@ The bundle record chain is unsigned integrity evidence. It detects missing,
 corrupt, reordered, or modified records and binds them to the supplied header,
 block hash, and state root. It does not establish a trusted timestamp, signer,
 external canonicality, or L1 finality.
+
+## OVM audit evidence
+
+The independent `metis-l2state-ovm-verification` v1 report may contain
+`audit_summary: {file_sha256, balance_sum, supply_difference}`. Its presence binds
+an exact mvm summary input to a balance-preserving OVM conversion at current
+LastBlock L. Original
+supply remains in `balances.original_supply`; migrated native plus retained
+supply must equal `balance_sum`, and their difference from original supply must
+equal `supply_difference`. The latter is a canonical signed decimal string;
+`balance_sum` retains the existing uint256 JSON representation. Missing audit
+evidence preserves original supply equality; explicit null is rejected.
+
+Standalone verification requires the original summary bytes and independently
+recomputes source amounts and target state. Artifact roots still contain only
+`chaindata/` and `verification.json`. See [audit acceptance and trust boundaries](ovm-conversion.md#matching-an-mvm-accounting-audit).
+
+A reused audit ending at H < L additionally records `audit_summary.audit_head`
+with `block_number`, `block_hash` and `state_root`. It is omitted at H == L;
+existing same-height encoding is unchanged. `balance_sum`, original supply and
+conversion totals describe L even when the audit describes H. The optional head
+must be complete, non-null, nonzero and strictly earlier than L. Standalone
+verification authenticates H on L's canonical history, requires the same OVM code
+hash and exact current net discrepancy, and reconstructs this evidence rather
+than trusting the report. Audit completeness is limited to H, not the later
+interval; offsetting later anomalies are not excluded by net equality alone.

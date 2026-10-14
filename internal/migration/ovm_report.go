@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"time"
@@ -66,24 +67,58 @@ type OVMVerificationReport struct {
 	History         OVMHistoryEvidence         `json:"history"`
 	Balances        OVMBalanceEvidence         `json:"balances"`
 	GenesisAlloc    *OVMGenesisAllocEvidence   `json:"genesis_alloc,omitempty"`
+	AuditSummary    *OVMAuditEvidence          `json:"audit_summary,omitempty"`
 	ERC20Retention  *OVMERC20RetentionEvidence `json:"erc20_retention,omitempty"`
 }
 
-// UnmarshalJSON retains strict fields and distinguishes absent alloc from null.
+// UnmarshalJSON rejects ambiguous top-level fields before typed decoding and
+// distinguishes omitted optional evidence from explicit null.
 func (r *OVMVerificationReport) UnmarshalJSON(data []byte) error {
 	type reportJSON OVMVerificationReport
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	if token, err := decoder.Token(); err != nil || token != json.Delim('{') {
+		return errors.New("OVM verification report must be an object")
+	}
+	var names []string
+	for field := range reflect.TypeFor[reportJSON]().Fields() {
+		name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
+		names = append(names, name)
+	}
+	seen := make(map[string]bool, len(names))
+	for decoder.More() {
+		token, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		name, ok := token.(string)
+		if !ok {
+			return errors.New("invalid OVM report field")
+		}
+		// Match encoding/json's case folding, so aliases cannot evade duplicate
+		// detection. Unknown keys fail immediately, bounding the seen set.
+		key := ""
+		for _, candidate := range names {
+			if strings.EqualFold(name, candidate) {
+				key = candidate
+				break
+			}
+		}
+		if key == "" || seen[key] {
+			return fmt.Errorf("unknown or duplicate OVM report field %q", name)
+		}
+		seen[key] = true
+		var raw json.RawMessage
+		if err := decoder.Decode(&raw); err != nil {
+			return err
+		}
+		if (key == "genesis_alloc" || key == "erc20_retention" || key == "audit_summary") && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			return fmt.Errorf("OVM %s evidence must not be null", key)
+		}
+	}
+	// Typed decoding also validates the closing delimiter and end of input.
 	decoded, err := strictio.DecodeJSON[reportJSON](data, "OVM verification report")
 	if err != nil {
 		return err
-	}
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(data, &fields); err != nil {
-		return err
-	}
-	for key, raw := range fields {
-		if (strings.EqualFold(key, "genesis_alloc") || strings.EqualFold(key, "erc20_retention")) && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			return fmt.Errorf("OVM %s evidence must not be null", key)
-		}
 	}
 	*r = OVMVerificationReport(decoded)
 	return nil
@@ -95,7 +130,7 @@ func newOVMReport(source bundle.SourceEvidence, original, final StateResult, che
 		Scheme: scheme, DBEngine: target.engine, StateLayout: target.layout, ToolVersion: version.ToolVersion, GethVersion: version.GethVersion,
 		Source: source, Original: OVMStateEvidence(original), Target: OVMStateEvidence(final), Checkpoint: checkpoint,
 		WrappedCodeHash: cryptoCodeHash(inputs), CodeFileSHA256: inputs.codeFileDigest, WitnessSHA256: inputs.witnessDigest, History: history, Balances: balances,
-		ERC20Retention: inputs.retention,
+		ERC20Retention: inputs.retention, AuditSummary: inputs.auditEvidence,
 	}
 }
 
@@ -152,15 +187,32 @@ func (r OVMVerificationReport) Validate() error {
 	if r.History.FirstBlock != 0 || r.History.LastBlock != r.Source.HeadBefore.BlockNumber || r.History.Blocks != r.History.LastBlock+1 {
 		return errors.New("OVM report history range is incomplete")
 	}
-	return validateOVMBalances(r.Balances)
+	if r.AuditSummary != nil && r.AuditSummary.AuditHead != nil {
+		head := r.AuditSummary.AuditHead
+		if head.BlockNumber == 0 || head.BlockNumber >= r.Source.HeadBefore.BlockNumber || head.BlockHash == (common.Hash{}) || head.StateRoot == (common.Hash{}) {
+			return errors.New("OVM audit_head must identify an earlier nonzero canonical block")
+		}
+	}
+	return validateOVMBalances(r.Balances, r.AuditSummary)
 }
 
-func validateOVMBalances(b OVMBalanceEvidence) error {
+func validateOVMBalances(b OVMBalanceEvidence, audit *OVMAuditEvidence) error {
 	if b.OriginalSupply == nil || b.MigratedNative == nil || b.RemainingSupply == nil || b.SelfBalance == nil {
 		return errors.New("OVM report lacks balance amounts")
 	}
+	expected := b.OriginalSupply
+	if audit != nil {
+		delta, err := auditInteger(audit.SupplyDifference, false)
+		if err != nil {
+			return err
+		}
+		if audit.FileSHA256 == (common.Hash{}) || audit.BalanceSum == nil || delta.Sign() < 0 || new(big.Int).Sub(audit.BalanceSum.ToBig(), b.OriginalSupply.ToBig()).Cmp(delta) != 0 {
+			return errors.New("OVM audit report accounting mismatch")
+		}
+		expected = audit.BalanceSum
+	}
 	sum, overflow := new(uint256.Int).AddOverflow(b.MigratedNative, b.RemainingSupply)
-	if overflow || !sum.Eq(b.OriginalSupply) || b.SelfBalance.Cmp(b.RemainingSupply) > 0 {
+	if overflow || !sum.Eq(expected) || b.SelfBalance.Cmp(b.RemainingSupply) > 0 {
 		return errors.New("OVM report balance conservation mismatch")
 	}
 	return nil

@@ -10,7 +10,51 @@
 - Require an operator-supplied storage-compatible wrappedEther runtime hex file;
   never install the test runtime by default or execute a constructor. All source
   native balances must be zero. Reconcile every identified balance against the
-  original totalSupply; unknown storage and accounting discrepancies fail closed.
+  original totalSupply by default. The only discrepancy exception is the exact,
+  fully explained `--ovm-audit-summary` contract below; unknown storage and
+  unmatched/unexplained accounting discrepancies fail closed.
+- An empty or omitted `--ovm-audit-summary` means no audit input; it must not
+  bypass strict supply equality or verification of recorded audit evidence.
+  A nonempty path accepts only the existing mvm summary/identity v1,
+  as a regular non-symlink file of at most 1 MiB with strict required fields,
+  duplicate/unknown/null rejection and canonical integer strings. Require full
+  execution/accounting/cause completion, zero genesis discrepancy, zero unexplained
+  amount AND event count, and exact component/cause arithmetic. For audit endpoint
+  H and current LastBlock L, reject H > L early. Authenticate genesis and H's
+  hash/root in the existing canonical hot/ancient history lane and require that
+  H was seen before conversion; keep scanning through L. Do not load historical
+  state tries or add another history scan. H == L retains full snapshot matching;
+  H < L requires matching current OVM code hash and exact B_L - S_L == D_H, but
+  does not compare current balance sum, supply or slot count to historical values.
+  Select the branch by height, including when roots are equal. Never hardcode a
+  Shanghai boundary or relax current unknown-storage/native/code/root checks.
+  Never use diagnostic prior amounts as allowances, audit
+  witnesses as migration witnesses, or audit addresses as retention policy.
+- With accepted audit input, conserve actual B = M + R instead of S = M + R;
+  preserve every holder's policy-determined amount, original S in the report, and
+  R as target ERC20 supply/native backing. Never subtract an arbitrary balance or
+  award the difference twice. Keep alloc after conversion. Default conversion
+  still requires B = S; zero-difference audit inputs retain explicit presence.
+- OVM report v1 optionally adds `audit_summary` with `file_sha256`, `balance_sum`
+  (uint256) and `supply_difference` (canonical signed decimal), computed from the
+  current conversion before alloc, not historical summary amounts. For H < L,
+  include optional `audit_head` using block_number/block_hash/state_root; omit it
+  for H == L to preserve existing same-height encoding. Validate 0 < H < L and
+  strict required hash/number fields; verify must reconstruct it from the input
+  and canonical history and reject removal/tampering. The audit's complete cause
+  explanation ends at H; matching net discrepancy does not rule out later
+  offsetting anomalies. Reject null or incomplete evidence. Reject duplicate top-level report fields (including
+  case-folded aliases) before typed decoding can merge them. Verify requires
+  identical input presence/bytes, replays
+  source matching, and independently inventories the target. Confirm raw input
+  hashes before success/publication. Do not copy files into the artifact, modify
+  mvm, depend on its module at runtime, scan historical state again, or claim an
+  input hash proves historical execution. Keep config/witness hashes as provenance.
+  Exercise four targets, both temp modes, M > S, retained/self balances, alloc,
+  independent reference inventory, runtime/continuation, tampering and cleanup.
+  Benchmark no input, same-height and historical input on an identical current
+  source via `--with-historical-audit` in the isolated, alternating harness.
+  Retain the old same-height-only `--with-audit-summary` measurements separately.
 - Classify by code at the selected head. Authenticated canonical OVM_ETH
   nonzero Transfer-from membership or an explicit validated ERC20 retain-list
   entry retains a contract's ERC20 balance (including nonzero transferFrom and
@@ -105,7 +149,7 @@
   not-found sentinel as absence. EOA conversion does not query Transfer-from
   membership. Input confirmation hashes bounded raw-byte chunks without
   reparsing or rewriting evidence, and rechecks all supplied runtime/witness/
-  alloc/retain-list inputs immediately before publication or verification success.
+  alloc/retain-list/audit-summary inputs immediately before publication or verification success.
 - Ancient readers retain at most one current read-only data handle per table
   (three total), verify file identity/size/mtime on rotation and close, and
   propagate validation/close errors. Do not introduce freezer constructors.

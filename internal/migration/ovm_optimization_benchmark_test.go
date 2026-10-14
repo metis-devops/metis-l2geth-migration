@@ -15,16 +15,19 @@ import (
 	"github.com/golang/snappy"
 )
 
-func BenchmarkOVMVerification(b *testing.B)      { benchmarkOVMVerification(b, false, false) }
-func BenchmarkOVMVerificationAlloc(b *testing.B) { benchmarkOVMVerification(b, true, false) }
+func BenchmarkOVMVerification(b *testing.B) { benchmarkOVMVerification(b, false, false, false, false) }
+func BenchmarkOVMVerificationAlloc(b *testing.B) {
+	benchmarkOVMVerification(b, true, false, false, false)
+}
 
-func benchmarkOVMVerification(b *testing.B, withAlloc, withRetention bool) {
+func benchmarkOVMVerification(b *testing.B, withAlloc, withRetention, withAudit, historical bool) {
 	count, mode := ovmBenchmarkSettings(b)
 	for _, workers := range []int{2, 8} {
 		b.Run(fmt.Sprintf("workers=%d", workers), func(b *testing.B) {
 			setup := time.Now()
-			f := ovmBenchmarkFixture(b, count, withRetention)
+			f, auditPath := ovmBenchmarkAuditFixture(b, count, withRetention, withAudit, historical)
 			opts := MigrateOptions{SourceChaindata: f.source, Output: filepath.Join(b.TempDir(), "artifact"), Scheme: "hash", DBEngine: DBEnginePebble, CacheMB: 128, Handles: 128, Workers: workers, OVM: OVMOptions{Enabled: true, WrappedEtherCode: f.code, StateWitness: f.witness}}
+			opts.OVM.AuditSummary = auditPath
 			if withRetention {
 				opts.OVM.ERC20RetainList = writeOVMBenchmarkRetainList(b, f)
 			}
@@ -125,8 +128,12 @@ func writeOVMAncientReadFixture(t testing.TB, count, perFile int) string {
 	return path
 }
 
-func BenchmarkOVMVerificationRetain(b *testing.B)      { benchmarkOVMVerification(b, false, true) }
-func BenchmarkOVMVerificationAllocRetain(b *testing.B) { benchmarkOVMVerification(b, true, true) }
+func BenchmarkOVMVerificationRetain(b *testing.B) {
+	benchmarkOVMVerification(b, false, true, false, false)
+}
+func BenchmarkOVMVerificationAllocRetain(b *testing.B) {
+	benchmarkOVMVerification(b, true, true, false, false)
+}
 
 func ovmBenchmarkFixture(b *testing.B, count int, withRetention bool) ovmFixture {
 	var change func([]fixtureAccount)
@@ -165,4 +172,57 @@ func writeOVMBenchmarkRetainList(b *testing.B, f ovmFixture) string {
 		fmt.Fprintln(&data, account.address.Hex())
 	}
 	return writeRetainList(b, data.String())
+}
+
+func BenchmarkOVMVerificationAudit(b *testing.B) {
+	benchmarkOVMVerification(b, false, false, true, false)
+}
+
+func BenchmarkOVMVerificationRetainAudit(b *testing.B) {
+	benchmarkOVMVerification(b, false, true, true, false)
+}
+
+func BenchmarkOVMVerificationAllocAudit(b *testing.B) {
+	benchmarkOVMVerification(b, true, false, true, false)
+}
+
+func BenchmarkOVMVerificationAllocRetainAudit(b *testing.B) {
+	benchmarkOVMVerification(b, true, true, true, false)
+}
+
+func BenchmarkOVMVerificationAuditHistory(b *testing.B) {
+	benchmarkOVMVerification(b, false, false, true, true)
+}
+
+func BenchmarkOVMVerificationRetainAuditHistory(b *testing.B) {
+	benchmarkOVMVerification(b, false, true, true, true)
+}
+
+func BenchmarkOVMVerificationAllocAuditHistory(b *testing.B) {
+	benchmarkOVMVerification(b, true, false, true, true)
+}
+
+func BenchmarkOVMVerificationAllocRetainAuditHistory(b *testing.B) {
+	benchmarkOVMVerification(b, true, true, true, true)
+}
+
+// All three variants receive the same later source when the historical fixture
+// is enabled. Only the selected summary/input presence differs.
+func ovmBenchmarkAuditFixture(b *testing.B, count int, retain, audit, historical bool) (ovmFixture, string) {
+	f := ovmBenchmarkFixture(b, count, retain)
+	var summary ovmAuditSummary
+	if historical {
+		summary = fixtureAudit(b, f)
+	}
+	if historical || os.Getenv("L2STATE_BENCH_HISTORY_FIXTURE") == "1" {
+		evolveAuditFixture(b, &f)
+	}
+	path := ""
+	if audit {
+		if !historical {
+			summary = fixtureAudit(b, f)
+		}
+		path = writeAudit(b, summary)
+	}
+	return f, path
 }

@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "identity": {
+    "version": 1,
+    "genesis": "0x02804f0e17cfdc5b8beed6c3d0a1689f59415c3111d42b3f5253ed0106232bc8",
+    "configHash": "0x1111111111111111111111111111111111111111111111111111111111111111",
+    "witnessHash": "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
+    "to": 1,
+    "toHash": "0x833373a21acc0a033d4c939cb99e530c7740afb7fde4914582a4a76ee99cc55b",
+    "deSeqBlock": 0,
+    "seqValidHeight": 0,
+    "firstSequencer": "0x0000000000000000000000000000000000000000"
+  },
+  "clientVersion": "synthetic-mvm-v1-d497d8ee",
+  "from": 1,
+  "verifiedBlocks": 1,
+  "genesisState": {
+    "root": "0xad837314408544e6ecf12ffdd01bbe98463c3850306f0815f19e3c40a362007b",
+    "ovmCodeHash": "0x4c49258285e0a7c02ec11dbf7721e9e2e8ebdd5c242ed824ba2cb57d90ba204e",
+    "balanceSlots": 7,
+    "balancesWei": "308",
+    "supplyWei": "308",
+    "differenceWei": "0"
+  },
+  "targetState": {
+    "root": "0xad837314408544e6ecf12ffdd01bbe98463c3850306f0815f19e3c40a362007b",
+    "ovmCodeHash": "0x4c49258285e0a7c02ec11dbf7721e9e2e8ebdd5c242ed824ba2cb57d90ba204e",
+    "balanceSlots": 7,
+    "balancesWei": "308",
+    "supplyWei": "308",
+    "differenceWei": "0"
+  },
+  "totals": {
+    "balanceDeltaWei": "0",
+    "supplyDeltaWei": "0",
+    "discrepancyDeltaWei": "0",
+    "gasShortfallWei": "0",
+    "legacySelfdestructWei": "0",
+    "unexplainedDeltaWei": "0"
+  },
+  "executionVerified": true,
+  "accountingReconciled": true,
+  "intervalCausesFullyExplained": true,
+  "unexplainedEvents": 0,
+  "genesisDifferenceExplained": true,
+  "previousDiagnosisDifferenceWei": "39864711177577535",
+  "matchesPreviousDiagnosis": false
+}

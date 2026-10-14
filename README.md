@@ -76,6 +76,11 @@ canonical history; it changes balances and the head. Pruning deletes old state
 in place: stop the node and retain a backup before running it. Read the
 corresponding guide before using either mode.
 
+For historically inconsistent OVM accounting, conversion can accept an exact,
+fully explained mvm `summary.json` with `--ovm-audit-summary`, preserving all
+holder amounts. Historical summaries can be reused for later canonical snapshots
+with unchanged OVM code and exactly the same net discrepancy. See [audit acceptance and verification](docs/ovm-conversion.md#matching-an-mvm-accounting-audit).
+
 ## Documentation and development
 
 The [documentation index](docs/README.md) links all operator guides and development
