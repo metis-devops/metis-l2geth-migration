@@ -24,7 +24,7 @@ jobs:
       - name: Golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.13.1
+          version: v2.14.0
           skip-cache: true
           install-only: true
       - run: make ci-root
